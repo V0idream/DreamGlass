@@ -2,18 +2,19 @@ package com.coloros16.liquidglass.hook
 
 /** Independent volume windows own their capture, tint, progress and reveal animation. */
 object NativeScenePolicy {
-    private val volumeNames = listOf(
-        "com.oplus.systemui.volume.", "com.android.systemui.volume.",
-        "OplusVolumeSeekBar", "OplusVolumeRow", "OplusVolumeSettingsButton",
-        "OplusVolumeSideAccessoryButton", "VolumeDialog", "volume_dialog",
-        "volume_panel", "volume_seekbar", "volume_progress",
+    private val simpleVolumeClasses = setOf(
+        "OplusVolumeSeekBar", "OplusVolumeRow", "OplusVolumeDialogView", "VolumeDialogImpl",
+        "OplusVolumeSettingsButton", "OplusVolumeSideAccessoryButton",
     )
-    private val otherNativeNames = listOf("shutdown", "globalactions", "global_actions")
 
-    fun isVolume(identity: String): Boolean = volumeNames.any { identity.contains(it, ignoreCase = true) }
-
-    fun requiresNative(identity: String): Boolean = isVolume(identity) ||
-        otherNativeNames.any { identity.contains(it, ignoreCase = true) }
+    fun isVolume(identity: String): Boolean {
+        // DebugTool names can append a resource ID. Only the leading runtime class is evidence;
+        // IDs such as qs_volume_seekbar or labels containing "volume" are not independent windows.
+        val className = identity.trimStart().substringBefore('{').substringBefore('#').substringBefore(' ')
+        return className.startsWith("com.oplus.systemui.volume.") ||
+            className.startsWith("com.android.systemui.volume.") ||
+            className.substringBefore('$') in simpleVolumeClasses
+    }
 }
 
 /** A wrapper's nested posteffect draw must stay native even if no scene registration exists. */

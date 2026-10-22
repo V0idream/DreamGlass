@@ -86,3 +86,7 @@ com.oplus.systemui.plugins.seedling.capsule.ui.view.CapsuleView
 ## Preview4 独立音量窗口
 
 为按音量键弹出的独立音量面板补充原生绘制隔离，不复用控制中心捕获与材质。包装字段、内部绘制和线程局部保护经合约与回归测试，实际面板视觉仍待用户安装验证。详见 docs/VOLUME_PANEL_FIX.md。
+
+## Preview5 控制中心玻璃回归
+
+恢复完整折射并增强薄边缘反光；独立音量面板基于实际宿主识别，撤回 Preview4 宽泛层名排除。静态与回归检查通过，用户截图是旧版问题证据，新版像素输出仍待安装验证。详见 docs/CONTROL_GLASS_REGRESSION.md。

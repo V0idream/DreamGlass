@@ -252,19 +252,19 @@ Generated from source registration functions and the supplied APK DEX definition
 - Methods: `drawBlur`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountScrimViewAlpha — BlurDrawHook.kt:13593
+### mountScrimViewAlpha — BlurDrawHook.kt:13597
 
 - Classes: com.android.systemui.scrim.ScrimView: SystemUI; com.android.systemui.scrim.ScrimViewEx: SystemUI; com.oplus.systemui.scrim.ScrimViewExImp: SystemUI
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountScrimAlphaHook — BlurDrawHook.kt:13604
+### mountScrimAlphaHook — BlurDrawHook.kt:13608
 
 - Classes: dynamic / inherited target
 - Methods: `setViewAlpha`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountScrimGetViewAlphaHook — BlurDrawHook.kt:13637
+### mountScrimGetViewAlphaHook — BlurDrawHook.kt:13641
 
 - Classes: com.android.systemui.scrim.ScrimView: SystemUI
 - Methods: `getViewAlpha`

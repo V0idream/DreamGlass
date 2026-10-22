@@ -661,8 +661,7 @@ object LiquidGlassShader {
                 }
             } else {
                 // 2b. 折射环带：边缘位移最大，向内趋 0（包络 circleMap 与 Kyant 语义不变）
-                float d = circleMap(1.0 - -sd / max(uRefractionHeight, 1.0)) * uRefractionAmount
-                    * mix(1.0, 0.42, uSurfaceSoftness);
+                float d = circleMap(1.0 - -sd / max(uRefractionHeight, 1.0)) * uRefractionAmount;
                 // [2026-10-10 spec/97] 方向场改走 gradRefract（返回值幅值 = 方向可信度），
                 // 替代旧的 `sdfGrad + uDepth×球面径向` —— 旧场在宽元素内部退化成「从中心径向」，
                 // 与局部边界法线差 70~80° → 内容被横向拽向中心 → 玻璃内部奇怪扭曲图案。
@@ -799,14 +798,15 @@ object LiquidGlassShader {
             if (uSurfaceSoftness > 0.5) {
                 // A narrow perimeter glint with unequal front/back illumination. Screen blending
                 // preserves background color instead of clipping a broad additive white ring.
-                float thinWidth = clamp(hw * 0.30, 1.2, 3.0);
-                float thinBand = 1.0 - smoothstep(0.0, thinWidth, abs(dIn - 1.8));
+                float thinWidth = clamp(hw * 0.45, 2.0, 4.0);
+                float thinBand = 1.0 - smoothstep(0.0, thinWidth, abs(dIn - 2.4));
+                float reflectionFeather = 1.0 - smoothstep(0.0, max(hw, 5.0), abs(dIn - 3.0));
                 float facing = dot(sdfGrad, lightDir);
-                float softDirection = 0.10 + 0.62 * pow(max(facing, 0.0), 2.0)
-                    + 0.18 * pow(max(-facing, 0.0), 3.0);
+                float softDirection = 0.16 + 0.72 * pow(max(facing, 0.0), 2.0)
+                    + 0.24 * pow(max(-facing, 0.0), 3.0);
                 float faceLight = clamp(0.5 - centeredCoord.y / max(halfSize.y * 2.0, 1.0), 0.0, 1.0);
-                float sheen = (thinBand * softDirection * clamp(uHighlight, 0.0, 1.0) * 0.52
-                    + faceLight * faceLight * 0.022) * shapeAlpha;
+                float sheen = ((thinBand + reflectionFeather * 0.10) * softDirection * 0.85
+                    + faceLight * faceLight * 0.025) * clamp(uHighlight, 0.0, 1.0) * shapeAlpha;
                 glass.rgb += (float3(1.0) - glass.rgb) * sheen;
             } else {
                 glass.rgb += float3(hl * band * innerAtt * uHighlight);

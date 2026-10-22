@@ -48,7 +48,7 @@ object RuntimeDiagnostics {
         val version = revision.get()
         val snapshot = JSONObject().apply {
             put("host", host); put("pid", Process.myPid()); put("at", System.currentTimeMillis())
-            put("version", "0.1.3-COS17-Preview4"); put("stages", JSONObject(stages.toMap()))
+            put("version", "0.1.4-COS17-Preview5"); put("stages", JSONObject(stages.toMap()))
         }.toString()
         val classes = classesSnapshot
         val accepted = try {

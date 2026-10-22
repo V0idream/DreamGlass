@@ -40,9 +40,9 @@ BlurDrawHook.kt,9996,mountQsSeekBarActiveDrawable,com.oplus.systemui.qs.base.uti
 BlurDrawHook.kt,10024,mountDrawBlurShader,com.oplus.posteffect.drawable.BaseDrawable,drawBlurShader,static only; runtime pending
 BlurDrawHook.kt,10114,mountOnDrawContent,com.oplus.posteffect.drawable.BaseDrawable; com.oplus.posteffect.drawable.BlendDrawable,onDrawContent,static only; runtime pending
 BlurDrawHook.kt,10156,mountLegacyDrawBlur,com.oplus.posteffect.drawable.BaseDrawable; com.oplus.posteffect.ForegroundBlurParam,drawBlur,static only; runtime pending
-BlurDrawHook.kt,13593,mountScrimViewAlpha,com.android.systemui.scrim.ScrimView; com.android.systemui.scrim.ScrimViewEx; com.oplus.systemui.scrim.ScrimViewExImp,,static only; runtime pending
-BlurDrawHook.kt,13604,mountScrimAlphaHook,,setViewAlpha,static only; runtime pending
-BlurDrawHook.kt,13637,mountScrimGetViewAlphaHook,com.android.systemui.scrim.ScrimView,getViewAlpha,static only; runtime pending
+BlurDrawHook.kt,13597,mountScrimViewAlpha,com.android.systemui.scrim.ScrimView; com.android.systemui.scrim.ScrimViewEx; com.oplus.systemui.scrim.ScrimViewExImp,,static only; runtime pending
+BlurDrawHook.kt,13608,mountScrimAlphaHook,,setViewAlpha,static only; runtime pending
+BlurDrawHook.kt,13641,mountScrimGetViewAlphaHook,com.android.systemui.scrim.ScrimView,getViewAlpha,static only; runtime pending
 LauncherAnimHook.kt,150,mountSetAnimParamByType,com.android.quickstep.util.animation.CustomRectFSpringAnim$AnimType; com.android.quickstep.util.animation.CustomRectFSpringAnim,setAnimParamByType,static only; runtime pending
 LauncherAnimHook.kt,182,mountInitAllAnimations,com.android.quickstep.util.animation.CustomRectFSpringAnim,initAllAnimations,static only; runtime pending
 LauncherAnimHook.kt,210,mountGetLauncherViewAnimParam,com.android.quickstep.util.animation.CustomRectFSpringAnim$AnimType; com.oplus.quickstep.anim.LauncherContentAnimManager,getLauncherViewAnimParam,static only; runtime pending

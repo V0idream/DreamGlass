@@ -55,6 +55,8 @@ class RomContracts(unittest.TestCase):
         self.assertIn('blurMaskColor:I',wrapper['fields'])
         self.assertIn('draw(Landroid/graphics/Canvas;)V',wrapper['methods'])
         self.assertIn('getBlurDrawable()Lcom/oplus/posteffect/BlurDrawable;',wrapper['methods'])
+        helper=system['com.oplusos.systemui.common.blurability.platformblur.PlatformBlurHelper']
+        self.assertIn('hostView:Landroid/view/View;',helper['fields'])
         self.assertIn('com.oplus.systemui.volume.OplusVolumeSeekBar',system)
         for name in ('NativeScenePolicy','NativeDrawScope','VolumePanelGuard'):
             self.assertIn('com.coloros16.liquidglass.hook.'+name,module)

@@ -152,7 +152,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, false) }
         }
         action(safe, "恢复玻璃效果", true) { write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, true) } }
-        body.addView(text("DreamGlassforCOS17  ·  0.1.3 Preview 4\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
+        body.addView(text("DreamGlassforCOS17  ·  0.1.4 Preview 5\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
     }
 
     private fun attachPreview(parent: LinearLayout) {
@@ -169,7 +169,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         attachPreview(canvas)
         val control = card()
         control.addView(text("控制中心 · 柔光玻璃", 19f, ink, true))
-        control.addView(text("薄边缘、柔和反光与克制的折射，让背景的颜色自然透进来。", 13f, muted))
+        control.addView(text("完整折射、清晰光边与柔和反光，让背景的颜色自然透进来。", 13f, muted))
         fun option(label: String, key: String, changed: (() -> Unit)? = null) {
             control.addView(Switch(this).apply {
                 text = label; setTextColor(ink); minHeight = dp(48)
@@ -180,7 +180,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
                 }
             })
         }
-        option("柔光玻璃材质", Prefs.KEY_CC_SOFT_SURFACE) { updatePreview() }
+        option("柔光边缘（保留完整折射）", Prefs.KEY_CC_SOFT_SURFACE) { updatePreview() }
         option("去掉横向按钮的图标小圈", Prefs.KEY_CC_HIDE_ICON_BACKGROUND)
         control.addView(text("适用于控制中心按钮、滑条和媒体卡片。图标小圈的变化在布局或状态刷新时更新；首次升级需重启 SystemUI。", 12f, muted))
         for (style in Styles.all) {

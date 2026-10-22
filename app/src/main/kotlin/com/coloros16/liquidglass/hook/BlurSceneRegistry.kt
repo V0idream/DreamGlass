@@ -118,8 +118,7 @@ object BlurSceneRegistry {
         val entry = lookup(drawable) ?: return true
         val layer = entry.layerName ?: return true
         glassableByLayer[layer]?.let { return it }
-        val result = if (NativeScenePolicy.requiresNative(layer)) false
-        else if (WHITELIST.any { layer.contains(it, ignoreCase = true) }) true
+        val result = if (WHITELIST.any { layer.contains(it, ignoreCase = true) }) true
         else if (BLACKLIST.any { layer.contains(it, ignoreCase = true) }) false
         else true
         if (glassableByLayer.size >= GLASSABLE_CACHE_MAX) glassableByLayer.clear()

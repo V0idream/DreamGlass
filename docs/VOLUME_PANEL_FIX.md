@@ -1,5 +1,7 @@
 # Preview4：独立音量面板修复
 
+> 本文记录 Preview4。Preview5 已撤回宽泛层名优先排除，改为优先核对实际宿主 View，并严格区分 QS 资源 ID；见 CONTROL_GLASS_REGRESSION.md。
+
 用户明确指定异常位置为按音量键弹出的音量面板，不是控制中心的竖向音量滑条。
 
 ## 代码证据

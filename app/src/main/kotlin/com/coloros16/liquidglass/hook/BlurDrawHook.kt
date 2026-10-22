@@ -10867,6 +10867,10 @@ object BlurDrawHook {
                 // [doc/spec/112] 通知卡倾斜角（0 = 恒等零变化；动画期每帧更新）
                 tiltRadians = tiltNow,
             )
+            if (screenRegionMap[id]?.controlCenterSurface == true) {
+                RuntimeDiagnostics.mark("control_uniforms", "控制中心首次下发玻璃参数：折射=${cg.params.refractionAmount}px，" +
+                    "高光=${cg.params.highlight}，柔光边缘=${cg.params.surfaceSoftness}")
+            }
             appliedUniformsMap[id] = AppliedKey(
                 frame, sourceBitmapId, viewport, srcRect, cg.maskRect,
                 cornerIsConic = cg.cornerIsConic, cornerWeight = cg.cornerWeight, cornerRadius = cg.cornerRadius,

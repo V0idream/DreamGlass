@@ -22,6 +22,8 @@ public class NativeVolumeTest {
     @Test public void platformHostIsReadFromCallbackFieldWithoutGetterMethod() {
         assertTrue(VolumePanelGuard.INSTANCE.isVolumeWrapper(new PlatformWrapper("OplusVolumeSeekBar{a1b2}")));
         assertFalse(VolumePanelGuard.INSTANCE.isVolumeWrapper(new PlatformWrapper("OplusQsVerticalSeekBar{a1b2}")));
+        assertFalse(VolumePanelGuard.INSTANCE.isVolumeWrapper(new PlatformWrapper("ImageView{a1b2 app:id/qs_volume_seekbar}")));
+        assertFalse(VolumePanelGuard.INSTANCE.isVolumeWrapper(new PlatformWrapper("OplusQSIconView#volume_dialog")));
     }
 
     @Test public void nativeIdentityWinsEvenWithoutLayerRegistration() {
@@ -33,17 +35,18 @@ public class NativeVolumeTest {
         assertFalse(registry.isGlassable(volume));
         Object mixedLayer = new Object();
         registry.register(mixedLayer, 78, "media/VolumeDialog", null);
-        assertFalse(registry.isGlassable(mixedLayer));
+        assertTrue(registry.isGlassable(mixedLayer)); // Ambiguous layer names alone cannot exclude QS.
         assertTrue(registry.isGlassable(new Object()));
     }
 
-    @Test public void volumeWinsOverMediaOrNotificationInLayerIdentity() {
-        assertTrue(NativeScenePolicy.INSTANCE.requiresNative("media/VolumeDialog#progress"));
-        assertTrue(NativeScenePolicy.INSTANCE.requiresNative("NotificationShade/volume_dialog"));
+    @Test public void volumeRequiresHostClassIdentityRatherThanControlLabels() {
+        assertFalse(NativeScenePolicy.INSTANCE.isVolume("media/VolumeDialog#progress"));
+        assertFalse(NativeScenePolicy.INSTANCE.isVolume("NotificationShade/volume_dialog"));
         assertTrue(NativeScenePolicy.INSTANCE.isVolume("com.oplus.systemui.volume.OplusVolumeSeekBar{abcdef}"));
         assertTrue(NativeScenePolicy.INSTANCE.isVolume("OplusVolumeSideAccessoryButton"));
-        assertFalse(NativeScenePolicy.INSTANCE.requiresNative("OplusQsVerticalSeekBar"));
-        assertFalse(NativeScenePolicy.INSTANCE.requiresNative("quick_settings/media"));
+        assertFalse(NativeScenePolicy.INSTANCE.isVolume("OplusQsVerticalSeekBar"));
+        assertFalse(NativeScenePolicy.INSTANCE.isVolume("quick_settings/media"));
+        assertFalse(NativeScenePolicy.INSTANCE.isVolume("ImageView{ab12 id/qs_volume_progress}"));
     }
 
     @Test public void nestedNativeDrawAndExceptionDoNotLeakIntoNextTile() {

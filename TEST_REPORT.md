@@ -1,18 +1,18 @@
-# DreamGlassforCOS17 Preview4 验证报告
+# DreamGlassforCOS17 Preview5 验证报告
 
-日期：2026-10-22。版本 0.1.3-COS17-Preview4，versionCode 10004。
+日期：2026-10-22。版本 0.1.4-COS17-Preview5，versionCode 10005。
 
-本次修复按音量键弹出的独立面板被控制中心绘制 Hook 误处理的问题，保留其系统原生采样、遮罩和进度分层。Preview3 的柔光控制中心与横向磁贴去小圈功能继续保留。
+用户反馈控制中心玻璃感明显减弱并提供截图。本版恢复完整折射、增强薄边缘反光，同时收紧独立音量窗口身份判断，撤回 Preview4 的宽泛层名排除。横向按钮去小圈保留。
 
 | 检查 | 结果 |
 | --- | --- |
 | assembleDebug / testDebugUnitTest / lintDebug | BUILD SUCCESSFUL |
-| JVM 回归测试 | 7 项通过，0 失败 |
-| 实际 ROM / 框架 / APK 合约 | 7 项通过 |
+| JVM 回归测试 | 7 项通过，0 失败；含 QS 资源名不能当音量宿主的反例 |
+| 实际 ROM / 框架 / APK 合约 | 7 项通过；增加 PlatformBlurHelper.hostView 字段校验 |
 | Android Lint | 0 错误，182 警告 |
-| APK 签名 | v2 通过，与已验收 Preview2 同证书 |
-| 本版安装及视觉验收 | 未执行；用户选择自行安装，当前普通 ADB 无在线设备 |
+| APK 签名 | v2 通过，与 Preview2 同证书 |
+| 本版安装 / GPU / 实际外观 | 未执行，用户选择自行安装，普通 ADB 无在线设备 |
 
-APK SHA-256：`08d6ae9010e9a67c7edc1f044a8f8bcfc052661d2c3872e78be9b0a4efacf512`
+APK SHA-256：`445981188174d42a80b1e00c887b58dc5df268f26d2687fe45713845d43e24cb`
 
-修复证据与边界见 docs/VOLUME_PANEL_FIX.md。源码、实际测试输出与对应签名 APK 均已打包。未使用 ADB Shell Root，未自动安装或重启作用域。Preview2 的用户验收不替代本版视觉验收。
+新增 control_uniforms 诊断阶段记录实际下发的首次折射、高光和柔光参数，不能据此宣称最终视觉已通过。具体变更见 docs/CONTROL_GLASS_REGRESSION.md。没有自动安装、使用 Shell Root 或重启作用域。
