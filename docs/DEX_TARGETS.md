@@ -1719,6 +1719,76 @@ Exact descriptors from supplied APKs; not decompiler display aliases. APK-level 
 - `setDisallowChildIntercept(Z)V`
 - `setOnTouchListener(Lcom/oplus/systemui/plugins/qs/OplusQSRootViewComponent$TouchHandler;)V`
 
+### com.oplus.systemui.plugins.qs.customize.view.tile.OplusQSIconView (classes4.dex)
+
+- `$r8$lambda$Gfgu2Zxa6TLr4WmeKSxLe3oh19c(Lcom/oplus/systemui/plugins/qs/customize/view/tile/OplusQSIconView;)Lcom/oplus/systemui/qs/base/res/drawable/TileTransitionDrawable;`
+- `$r8$lambda$rk8VM8JV8ZxJJMuNU2XBslaE0IE(Lcom/oplus/systemui/plugins/qs/customize/view/tile/OplusQSIconView;)Lcom/oplus/systemui/qs/base/springtransition/DrawableTransitionAlphaTarget;`
+- `<init>(Landroid/content/Context;Lcom/oplusos/systemui/common/model/SpanSize;Z)V`
+- `getBgDrawable()Lcom/oplus/systemui/qs/base/res/drawable/TileDrawableWrapper;`
+- `getIconBgDrawable()Lcom/oplus/systemui/qs/base/res/drawable/TileTransitionDrawable;`
+- `getThemeDrawable()Lcom/oplus/systemui/qs/base/res/drawable/TileDrawableWrapper;`
+- `setDisableTheme(Z)V`
+- `setTileColorfulConfig(Ljava/lang/Integer;)V`
+- `setTileToggleable(Z)V`
+- `dimen(I)I`
+- `disableAnimation()V`
+- `disableTheme(Z)V`
+- `enableAnimation()V`
+- `getIconBgTransitionTarget()Lcom/oplus/systemui/qs/base/springtransition/DrawableTransitionAlphaTarget;`
+- `getIconScaleRatio()F`
+- `getIconView()Landroid/view/View;`
+- `getIconView()Landroid/widget/ImageView;`
+- `getIconViewTransitionTarget()Lcom/oplus/systemui/qs/base/springtransition/ImageViewTintTarget;`
+- `layoutViewToCenter(Landroid/view/View;)V`
+- `onAttachedToWindow()V`
+- `onIconDrawableUpdate(Z)V`
+- `onIconTintUpdate()V`
+- `onLayout(ZIIII)V`
+- `onMeasure(II)V`
+- `onRecycle()V`
+- `onThemeApplied(Z)V`
+- `setIcon(Lcom/android/systemui/plugins/qs/QSTile$State;Z)V`
+- `setIconScaleRatio(F)V`
+- `toString()Ljava/lang/String;`
+- `updateIconBgDrawable()V`
+
+### com.oplus.systemui.plugins.qs.customize.view.tile.OplusQSResizeableTileViewTwoXOne (classes4.dex)
+
+- `$r8$lambda$b4RqVXgg9a-wA2y2ZFIfFUba0rA(Lcom/oplus/systemui/plugins/qs/customize/view/tile/OplusQSResizeableTileViewTwoXOne;I)Lkotlin/Unit;`
+- `<init>(Landroid/content/Context;Lcom/android/systemui/plugins/qs/QSIconView;Lcom/oplus/systemui/plugins/qs/customize/view/tile/QsLabelView;)V`
+- `access$getAnimatorForLabel$p(Lcom/oplus/systemui/plugins/qs/customize/view/tile/OplusQSResizeableTileViewTwoXOne;)Lcom/oplus/systemui/plugins/qs/customize/view/tile/OplusQSHighlightTileViewAnimatorLabel;`
+- `access$getLabelDesc$p(Lcom/oplus/systemui/plugins/qs/customize/view/tile/OplusQSResizeableTileViewTwoXOne;)Landroid/widget/TextSwitcher;`
+- `access$getLabelTitle$p(Lcom/oplus/systemui/plugins/qs/customize/view/tile/OplusQSResizeableTileViewTwoXOne;)Landroid/widget/TextSwitcher;`
+- `bindClickListener(Landroid/view/View$OnClickListener;Landroid/view/View$OnClickListener;Landroid/view/View$OnLongClickListener;Lkotlin/jvm/functions/Function0;)V`
+- `collectProperties(Ljava/lang/String;Ljava/util/List;)Ljava/util/List;`
+- `doAnimation(Lcom/android/systemui/plugins/qs/QSTile$State;Z)V`
+- `getClickExpandView()Lcom/android/systemui/animation/Expandable;`
+- `getCornerRadius()F`
+- `getCornerWeight()Ljava/lang/Float;`
+- `getLabelDescText(Lcom/android/systemui/plugins/qs/QSTile$State;)Ljava/lang/CharSequence;`
+- `getPaddingForLaunchAnimation()Landroid/graphics/Rect;`
+- `getSecondaryClickHostView()Landroid/view/View;`
+- `getTileViewSize()Lcom/oplusos/systemui/common/model/SpanSize;`
+- `getViewRadius()F`
+- `handleCellLayoutConstraintChanged(Lcom/oplus/systemui/plugins/qs/CellCalculatorManager$LayoutConstraint;)V`
+- `handleEditModeChanged(Z)V`
+- `handleLabelColorChanged(Lkotlin/Pair;)V`
+- `handleTileStateChange(Lcom/android/systemui/plugins/qs/QSTile$State;)V`
+- `initializeLabelColorManager()Lcom/oplus/systemui/plugins/qs/customize/view/tile/IOplusQSTileViewLabelColorManager;`
+- `isNeedLayer(Landroid/view/View;)Z`
+- `onActivityLaunchAnimationEnd()V`
+- `onConfigurationChanged(Landroid/content/res/Configuration;)V`
+- `onDrawableUpdate(Ljava/util/List;Z)V`
+- `onMeasure(II)V`
+- `onOutlineUpdate(Ljava/util/List;)V`
+- `onRecycle()V`
+- `refreshClickable(Lcom/android/systemui/plugins/qs/QSTile$State;)V`
+- `refreshTextDesc(Lcom/android/systemui/plugins/qs/QSTile$State;Z)V`
+- `setShouldBlockVisibilityChanges(Z)V`
+- `setVisibility(I)V`
+- `updateLabelDescText(Lcom/android/systemui/plugins/qs/QSTile$State;)V`
+- `updateTextStyleInfo()V`
+
 ### com.oplus.systemui.qs.base.res.drawable.MixColorTileDrawable (classes4.dex)
 
 - `<init>(Lcom/oplusos/systemui/common/blurability/drawable/AutoBlurDrawable;Ljava/util/LinkedHashMap;)V`

@@ -1,23 +1,23 @@
-# DreamGlassforCOS17 Preview2 验证报告
+# DreamGlassforCOS17 Preview3 验证报告
 
-日期：2026-10-22。版本 0.1.1-COS17-Preview2，versionCode 10002。
+日期：2026-10-22。版本 0.1.2-COS17-Preview3，versionCode 10003。
+
+Preview2 用户反馈测试通过，已发布到 GitHub v0.1.1-preview2。此报告只描述新的控制中心柔光材质版本，不将旧版验收视为新版视觉验收。
 
 | 检查 | 结果 |
 | --- | --- |
 | assembleDebug / testDebugUnitTest / lintDebug | BUILD SUCCESSFUL |
-| JVM 类族解析测试 | 2 项通过，0 失败 |
-| 实际 APK 与设备框架合约 | 5 项通过 |
-| Android Lint | 0 错误，182 警告；未全局忽略 |
-| APK CRC / DEX 校验 / 元数据 | 通过 |
-| APK 签名 | v2 验证通过，与 Preview1 同一调试证书 |
-| 普通 ADB 覆盖安装 | 成功，保留配置 |
-| 子菜单返回 | 真机确认回到 DreamGlass 设置页 |
-| 图标开关 | 真机 LAUNCHER 隐藏/恢复通过，MODULE_SETTINGS 保留 |
-| 设备功能验收 | 用户反馈“测试通过” |
-| 长时间稳定性 / 帧率 / 多 ROM | 未完成专项测试 |
+| JVM 截屏类族测试 | 2 项通过 |
+| 实际 ROM / 框架 / APK 合约 | 6 项通过，新增 2x1 图标背景字段与回调核验 |
+| Android Lint | 0 错误，182 警告 |
+| APK 签名 | v2 通过，与 Preview2 同一证书 |
+| 新版覆盖安装及 GPU 输出 | 待本次安装授权和真机验证 |
+| 新版按钮观感 / 图标小圈 | 待用户手动重启 SystemUI 后验收 |
 
-APK SHA-256：`29d426c2a12486ae334f6f491d6ad71aed847c5df2bc65f323e6679909b5b694`
+APK SHA-256：`fdd339cfbf1dcca3e3818cb938cc8883b12e4c6198dc603f02561ba6b8389d1a`
 
-证书 SHA-256：`12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96`
+APK：DreamGlassforCOS17-0.1.2-Preview3.apk。
 
-本版修复 API 37 截屏类族和只读宿主配置导致的运行记录丢失；加入本应用 Root 快速重启、可隐藏图标及返回路径修复。具体证据与测试边界见 docs/DEVICE_DIAGNOSIS_2026-10-22.md。GPL 与第三方声明完整保留。旧 Preview1 报告见 docs/PREVIEW1_TEST_REPORT.md。
+已实现：控制中心薄边缘光、柔和面光、收敛折射；横向 2x1 按钮仅隐藏独立图标背景层；两个可关闭开关；MODULE_SETTINGS 补 DEFAULT 以支持隐式恢复启动。
+
+技术说明见 docs/SOFT_CONTROL_SURFACES.md，原有设备故障诊断见 docs/DEVICE_DIAGNOSIS_2026-10-22.md。旧版本验收报告单独保留。没有自动申请 Root、授予 Shell Root 或重启作用域。

@@ -617,6 +617,7 @@ object BlurDrawHook {
          *  开关（Prefs.KEY_UNIFIED_CORNER_ENABLE）另在渲染期读，与本标记是「与」关系：
          *  两者都真才重算圆角，任一为假即维持元素自身圆角。 */
         val unifiedScope: Boolean = false,
+        val controlCenterSurface: Boolean = ControlCenterStyleHook.isControlHost(hostViewRef?.get(), hostViewName),
     ) {
         /**
          * [doc/spec/99 clip∩bounds] 宿主 canvas 的 **clipBounds**（与 [autoBounds] 同坐标空间 =
@@ -2297,6 +2298,7 @@ object BlurDrawHook {
             return
         }
         resolveMethods(classLoader)
+        ControlCenterStyleHook.mount(api, classLoader)
         mountAutoBlurDrawable(api, classLoader)
         // [spec/48 过渡修复 2026-08-13] hook ScrimView.setViewAlpha 捕获 behind_scrim 真实动画 alpha
         //（AutoBlurDrawable.setAlpha 空实现恒 255 → 原黑 tint 读 drawable.alpha 永远=1 无过渡）。
@@ -11919,6 +11921,8 @@ object BlurDrawHook {
                 lightAngleDegrees = pick(Prefs.KEY_LIGHT_ANGLE, m.lightAngleDegrees),
                 parallaxX = pick(Prefs.KEY_PARALLAX_X, m.parallaxX),
                 parallaxY = pick(Prefs.KEY_PARALLAX_Y, m.parallaxY),
+                surfaceSoftness = if (screenRegionMap[elementId]?.controlCenterSurface == true)
+                    ControlCenterStyleHook.softness(api) else 0f,
             )
         } catch (t: Throwable) {
             Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)

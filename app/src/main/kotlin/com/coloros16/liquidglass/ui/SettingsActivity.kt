@@ -2138,6 +2138,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
     var innerGlow = Prefs.DEFAULT_INNER_GLOW
     var maskGlassDim = Prefs.DEFAULT_MASK_GLASS_DIM
     var lightAngle = Prefs.DEFAULT_LIGHT_ANGLE
+    var surfaceSoftness = 0f
 
     /** 参数变了由外部调 [refresh] 重绘；背景滚动则由 [onDraw] 自续帧驱动。 */
     fun refresh() = invalidate()
@@ -2255,6 +2256,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             lightAngleDegrees = lightAngle,
             parallaxX = 0f,
             parallaxY = 0f,
+            surfaceSoftness = surfaceSoftness,
         )
         // 卡片窗口在样图中的区域（bitmap 坐标）；AGSL 侧 srcCoord = srcRect.xy + coord/uViewport * srcRect.zw
         val srcRect = RectF(cardLeft + scrollX, cardTop, cardLeft + scrollX + cw, cardTop + ch)

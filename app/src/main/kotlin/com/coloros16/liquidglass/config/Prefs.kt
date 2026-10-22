@@ -35,6 +35,8 @@ object Prefs {
     /** [2026-10-13] 玻璃渲染总开关：false = 自研液态玻璃 shader 完全不套（回退系统模糊），
      *  其余功能（倾斜/飞入/热重载等）不受影响。默认开（保持现行为）。500ms TTL 直读生效。 */
     const val KEY_GLASS_ENABLE = "glass_enable"
+    const val KEY_CC_SOFT_SURFACE = "dreamglass_cc_soft_surface"
+    const val KEY_CC_HIDE_ICON_BACKGROUND = "dreamglass_cc_hide_icon_background"
     const val DEFAULT_GLASS_ENABLE = true
 
     // ---------- 玻璃效果预设 ----------

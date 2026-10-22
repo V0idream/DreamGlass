@@ -152,7 +152,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, false) }
         }
         action(safe, "恢复玻璃效果", true) { write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, true) } }
-        body.addView(text("DreamGlassforCOS17  ·  0.1.1 Preview 2\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
+        body.addView(text("DreamGlassforCOS17  ·  0.1.2 Preview 3\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
     }
 
     private fun attachPreview(parent: LinearLayout) {
@@ -167,6 +167,22 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         canvas.addView(text("光的实验室", 22f, ink, true))
         canvas.addView(text("先预览，再将材质写入系统配置。", 13f, muted))
         attachPreview(canvas)
+        val control = card()
+        control.addView(text("控制中心 · 柔光玻璃", 19f, ink, true))
+        control.addView(text("薄边缘、柔和反光与克制的折射，让背景的颜色自然透进来。", 13f, muted))
+        fun option(label: String, key: String, changed: (() -> Unit)? = null) {
+            control.addView(Switch(this).apply {
+                text = label; setTextColor(ink); minHeight = dp(48)
+                isChecked = try { remote()?.getBoolean(key, true) ?: true } catch (_: Throwable) { true }
+                setOnCheckedChangeListener { _, enabled ->
+                    write { it.putBoolean(key, enabled) }
+                    changed?.invoke()
+                }
+            })
+        }
+        option("柔光玻璃材质", Prefs.KEY_CC_SOFT_SURFACE) { updatePreview() }
+        option("去掉横向按钮的图标小圈", Prefs.KEY_CC_HIDE_ICON_BACKGROUND)
+        control.addView(text("适用于控制中心按钮、滑条和媒体卡片。图标小圈的变化在布局或状态刷新时更新；首次升级需重启 SystemUI。", 12f, muted))
         for (style in Styles.all) {
             val c = card()
             c.addView(text(style.name, 19f, ink, true))
@@ -188,6 +204,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         preview?.apply {
             blurRadius = previewStyle.blur; refractionAmount = previewStyle.refract
             dispersion = previewStyle.dispersion; highlight = previewStyle.highlight
+            surfaceSoftness = try { if (remote()?.getBoolean(Prefs.KEY_CC_SOFT_SURFACE, true) != false) 1f else 0f } catch (_: Throwable) { 1f }
             refresh()
         }
     }

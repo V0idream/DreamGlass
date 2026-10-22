@@ -24,247 +24,247 @@ Generated from source registration functions and the supplied APK DEX definition
 
 ## BlurDrawHook.kt
 
-### mountAutoBlurDrawable — BlurDrawHook.kt:2916
+### mountAutoBlurDrawable — BlurDrawHook.kt:2918
 
 - Classes: com.oplusos.systemui.common.blurability.drawable.AutoBlurDrawable: SystemUI
 - Methods: `draw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountLightStyleStrokeDrawable — BlurDrawHook.kt:2985
+### mountLightStyleStrokeDrawable — BlurDrawHook.kt:2987
 
 - Classes: com.oplus.systemui.qs.base.widget.LightStyleStrokeDrawable: SystemUI
 - Methods: `draw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountMaskBlurDrawable — BlurDrawHook.kt:3016
+### mountMaskBlurDrawable — BlurDrawHook.kt:3018
 
 - Classes: com.oplusos.systemui.common.blurability.drawable.MaskBlurDrawable: SystemUI
 - Methods: `draw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountCapsuleBackground — BlurDrawHook.kt:3059
+### mountCapsuleBackground — BlurDrawHook.kt:3061
 
 - Classes: com.oplus.systemui.notification.lockscreen.capsule.CapsuleBackgroundHelper: SystemUI
 - Methods: `drawCapsuleBg`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountCapsuleEar — BlurDrawHook.kt:3119
+### mountCapsuleEar — BlurDrawHook.kt:3121
 
 - Classes: com.oplus.systemui.notification.lockscreen.capsule.CapsuleEarView: SystemUI
 - Methods: `onDraw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountMediaCarousel — BlurDrawHook.kt:3166
+### mountMediaCarousel — BlurDrawHook.kt:3168
 
 - Classes: com.oplus.systemui.media.controls.ui.OplusMediaCarouselView: SystemUI
 - Methods: `onDraw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountMixColorTileRegion — BlurDrawHook.kt:4071
+### mountMixColorTileRegion — BlurDrawHook.kt:4073
 
 - Classes: com.oplus.systemui.qs.base.res.drawable.MixColorTileDrawable: SystemUI
 - Methods: `draw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountNotifHeaderMaskColor — BlurDrawHook.kt:4293
+### mountNotifHeaderMaskColor — BlurDrawHook.kt:4295
 
 - Classes: com.oplus.systemui.statusbar.notification.stack.NotificationChildrenContainerExtImp$NotificationHeaderMaskColorDrawable: SystemUI
 - Methods: `draw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountMetaColorSuppress — BlurDrawHook.kt:4356
+### mountMetaColorSuppress — BlurDrawHook.kt:4358
 
 - Classes: dynamic / inherited target
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountNotificationBackground — BlurDrawHook.kt:4799
+### mountNotificationBackground — BlurDrawHook.kt:4801
 
 - Classes: com.oplus.systemui.statusbar.notification.row.NotificationBackgroundViewExtImp: SystemUI
 - Methods: `draw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountPlatformBlurMaskColor — BlurDrawHook.kt:4923
+### mountPlatformBlurMaskColor — BlurDrawHook.kt:4925
 
 - Classes: com.oplusos.systemui.common.blurability.platformblur.PlatformBlurDrawable: SystemUI
 - Methods: `draw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountMotionSources — BlurDrawHook.kt:5144
+### mountMotionSources — BlurDrawHook.kt:5146
 
 - Classes: dynamic / inherited target
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountShadeRootAttach — BlurDrawHook.kt:5169
+### mountShadeRootAttach — BlurDrawHook.kt:5171
 
 - Classes: com.android.systemui.shade.NotificationShadeWindowView: SystemUI
 - Methods: `onAttachedToWindow`, `onDetachedFromWindow`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountQsPageScroll — BlurDrawHook.kt:5234
+### mountQsPageScroll — BlurDrawHook.kt:5236
 
 - Classes: com.android.systemui.qs.PagedTileLayout$2: not defined in supplied APKs / external or dynamic; com.android.systemui.qs.deprecated.PagedTileLayout$2: SystemUI
 - Methods: `onPageScrolled`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountPanelExpansion — BlurDrawHook.kt:5280
+### mountPanelExpansion — BlurDrawHook.kt:5282
 
 - Classes: com.android.systemui.shade.QuickSettingsControllerImpl: SystemUI
 - Methods: `setExpansionHeight`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountCustomRowTranslation — BlurDrawHook.kt:5406
+### mountCustomRowTranslation — BlurDrawHook.kt:5408
 
 - Classes: com.oplus.systemui.statusbar.notification.customcard.OplusCustomRow: SystemUI
 - Methods: `setTranslation`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountNotificationTilt — BlurDrawHook.kt:5518
+### mountNotificationTilt — BlurDrawHook.kt:5520
 
 - Classes: com.android.systemui.statusbar.notification.row.ExpandableView: SystemUI; com.oplus.systemui.notification.headsup.windowframe.HeadsUpContainerWindow: SystemUI; com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout: SystemUI; com.oplus.systemui.notification.headsup.windowframe.OplusHeadsUpAnimator: SystemUI
 - Methods: `generateAddAnimation`, `animateTo`, `dismiss`, `getView`, `show`, `setTranslationY`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountContainerTransformHooks — BlurDrawHook.kt:6165
+### mountContainerTransformHooks — BlurDrawHook.kt:6167
 
 - Classes: com.android.systemui.shade.NotificationPanelView: SystemUI; com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout: SystemUI; com.oplus.systemui.plugins.qs.OplusQSRootView: SystemUI
 - Methods: `setScaleX`, `setScaleY`, `setTranslationX`, `setTranslationY`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountViewBlurProxySetBlurType — BlurDrawHook.kt:6350
+### mountViewBlurProxySetBlurType — BlurDrawHook.kt:6352
 
 - Classes: com.oplusos.systemui.common.blurability.ViewBlurProxy: SystemUI
 - Methods: `setBlurType`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountHeadsUpContainerIsHeadsUpView — BlurDrawHook.kt:6419
+### mountHeadsUpContainerIsHeadsUpView — BlurDrawHook.kt:6421
 
 - Classes: com.oplus.systemui.notification.headsup.windowframe.HeadsUpContainerWindow: SystemUI
 - Methods: `isHeadsUpView`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountSeedlingCardContainer — BlurDrawHook.kt:6464
+### mountSeedlingCardContainer — BlurDrawHook.kt:6466
 
 - Classes: com.oplus.systemui.statusbar.seeding.CapsulePluginContainer: SystemUI; android.view.ViewGroup: not defined in supplied APKs / external or dynamic
 - Methods: `dispatchDraw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountCardBackgroundGlass — BlurDrawHook.kt:6875
+### mountCardBackgroundGlass — BlurDrawHook.kt:6877
 
 - Classes: com.oplus.systemui.plugins.seedling.card.ui.view.CardBackgroundView: not defined in supplied APKs / external or dynamic
 - Methods: `onDraw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountSimpleBannerGlass — BlurDrawHook.kt:7109
+### mountSimpleBannerGlass — BlurDrawHook.kt:7111
 
 - Classes: com.oplus.systemui.notification.interruption.fullscreenbanner.view.FullScreenBanner: SystemUI; android.view.ViewGroup: not defined in supplied APKs / external or dynamic
 - Methods: `dispatchDraw`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountSimpleBannerAttachHook — BlurDrawHook.kt:7197
+### mountSimpleBannerAttachHook — BlurDrawHook.kt:7199
 
 - Classes: com.oplus.systemui.notification.interruption.fullscreenbanner.view.FullScreenBanner: SystemUI
 - Methods: `onAttachedToWindow`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountCardBackgroundAttachHook — BlurDrawHook.kt:7261
+### mountCardBackgroundAttachHook — BlurDrawHook.kt:7263
 
 - Classes: com.oplus.systemui.plugins.seedling.card.ui.view.CardBackgroundView: not defined in supplied APKs / external or dynamic
 - Methods: `onAttachedToWindow`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountCcBlurHooks — BlurDrawHook.kt:7381
+### mountCcBlurHooks — BlurDrawHook.kt:7383
 
 - Classes: com.oplusos.systemui.common.blurability.BlurConfig: SystemUI; com.oplusos.systemui.common.blurability.ViewBlurProxy: SystemUI
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountApplyPanelMirrorScale — BlurDrawHook.kt:7492
+### mountApplyPanelMirrorScale — BlurDrawHook.kt:7494
 
 - Classes: com.oplusos.systemui.common.util.NotifiAndQsPlatformBlurExKt: SystemUI; com.oplusos.systemui.common.blurability.ViewBlurProxy: SystemUI
 - Methods: `applyPanelMirrorScale`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountViewBlurProxyApplyBlurConfig — BlurDrawHook.kt:7531
+### mountViewBlurProxyApplyBlurConfig — BlurDrawHook.kt:7533
 
 - Classes: com.oplusos.systemui.common.blurability.ViewBlurProxy: SystemUI
 - Methods: `applyConfigToPlatformBlur`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountOplusCustomRowGlass — BlurDrawHook.kt:7870
+### mountOplusCustomRowGlass — BlurDrawHook.kt:7872
 
 - Classes: com.oplus.systemui.statusbar.notification.customcard.OplusCustomRow: SystemUI
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountQsColorUtil — BlurDrawHook.kt:8079
+### mountQsColorUtil — BlurDrawHook.kt:8081
 
 - Classes: dynamic / inherited target
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountTextViewSetTextColor — BlurDrawHook.kt:8156
+### mountTextViewSetTextColor — BlurDrawHook.kt:8158
 
 - Classes: dynamic / inherited target
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountTextViewOnDraw — BlurDrawHook.kt:8253
+### mountTextViewOnDraw — BlurDrawHook.kt:8255
 
 - Classes: dynamic / inherited target
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountOnBlurReady — BlurDrawHook.kt:9816
+### mountOnBlurReady — BlurDrawHook.kt:9818
 
 - Classes: com.oplus.posteffect.manager.BlurDrawableManager: SystemUI/SystemLauncher
 - Methods: `onBlurReady`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountAddBlurDrawable — BlurDrawHook.kt:9891
+### mountAddBlurDrawable — BlurDrawHook.kt:9893
 
 - Classes: com.oplus.posteffect.drawable.ContinuousBlurDrawable: SystemUI
 - Methods: `addBlurDrawable`, `getDrawableId`, `getDrawingParam`, `getSurfaceControl`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountQsSeekBarActiveDrawable — BlurDrawHook.kt:9975
+### mountQsSeekBarActiveDrawable — BlurDrawHook.kt:9977
 
 - Classes: com.oplus.systemui.qs.base.util.QsSeekBarBlurManager: SystemUI
 - Methods: `getSeekBarActiveDrawable`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountDrawBlurShader — BlurDrawHook.kt:10003
+### mountDrawBlurShader — BlurDrawHook.kt:10005
 
 - Classes: com.oplus.posteffect.drawable.BaseDrawable: SystemUI
 - Methods: `drawBlurShader`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountOnDrawContent — BlurDrawHook.kt:10093
+### mountOnDrawContent — BlurDrawHook.kt:10095
 
 - Classes: com.oplus.posteffect.drawable.BaseDrawable: SystemUI; com.oplus.posteffect.drawable.BlendDrawable: SystemUI
 - Methods: `onDrawContent`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountLegacyDrawBlur — BlurDrawHook.kt:10135
+### mountLegacyDrawBlur — BlurDrawHook.kt:10137
 
 - Classes: com.oplus.posteffect.drawable.BaseDrawable: SystemUI; com.oplus.posteffect.ForegroundBlurParam: SystemUI
 - Methods: `drawBlur`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountScrimViewAlpha — BlurDrawHook.kt:13562
+### mountScrimViewAlpha — BlurDrawHook.kt:13566
 
 - Classes: com.android.systemui.scrim.ScrimView: SystemUI; com.android.systemui.scrim.ScrimViewEx: SystemUI; com.oplus.systemui.scrim.ScrimViewExImp: SystemUI
 - Methods: literal / structural / delegated resolution; see source
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountScrimAlphaHook — BlurDrawHook.kt:13573
+### mountScrimAlphaHook — BlurDrawHook.kt:13577
 
 - Classes: dynamic / inherited target
 - Methods: `setViewAlpha`
 - Registration evidence: source only; device invocation and final pixels pending.
 
-### mountScrimGetViewAlphaHook — BlurDrawHook.kt:13606
+### mountScrimGetViewAlphaHook — BlurDrawHook.kt:13610
 
 - Classes: com.android.systemui.scrim.ScrimView: SystemUI
 - Methods: `getViewAlpha`

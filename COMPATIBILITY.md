@@ -78,3 +78,7 @@ com.oplus.systemui.plugins.seedling.capsule.ui.view.CapsuleView
 - 总开关在加载时生效，完全停用需要手动重启对应进程；单独“暂停玻璃”不会撤销已安装的所有非渲染 Hook。
 - 预设只影响材质，不替用户启用总开关或扩展功能；首页样图是应用内合成背景，不是设备截图。
 - 诊断记录是当前/最近一次进程启动的阶段快照，不等于实时存活或完整效果验收。
+
+## Preview3 控制中心外观
+
+新增 ControlCenterStyleHook，按真实 SystemUI 17.99.02 的 OplusQSIconView 字段与回调接入，控制中心视图注册时识别材质作用范围。六项 ROM 合约通过；新版实际像素输出与按钮观感待本次设备验收。详见 docs/SOFT_CONTROL_SURFACES.md。

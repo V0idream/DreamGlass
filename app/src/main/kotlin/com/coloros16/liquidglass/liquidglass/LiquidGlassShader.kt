@@ -61,6 +61,7 @@ object LiquidGlassShader {
         uniform float uDepth;            // 深度：法线的径向分量强度（Kyant depthEffect，0 或 1）
         uniform float uDispersion;       // 色散强度（光谱采样缩放；0=关闭，建议 0~0.3）
         uniform float uHighlight;        // 高光强度（加性，建议 0.3~0.6；定向亮边而非整体发白）
+        uniform float uSurfaceSoftness;  // DreamGlass control surfaces: thin asymmetric light, restrained refraction.
         uniform float uHighlightWidth;   // 高光带宽度 px（边缘内外各此宽，模拟 Kyant 描边+模糊）
         uniform float uHighlightFalloff; // 高光方向衰减指数（Kyant ControlCenter=2；越大越聚光）
         uniform float uHighlightFloor;   // [2026-09-16 弧线高光修复] 方向因子保底：圆角弧线法线扫过 90°
@@ -660,7 +661,8 @@ object LiquidGlassShader {
                 }
             } else {
                 // 2b. 折射环带：边缘位移最大，向内趋 0（包络 circleMap 与 Kyant 语义不变）
-                float d = circleMap(1.0 - -sd / max(uRefractionHeight, 1.0)) * uRefractionAmount;
+                float d = circleMap(1.0 - -sd / max(uRefractionHeight, 1.0)) * uRefractionAmount
+                    * mix(1.0, 0.42, uSurfaceSoftness);
                 // [2026-10-10 spec/97] 方向场改走 gradRefract（返回值幅值 = 方向可信度），
                 // 替代旧的 `sdfGrad + uDepth×球面径向` —— 旧场在宽元素内部退化成「从中心径向」，
                 // 与局部边界法线差 70~80° → 内容被横向拽向中心 → 玻璃内部奇怪扭曲图案。
@@ -794,7 +796,21 @@ object LiquidGlassShader {
             float floorK = clamp(uHighlightFloor, 0.0, 1.0);
             float dirDot = pow(abs(dot(sdfGrad, lightDir)), uHighlightFalloff);
             float hl = floorK + (1.0 - floorK) * dirDot;
-            glass.rgb += float3(hl * band * innerAtt * uHighlight);
+            if (uSurfaceSoftness > 0.5) {
+                // A narrow perimeter glint with unequal front/back illumination. Screen blending
+                // preserves background color instead of clipping a broad additive white ring.
+                float thinWidth = clamp(hw * 0.30, 1.2, 3.0);
+                float thinBand = 1.0 - smoothstep(0.0, thinWidth, abs(dIn - 1.8));
+                float facing = dot(sdfGrad, lightDir);
+                float softDirection = 0.10 + 0.62 * pow(max(facing, 0.0), 2.0)
+                    + 0.18 * pow(max(-facing, 0.0), 3.0);
+                float faceLight = clamp(0.5 - centeredCoord.y / max(halfSize.y * 2.0, 1.0), 0.0, 1.0);
+                float sheen = (thinBand * softDirection * clamp(uHighlight, 0.0, 1.0) * 0.52
+                    + faceLight * faceLight * 0.022) * shapeAlpha;
+                glass.rgb += (float3(1.0) - glass.rgb) * sheen;
+            } else {
+                glass.rgb += float3(hl * band * innerAtt * uHighlight);
+            }
 
             // [临时诊断 高光] 逐像素可视化（需 uDebugHighlight>0.5）。
             // R = hl（方向因子）、G = band（带包络）、B = sdfGrad.x 映射到 [0,1]（梯度方向）。
@@ -860,6 +876,7 @@ object LiquidGlassShader {
         val parallaxY: Float = 0f,
         /** 内侧光 0~1（uInnerGlow；0=关）。放末尾带默认值，既有位置实参不受影响。 */
         val innerGlow: Float = 0f,
+        val surfaceSoftness: Float = 0f,
     )
 
     /**
@@ -1031,6 +1048,7 @@ object LiquidGlassShader {
         shader.setFloatUniform("uDepth", params.depth)
         shader.setFloatUniform("uDispersion", params.dispersion)
         shader.setFloatUniform("uHighlight", params.highlight)
+        shader.setFloatUniform("uSurfaceSoftness", params.surfaceSoftness.coerceIn(0f, 1f))
         shader.setFloatUniform("uHighlightWidth", params.highlightWidth)
         shader.setFloatUniform("uHighlightFalloff", params.highlightFalloff)
         shader.setFloatUniform("uVibrancy", params.vibrancy)

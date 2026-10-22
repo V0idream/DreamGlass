@@ -38,6 +38,17 @@ class RomContracts(unittest.TestCase):
         for cls,methods in targets.items():
             for method in methods:self.assertIn(method,system[cls]['methods'])
 
+    def test_cos17_wide_icon_decoration_contract(self):
+        prefix='com.oplus.systemui.plugins.qs.customize.view.tile.'
+        icon=system[prefix+'OplusQSIconView']
+        self.assertIn('iconBgView:Landroid/widget/ImageView;',icon['fields'])
+        self.assertIn('updateIconBgDrawable()V',icon['methods'])
+        self.assertIn('onLayout(ZIIII)V',icon['methods'])
+        self.assertIn('onAttachedToWindow()V',icon['methods'])
+        self.assertIn('onIconDrawableUpdate(Z)V',icon['methods'])
+        self.assertIn(prefix+'OplusQSResizeableTileViewTwoXOne',system)
+        self.assertIn('com.coloros16.liquidglass.hook.ControlCenterStyleHook',module)
+
     def test_module_entry_and_new_product_classes(self):
         for name in ['entry.XposedEntry','ui.DreamActivity','ui.SettingsActivity','diagnostics.RuntimeDiagnostics','diagnostics.RuntimeStore','root.ScopeRestarter','hook.CaptureApi','hook.BlurDrawHook','hook.LauncherHook','liquidglass.LiquidGlassShader']:
             self.assertIn('com.coloros16.liquidglass.'+name,module)
