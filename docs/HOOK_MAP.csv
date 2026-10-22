@@ -11,38 +11,38 @@ BlurDrawHook.kt,3168,mountMediaCarousel,com.oplus.systemui.media.controls.ui.Opl
 BlurDrawHook.kt,4073,mountMixColorTileRegion,com.oplus.systemui.qs.base.res.drawable.MixColorTileDrawable,draw,static only; runtime pending
 BlurDrawHook.kt,4295,mountNotifHeaderMaskColor,com.oplus.systemui.statusbar.notification.stack.NotificationChildrenContainerExtImp$NotificationHeaderMaskColorDrawable,draw,static only; runtime pending
 BlurDrawHook.kt,4358,mountMetaColorSuppress,,,static only; runtime pending
-BlurDrawHook.kt,4801,mountNotificationBackground,com.oplus.systemui.statusbar.notification.row.NotificationBackgroundViewExtImp,draw,static only; runtime pending
-BlurDrawHook.kt,4925,mountPlatformBlurMaskColor,com.oplusos.systemui.common.blurability.platformblur.PlatformBlurDrawable,draw,static only; runtime pending
-BlurDrawHook.kt,5146,mountMotionSources,,,static only; runtime pending
-BlurDrawHook.kt,5171,mountShadeRootAttach,com.android.systemui.shade.NotificationShadeWindowView,onAttachedToWindow; onDetachedFromWindow,static only; runtime pending
-BlurDrawHook.kt,5236,mountQsPageScroll,com.android.systemui.qs.PagedTileLayout$2; com.android.systemui.qs.deprecated.PagedTileLayout$2,onPageScrolled,static only; runtime pending
-BlurDrawHook.kt,5282,mountPanelExpansion,com.android.systemui.shade.QuickSettingsControllerImpl,setExpansionHeight,static only; runtime pending
-BlurDrawHook.kt,5408,mountCustomRowTranslation,com.oplus.systemui.statusbar.notification.customcard.OplusCustomRow,setTranslation,static only; runtime pending
-BlurDrawHook.kt,5520,mountNotificationTilt,com.android.systemui.statusbar.notification.row.ExpandableView; com.oplus.systemui.notification.headsup.windowframe.HeadsUpContainerWindow; com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout; com.oplus.systemui.notification.headsup.windowframe.OplusHeadsUpAnimator,generateAddAnimation; animateTo; dismiss; getView; show; setTranslationY,static only; runtime pending
-BlurDrawHook.kt,6167,mountContainerTransformHooks,com.android.systemui.shade.NotificationPanelView; com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout; com.oplus.systemui.plugins.qs.OplusQSRootView,setScaleX; setScaleY; setTranslationX; setTranslationY,static only; runtime pending
-BlurDrawHook.kt,6352,mountViewBlurProxySetBlurType,com.oplusos.systemui.common.blurability.ViewBlurProxy,setBlurType,static only; runtime pending
-BlurDrawHook.kt,6421,mountHeadsUpContainerIsHeadsUpView,com.oplus.systemui.notification.headsup.windowframe.HeadsUpContainerWindow,isHeadsUpView,static only; runtime pending
-BlurDrawHook.kt,6466,mountSeedlingCardContainer,com.oplus.systemui.statusbar.seeding.CapsulePluginContainer; android.view.ViewGroup,dispatchDraw,static only; runtime pending
-BlurDrawHook.kt,6877,mountCardBackgroundGlass,com.oplus.systemui.plugins.seedling.card.ui.view.CardBackgroundView,onDraw,static only; runtime pending
-BlurDrawHook.kt,7111,mountSimpleBannerGlass,com.oplus.systemui.notification.interruption.fullscreenbanner.view.FullScreenBanner; android.view.ViewGroup,dispatchDraw,static only; runtime pending
-BlurDrawHook.kt,7199,mountSimpleBannerAttachHook,com.oplus.systemui.notification.interruption.fullscreenbanner.view.FullScreenBanner,onAttachedToWindow,static only; runtime pending
-BlurDrawHook.kt,7263,mountCardBackgroundAttachHook,com.oplus.systemui.plugins.seedling.card.ui.view.CardBackgroundView,onAttachedToWindow,static only; runtime pending
-BlurDrawHook.kt,7383,mountCcBlurHooks,com.oplusos.systemui.common.blurability.BlurConfig; com.oplusos.systemui.common.blurability.ViewBlurProxy,,static only; runtime pending
-BlurDrawHook.kt,7494,mountApplyPanelMirrorScale,com.oplusos.systemui.common.util.NotifiAndQsPlatformBlurExKt; com.oplusos.systemui.common.blurability.ViewBlurProxy,applyPanelMirrorScale,static only; runtime pending
-BlurDrawHook.kt,7533,mountViewBlurProxyApplyBlurConfig,com.oplusos.systemui.common.blurability.ViewBlurProxy,applyConfigToPlatformBlur,static only; runtime pending
-BlurDrawHook.kt,7872,mountOplusCustomRowGlass,com.oplus.systemui.statusbar.notification.customcard.OplusCustomRow,,static only; runtime pending
-BlurDrawHook.kt,8081,mountQsColorUtil,,,static only; runtime pending
-BlurDrawHook.kt,8158,mountTextViewSetTextColor,,,static only; runtime pending
-BlurDrawHook.kt,8255,mountTextViewOnDraw,,,static only; runtime pending
-BlurDrawHook.kt,9818,mountOnBlurReady,com.oplus.posteffect.manager.BlurDrawableManager,onBlurReady,static only; runtime pending
-BlurDrawHook.kt,9893,mountAddBlurDrawable,com.oplus.posteffect.drawable.ContinuousBlurDrawable,addBlurDrawable; getDrawableId; getDrawingParam; getSurfaceControl,static only; runtime pending
-BlurDrawHook.kt,9977,mountQsSeekBarActiveDrawable,com.oplus.systemui.qs.base.util.QsSeekBarBlurManager,getSeekBarActiveDrawable,static only; runtime pending
-BlurDrawHook.kt,10005,mountDrawBlurShader,com.oplus.posteffect.drawable.BaseDrawable,drawBlurShader,static only; runtime pending
-BlurDrawHook.kt,10095,mountOnDrawContent,com.oplus.posteffect.drawable.BaseDrawable; com.oplus.posteffect.drawable.BlendDrawable,onDrawContent,static only; runtime pending
-BlurDrawHook.kt,10137,mountLegacyDrawBlur,com.oplus.posteffect.drawable.BaseDrawable; com.oplus.posteffect.ForegroundBlurParam,drawBlur,static only; runtime pending
-BlurDrawHook.kt,13566,mountScrimViewAlpha,com.android.systemui.scrim.ScrimView; com.android.systemui.scrim.ScrimViewEx; com.oplus.systemui.scrim.ScrimViewExImp,,static only; runtime pending
-BlurDrawHook.kt,13577,mountScrimAlphaHook,,setViewAlpha,static only; runtime pending
-BlurDrawHook.kt,13610,mountScrimGetViewAlphaHook,com.android.systemui.scrim.ScrimView,getViewAlpha,static only; runtime pending
+BlurDrawHook.kt,4806,mountNotificationBackground,com.oplus.systemui.statusbar.notification.row.NotificationBackgroundViewExtImp,draw,static only; runtime pending
+BlurDrawHook.kt,4930,mountPlatformBlurMaskColor,com.oplusos.systemui.common.blurability.platformblur.PlatformBlurDrawable,draw,static only; runtime pending
+BlurDrawHook.kt,5165,mountMotionSources,,,static only; runtime pending
+BlurDrawHook.kt,5190,mountShadeRootAttach,com.android.systemui.shade.NotificationShadeWindowView,onAttachedToWindow; onDetachedFromWindow,static only; runtime pending
+BlurDrawHook.kt,5255,mountQsPageScroll,com.android.systemui.qs.PagedTileLayout$2; com.android.systemui.qs.deprecated.PagedTileLayout$2,onPageScrolled,static only; runtime pending
+BlurDrawHook.kt,5301,mountPanelExpansion,com.android.systemui.shade.QuickSettingsControllerImpl,setExpansionHeight,static only; runtime pending
+BlurDrawHook.kt,5427,mountCustomRowTranslation,com.oplus.systemui.statusbar.notification.customcard.OplusCustomRow,setTranslation,static only; runtime pending
+BlurDrawHook.kt,5539,mountNotificationTilt,com.android.systemui.statusbar.notification.row.ExpandableView; com.oplus.systemui.notification.headsup.windowframe.HeadsUpContainerWindow; com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout; com.oplus.systemui.notification.headsup.windowframe.OplusHeadsUpAnimator,generateAddAnimation; animateTo; dismiss; getView; show; setTranslationY,static only; runtime pending
+BlurDrawHook.kt,6186,mountContainerTransformHooks,com.android.systemui.shade.NotificationPanelView; com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout; com.oplus.systemui.plugins.qs.OplusQSRootView,setScaleX; setScaleY; setTranslationX; setTranslationY,static only; runtime pending
+BlurDrawHook.kt,6371,mountViewBlurProxySetBlurType,com.oplusos.systemui.common.blurability.ViewBlurProxy,setBlurType,static only; runtime pending
+BlurDrawHook.kt,6440,mountHeadsUpContainerIsHeadsUpView,com.oplus.systemui.notification.headsup.windowframe.HeadsUpContainerWindow,isHeadsUpView,static only; runtime pending
+BlurDrawHook.kt,6485,mountSeedlingCardContainer,com.oplus.systemui.statusbar.seeding.CapsulePluginContainer; android.view.ViewGroup,dispatchDraw,static only; runtime pending
+BlurDrawHook.kt,6896,mountCardBackgroundGlass,com.oplus.systemui.plugins.seedling.card.ui.view.CardBackgroundView,onDraw,static only; runtime pending
+BlurDrawHook.kt,7130,mountSimpleBannerGlass,com.oplus.systemui.notification.interruption.fullscreenbanner.view.FullScreenBanner; android.view.ViewGroup,dispatchDraw,static only; runtime pending
+BlurDrawHook.kt,7218,mountSimpleBannerAttachHook,com.oplus.systemui.notification.interruption.fullscreenbanner.view.FullScreenBanner,onAttachedToWindow,static only; runtime pending
+BlurDrawHook.kt,7282,mountCardBackgroundAttachHook,com.oplus.systemui.plugins.seedling.card.ui.view.CardBackgroundView,onAttachedToWindow,static only; runtime pending
+BlurDrawHook.kt,7402,mountCcBlurHooks,com.oplusos.systemui.common.blurability.BlurConfig; com.oplusos.systemui.common.blurability.ViewBlurProxy,,static only; runtime pending
+BlurDrawHook.kt,7513,mountApplyPanelMirrorScale,com.oplusos.systemui.common.util.NotifiAndQsPlatformBlurExKt; com.oplusos.systemui.common.blurability.ViewBlurProxy,applyPanelMirrorScale,static only; runtime pending
+BlurDrawHook.kt,7552,mountViewBlurProxyApplyBlurConfig,com.oplusos.systemui.common.blurability.ViewBlurProxy,applyConfigToPlatformBlur,static only; runtime pending
+BlurDrawHook.kt,7891,mountOplusCustomRowGlass,com.oplus.systemui.statusbar.notification.customcard.OplusCustomRow,,static only; runtime pending
+BlurDrawHook.kt,8100,mountQsColorUtil,,,static only; runtime pending
+BlurDrawHook.kt,8177,mountTextViewSetTextColor,,,static only; runtime pending
+BlurDrawHook.kt,8274,mountTextViewOnDraw,,,static only; runtime pending
+BlurDrawHook.kt,9837,mountOnBlurReady,com.oplus.posteffect.manager.BlurDrawableManager,onBlurReady,static only; runtime pending
+BlurDrawHook.kt,9912,mountAddBlurDrawable,com.oplus.posteffect.drawable.ContinuousBlurDrawable,addBlurDrawable; getDrawableId; getDrawingParam; getSurfaceControl,static only; runtime pending
+BlurDrawHook.kt,9996,mountQsSeekBarActiveDrawable,com.oplus.systemui.qs.base.util.QsSeekBarBlurManager,getSeekBarActiveDrawable,static only; runtime pending
+BlurDrawHook.kt,10024,mountDrawBlurShader,com.oplus.posteffect.drawable.BaseDrawable,drawBlurShader,static only; runtime pending
+BlurDrawHook.kt,10114,mountOnDrawContent,com.oplus.posteffect.drawable.BaseDrawable; com.oplus.posteffect.drawable.BlendDrawable,onDrawContent,static only; runtime pending
+BlurDrawHook.kt,10156,mountLegacyDrawBlur,com.oplus.posteffect.drawable.BaseDrawable; com.oplus.posteffect.ForegroundBlurParam,drawBlur,static only; runtime pending
+BlurDrawHook.kt,13593,mountScrimViewAlpha,com.android.systemui.scrim.ScrimView; com.android.systemui.scrim.ScrimViewEx; com.oplus.systemui.scrim.ScrimViewExImp,,static only; runtime pending
+BlurDrawHook.kt,13604,mountScrimAlphaHook,,setViewAlpha,static only; runtime pending
+BlurDrawHook.kt,13637,mountScrimGetViewAlphaHook,com.android.systemui.scrim.ScrimView,getViewAlpha,static only; runtime pending
 LauncherAnimHook.kt,150,mountSetAnimParamByType,com.android.quickstep.util.animation.CustomRectFSpringAnim$AnimType; com.android.quickstep.util.animation.CustomRectFSpringAnim,setAnimParamByType,static only; runtime pending
 LauncherAnimHook.kt,182,mountInitAllAnimations,com.android.quickstep.util.animation.CustomRectFSpringAnim,initAllAnimations,static only; runtime pending
 LauncherAnimHook.kt,210,mountGetLauncherViewAnimParam,com.android.quickstep.util.animation.CustomRectFSpringAnim$AnimType; com.oplus.quickstep.anim.LauncherContentAnimManager,getLauncherViewAnimParam,static only; runtime pending

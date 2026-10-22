@@ -35,6 +35,12 @@ object BlurSceneRegistry {
     )
 
     private val entries = ConcurrentHashMap<Int, SceneEntry>()
+    private val nativeDrawables = ConcurrentHashMap<Int, WeakReference<Any>>()
+
+    fun preserveNative(drawable: Any) {
+        if (nativeDrawables.size >= MAX_ENTRIES) nativeDrawables.clear()
+        nativeDrawables[System.identityHashCode(drawable)] = WeakReference(drawable)
+    }
 
     /** [spec/90 #6] 层名 → 是否玻璃化的判定缓存（WHITELIST/BLACKLIST 是固定小表，
      *  层名字符串有限；缓存后热路径免每次逐项 contains）。上限 64 整表清空。
@@ -104,10 +110,16 @@ object BlurSceneRegistry {
      * 至多各占一条缓存，判定值仍相同。
      */
     fun isGlassable(drawable: Any): Boolean {
+        val key = System.identityHashCode(drawable)
+        nativeDrawables[key]?.let {
+            if (it.get() === drawable) return false
+            nativeDrawables.remove(key, it)
+        }
         val entry = lookup(drawable) ?: return true
         val layer = entry.layerName ?: return true
         glassableByLayer[layer]?.let { return it }
-        val result = if (WHITELIST.any { layer.contains(it, ignoreCase = true) }) true
+        val result = if (NativeScenePolicy.requiresNative(layer)) false
+        else if (WHITELIST.any { layer.contains(it, ignoreCase = true) }) true
         else if (BLACKLIST.any { layer.contains(it, ignoreCase = true) }) false
         else true
         if (glassableByLayer.size >= GLASSABLE_CACHE_MAX) glassableByLayer.clear()

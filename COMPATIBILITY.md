@@ -82,3 +82,7 @@ com.oplus.systemui.plugins.seedling.capsule.ui.view.CapsuleView
 ## Preview3 控制中心外观
 
 新增 ControlCenterStyleHook，按真实 SystemUI 17.99.02 的 OplusQSIconView 字段与回调接入，控制中心视图注册时识别材质作用范围。六项 ROM 合约通过；新版实际像素输出与按钮观感待本次设备验收。详见 docs/SOFT_CONTROL_SURFACES.md。
+
+## Preview4 独立音量窗口
+
+为按音量键弹出的独立音量面板补充原生绘制隔离，不复用控制中心捕获与材质。包装字段、内部绘制和线程局部保护经合约与回归测试，实际面板视觉仍待用户安装验证。详见 docs/VOLUME_PANEL_FIX.md。

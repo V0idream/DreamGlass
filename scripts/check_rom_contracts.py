@@ -49,6 +49,16 @@ class RomContracts(unittest.TestCase):
         self.assertIn(prefix+'OplusQSResizeableTileViewTwoXOne',system)
         self.assertIn('com.coloros16.liquidglass.hook.ControlCenterStyleHook',module)
 
+    def test_independent_volume_platform_wrapper(self):
+        wrapper=system['com.oplusos.systemui.common.blurability.platformblur.PlatformBlurDrawable']
+        self.assertIn('getHostViewName:Lkotlin/jvm/functions/Function0;',wrapper['fields'])
+        self.assertIn('blurMaskColor:I',wrapper['fields'])
+        self.assertIn('draw(Landroid/graphics/Canvas;)V',wrapper['methods'])
+        self.assertIn('getBlurDrawable()Lcom/oplus/posteffect/BlurDrawable;',wrapper['methods'])
+        self.assertIn('com.oplus.systemui.volume.OplusVolumeSeekBar',system)
+        for name in ('NativeScenePolicy','NativeDrawScope','VolumePanelGuard'):
+            self.assertIn('com.coloros16.liquidglass.hook.'+name,module)
+
     def test_module_entry_and_new_product_classes(self):
         for name in ['entry.XposedEntry','ui.DreamActivity','ui.SettingsActivity','diagnostics.RuntimeDiagnostics','diagnostics.RuntimeStore','root.ScopeRestarter','hook.CaptureApi','hook.BlurDrawHook','hook.LauncherHook','liquidglass.LiquidGlassShader']:
             self.assertIn('com.coloros16.liquidglass.'+name,module)

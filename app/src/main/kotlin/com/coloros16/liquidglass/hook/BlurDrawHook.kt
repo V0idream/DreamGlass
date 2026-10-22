@@ -4432,6 +4432,11 @@ object BlurDrawHook {
             registerTargetCache[proxyKey] = RegisterTargetCache(resolved)
             target = resolved
         }
+        if (VolumePanelGuard.isVolumeView(hostView)) {
+            BlurSceneRegistry.preserveNative(target)
+            screenRegionMap.remove(System.identityHashCode(target))
+            return false
+        }
         GlassRegistry.bind(System.identityHashCode(target), target, cardClass)
         // [spec/38 修复 2026-08-13] ScrimView（面板背景 scrim，ScrimControllerExImp.refreshBehindDrawable 的
         // hostView）恒透明不渲染玻璃：**不写入 screenRegionMap**——否则全屏 region 令 isOverGlassRegion 对
@@ -4951,6 +4956,20 @@ object BlurDrawHook {
         }
         if (pbd == null) {
             chain.proceed(); return
+        }
+        if (VolumePanelGuard.isVolumeWrapper(pbd)) {
+            try {
+                mPlatformGetBlurDrawable?.invoke(pbd)?.let {
+                    BlurSceneRegistry.preserveNative(it)
+                    screenRegionMap.remove(System.identityHashCode(it))
+                    restoreSystemShaderIfReplaced(it)
+                }
+            } catch (t: Throwable) {
+                Lg.w(TAG, "volume: native identity registration unavailable", t)
+            }
+            RuntimeDiagnostics.mark("volume_native_surface", "独立音量面板保留系统采样、遮罩与进度层")
+            NativeDrawScope.runNative { chain.proceed() }
+            return
         }
         val original = try {
             mPlatformBlurMaskColor?.getInt(pbd)
@@ -10189,6 +10208,10 @@ object BlurDrawHook {
      * 系统 shader 可用时返回 false，让系统 proceed → 内部走 drawBlurShader → Hook 1 替换。
      */
     private fun tryRenderOnDrawContent(drawable: Any, canvas: Canvas): Boolean {
+        if (NativeDrawScope.isActive() || !BlurSceneRegistry.isGlassable(drawable)) {
+            restoreSystemShaderIfReplaced(drawable)
+            return false
+        }
         // [spec/85 省电模式] 省电开启 → 不接管：先还原可能残留的模块 shader，再交回系统原绘制
         //（return false → chain.proceed() 走系统 onDrawContent 分支，enableShader=false 时系统自己
         // 走 drawBitmapContent 位图平铺 = 恢复系统表现）。
@@ -10267,6 +10290,10 @@ object BlurDrawHook {
      * 返回值 true 仅代表 paint.shader 已替换为液态玻璃（后续由系统 drawPath 完成实际绘制）。
      */
     private fun replaceShaderIfPossible(drawable: Any): Boolean {
+        if (NativeDrawScope.isActive() || !BlurSceneRegistry.isGlassable(drawable)) {
+            restoreSystemShaderIfReplaced(drawable)
+            return false
+        }
         val id = System.identityHashCode(drawable)
         GlassRegistry.bind(id, drawable)
 
