@@ -155,7 +155,7 @@ object DisplayRootChannel {
     // 宿主 ClassLoader 加载 hide 类：模块类做 caller 会按模块签名判 hidden API 名单被拦成 CNFE
     private fun hostForName(name: String, ctx: Context?): Class<*> {
         val cl = ctx?.classLoader
-        return if (cl != null) Class.forName(name, true, cl) else Class.forName(name)
+        return CaptureApi.load(name, cl)
     }
 
     /**
@@ -201,8 +201,11 @@ object DisplayRootChannel {
             val hb = shot.javaClass.getMethod("getHardwareBuffer").invoke(shot) as? HardwareBuffer
                 ?: return null
             // 取到 buffer 后立刻 wrap+copy 出自有软件位图，再关掉 hb（避免泄漏）。
-            val bitmap = Bitmap.wrapHardwareBuffer(hb, null)?.copy(Bitmap.Config.ARGB_8888, false)
-            hb.close()
+            val bitmap = try {
+                val colorSpace = shot.javaClass.getMethod("getColorSpace").invoke(shot) as? android.graphics.ColorSpace
+                val wrapped = Bitmap.wrapHardwareBuffer(hb, colorSpace) ?: return null
+                try { wrapped.copy(Bitmap.Config.ARGB_8888, false) } finally { wrapped.recycle() }
+            } finally { hb.close() }
             // 不打成功日志：本函数在抓屏热路径上（面板拖动期每秒数十次），由调用方按需节流记录。
             bitmap
         } catch (t: Throwable) {

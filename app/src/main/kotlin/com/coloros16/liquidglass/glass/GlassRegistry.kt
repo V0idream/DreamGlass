@@ -284,7 +284,7 @@ object GlassRegistry {
             seen.keys.retainAll(keep)
             val json = encodeClasses(kept)
             if (json != raw) {
-                prefs.edit().putString(Prefs.KEY_GLASS_CLASSES, json).apply()
+                com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics.discovered(json)
             }
             dirty = false
         } catch (t: Throwable) {

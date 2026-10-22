@@ -2,6 +2,20 @@
 
 本项目包含派生自第三方开源项目的代码。按原项目许可证要求，声明如下。
 
+## AYwlilwYA / ColorOS16-LiquidGlass
+
+- 来源：https://github.com/AYwlilwYA/ColorOS16-LiquidGlass
+- 本次基线：`aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，上游 0.2.1。
+- 许可证：GPL-3.0，完整文本见 `LICENSE`。
+- DreamGlassforCOS17 是该代码的派生开发，保留原包命名空间以保持来源可追溯；安装包 ID 独立为 `com.dreamglass.cos17`。
+- 本次修改：原创产品首页、材质预设、阶段诊断、桌面反射字段校正、结构能力识别、API 范围与资源生命周期修正、独立应用身份。修改文件可通过 Git 差异与 `docs/DEVELOPMENT.md` 追踪。
+- 原项目说明保存于 `docs/UPSTREAM_README.md`。许可证及原作者声明继续有效。
+
+## 视觉和功能参考
+
+ElbowHitColor 仅用于包信息核查及功能范围参考。没有反编译、复制或打包它的代码、资源或素材。
+Z841973620/ColorOSLiquidGlass 仅查阅公开项目介绍，本次未复制其代码。
+
 ---
 
 ## Kyant0 / AndroidLiquidGlass

@@ -1,5 +1,8 @@
 # Gradle
 .gradle/
+.kotlin/
+__pycache__/
+*.pyc
 build/
 app/build/
 

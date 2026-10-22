@@ -20,7 +20,7 @@ material = "1.14.0"
 # SDK
 compileSdk = "36"
 targetSdk = "36"
-minSdk = "26"
+minSdk = "33"
 
 [libraries]
 libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed-api" }

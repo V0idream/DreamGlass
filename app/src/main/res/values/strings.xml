@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ColorOS 16 液态玻璃</string>
-    <string name="app_description">让 ColorOS 16 的通知中心和控制中心拥有 iOS 26 液态玻璃效果。</string>
+    <string name="app_name">DreamGlassforCOS17</string>
+    <string name="app_description">ColorOS 17 玻璃材质工作室：通知、控制中心、桌面效果与运行诊断。</string>
 
     <!-- 导航（[spec/88] 扩大返回键热区的无障碍描述） -->
     <string name="settings_back">返回</string>
@@ -186,7 +186,7 @@
     <string name="config_import_invalid">这不是本模块导出的配置文件</string>
     <string name="config_import_no_items">文件里没有可导入的配置项</string>
     <string name="config_framework_not_ready">服务还没准备好，请稍后再试。</string>
-    <string name="about_title">关于</string>
+    <string name="about_title">参考项目与原作者信息</string>
     <string name="about_tg">Telegram：https://t.me/c16lg666</string>
     <string name="about_qq">QQ 群：1102985644</string>
     <string name="about_developer">开发者：AlanYan</string>

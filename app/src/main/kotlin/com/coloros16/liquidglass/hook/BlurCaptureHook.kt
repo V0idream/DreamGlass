@@ -142,7 +142,7 @@ object BlurCaptureHook {
     // 宿主 ClassLoader 加载 hide 类：宿主 loader miss 时回退裸加载（保留原降级行为）
     private fun hostForName(name: String): Class<*> {
         val cl = hostClassLoader
-        return if (cl != null) Class.forName(name, true, cl) else Class.forName(name)
+        return CaptureApi.load(name, cl)
     }
 
     fun install(api: XposedInterface, classLoader: ClassLoader) {
@@ -834,13 +834,13 @@ object BlurCaptureHook {
                 Lg.w(TAG, "capture-dump: ActivityThread.currentApplication() null")
                 return
             }
-            val filter = android.content.IntentFilter("com.coloros16.liquidglass.DUMP")
+            val filter = android.content.IntentFilter("com.dreamglass.cos17.DUMP")
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
                     dumpRawCapture()
                 }
             }
-            ctx.registerReceiver(receiver, filter)
+            ctx.registerReceiver(receiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
             Lg.i(TAG, "capture-dump: broadcast receiver mounted (adb: am broadcast -a com.coloros16.liquidglass.DUMP)")
         } catch (t: Throwable) {
             Lg.e(TAG, "capture-dump: register receiver failed", t)

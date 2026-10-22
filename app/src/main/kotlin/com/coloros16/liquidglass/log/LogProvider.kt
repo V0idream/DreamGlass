@@ -7,6 +7,10 @@ import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import com.coloros16.liquidglass.diagnostics.RuntimeStore
+import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
+import com.coloros16.liquidglass.config.Prefs
+import org.json.JSONObject
 import java.io.File
 import java.io.FileNotFoundException
 
@@ -28,7 +32,7 @@ class LogProvider : ContentProvider() {
         private val ALLOWED_PACKAGES = setOf(
             "com.android.systemui",
             "com.android.launcher",
-            "com.coloros16.liquidglass",
+            "com.dreamglass.cos17",
         )
     }
 
@@ -87,7 +91,50 @@ class LogProvider : ContentProvider() {
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         checkCaller()
-        return null
+        val ctx = context ?: return null
+        val callingUid = Binder.getCallingUid()
+        fun requireHost(pkg: String) {
+            val packages = ctx.packageManager.getPackagesForUid(callingUid).orEmpty()
+            if (callingUid != android.os.Process.myUid() && pkg !in packages) {
+                throw SecurityException("Host identity mismatch")
+            }
+        }
+        val prefs = RuntimeStore.local(ctx)
+        val accepted = when (method) {
+            RuntimeStore.STATE -> {
+                require(arg == "com.android.systemui" || arg == "com.android.launcher")
+                requireHost(arg!!)
+                val raw = extras?.getString("snapshot") ?: return null
+                require(raw.length <= 8192)
+                val report = JSONObject(raw)
+                require(report.getString("host") == arg)
+                report.put("pid", Binder.getCallingPid())
+                report.put("receivedAt", System.currentTimeMillis())
+                prefs.edit().putString(RuntimeDiagnostics.PREFIX + arg, report.toString()).commit()
+            }
+            RuntimeStore.CLASSES -> {
+                require(arg == "com.android.systemui" || arg == "com.android.launcher")
+                requireHost(arg!!)
+                val raw = extras?.getString("classes") ?: return null
+                require(raw.length <= 65_536)
+                val classes = com.coloros16.liquidglass.glass.GlassRegistry.parseClasses(raw).take(1024)
+                prefs.edit().putString("observed_" + arg,
+                    com.coloros16.liquidglass.glass.GlassRegistry.encodeClasses(classes)).commit()
+            }
+            RuntimeStore.LOG -> {
+                val pkg = when (arg) {
+                    "systemui" -> "com.android.systemui"
+                    "launcher" -> "com.android.launcher"
+                    "app" -> "com.dreamglass.cos17"
+                    else -> throw IllegalArgumentException("Unknown host")
+                }
+                requireHost(pkg)
+                prefs.edit().putString(Prefs.KEY_LG_HB_PREFIX + arg, extras?.getString("heartbeat").orEmpty().take(512))
+                    .putString(Prefs.KEY_LG_CHUNK_PREFIX + arg, extras?.getString("tail").orEmpty().takeLast(4000)).commit()
+            }
+            else -> return null
+        }
+        return Bundle().apply { putBoolean("accepted", accepted) }
     }
 
     override fun getType(uri: Uri): String = "text/plain"

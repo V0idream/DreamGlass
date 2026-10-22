@@ -1,0 +1,818 @@
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\log\LogProvider.kt:113: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+                prefs.edit().putString(RuntimeDiagnostics.PREFIX + arg, report.toString()).commit()
+                                                                                           ~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\log\LogProvider.kt:122: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+                    com.coloros16.liquidglass.glass.GlassRegistry.encodeClasses(classes)).commit()
+                                                                                          ~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\log\LogProvider.kt:133: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+                    .putString(Prefs.KEY_LG_CHUNK_PREFIX + arg, extras?.getString("tail").orEmpty().takeLast(4000)).commit()
+                                                                                                                    ~~~~~~~~
+
+   Explanation for issues of type "ApplySharedPref":
+   Consider using apply() instead of commit on shared preferences. Whereas
+   commit blocks and writes its data to persistent storage immediately, apply
+   will handle it in the background.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:829: Warning: Reflective access to pathList, which is not part of the public SDK and therefore likely to change in future Android releases [DiscouragedPrivateApi]
+            val pathList = bdl.getDeclaredField("pathList").apply { isAccessible = true }.get(classLoader)
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LockScreenClockHook.kt:706: Warning: Reflective access to mRenderNode, which is not part of the public SDK and therefore likely to change in future Android releases [DiscouragedPrivateApi]
+                View::class.java.getDeclaredField("mRenderNode").apply { isAccessible = true }
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "DiscouragedPrivateApi":
+   Usage of restricted non-SDK interface may throw an exception at runtime.
+   Accessing non-SDK methods or fields through reflection has a high
+   likelihood to break your app between versions, and is being restricted to
+   facilitate future app compatibility.
+
+   https://developer.android.com/preview/restrictions-non-sdk-interfaces
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:8542: Warning: Using internal inset dimension resource status_bar_height is not supported [InternalInsetResource]
+            val id = res.getIdentifier("status_bar_height", "dimen", "android")
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "InternalInsetResource":
+   The internal inset dimension resources are not a supported way to retrieve
+   the relevant insets for your application. The insets are dynamic values
+   that can change while your app is visible, and your app's window may not
+   intersect with the system UI. To get the relevant value for your app and
+   listen to updates, use androidx.core.view.WindowInsetsCompat and related
+   APIs.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:2623: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val ext = Class.forName(CLASS_NBV_EXT, false, classLoader)
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:2805: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val nbvCls = Class.forName(CLASS_NOTIFICATION_BACKGROUND_VIEW, false, classLoader)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:2867: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            mNotifBackgroundViewClass = Class.forName(CLASS_NOTIFICATION_BACKGROUND_VIEW, false, classLoader)
+                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:2875: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val scrimCls = Class.forName(CLASS_SCRIM_VIEW, false, classLoader)
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:2887: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+                Class.forName(CLASS_SCRIM_VIEW_EX, false, classLoader)
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5173: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            Class.forName(CLASS_SHADE_ROOT_VIEW, false, classLoader)
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5238: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            Class.forName(CLASS_PAGED_TILE_LAYOUT_LISTENER, false, classLoader).also {
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5244: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+                Class.forName(CLASS_PAGED_TILE_LAYOUT_LISTENER_DEPRECATED, false, classLoader).also {
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5282: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_QUICK_SETTINGS_CONTROLLER, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5521: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            mExpandableRowClass = Class.forName(
+                                  ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5544: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+                val expandableViewCls = Class.forName(CLASS_EXPANDABLE_VIEW, false, classLoader)
+                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5549: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+                val scaleStateCls = Class.forName(
+                                    ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5555: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+                val rowAnimCls = Class.forName(
+                                 ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5762: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_NOTIFICATION_STACK_SCROLL_LAYOUT, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5763: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val expandableView = Class.forName(CLASS_EXPANDABLE_VIEW, false, classLoader)
+                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:13608: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_SCRIM_VIEW, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\Cos17Contract.kt:27: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+        Class.forName("com.android.quickstep.util.animation.ZuyqaWindowTilt", false, cl).getMethod("isEnabled")
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\Cos17Contract.kt:28: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+        Class.forName("com.android.common.util.ZuyqaAnimationTuning", false, cl).getMethod(
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\DisplayRootChannel.kt:91: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val at = Class.forName("android.app.ActivityThread")
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\log\FileLog.kt:144: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val ctx = Class.forName("android.app.ActivityThread")
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\log\FileLog.kt:150: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val at = Class.forName("android.app.ActivityThread")
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherAnimHook.kt:119: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_SPRING_ANIM, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherAnimHook.kt:140: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val absAnim = Class.forName(CLASS_ABS_ANIMATION, false, classLoader)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherAnimHook.kt:152: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_SPRING_ANIM, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherAnimHook.kt:153: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val animTypeCls = Class.forName(CLASS_ANIM_TYPE, false, classLoader)
+                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherAnimHook.kt:184: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_SPRING_ANIM, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherAnimHook.kt:217: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val animTypeCls = Class.forName(CLASS_ANIM_TYPE, false, classLoader)
+                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:544: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val opb = Class.forName(CLASS_OPLUS_PREVIEW_BACKGROUND, false, classLoader)
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:548: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val layer = Class.forName(CLASS_LAYER_BLUR_DRAWABLE, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:557: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val friv = Class.forName(CLASS_FOLDER_ROUND_IMAGE_VIEW, false, classLoader)
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:566: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val hotseat = Class.forName(CLASS_OPLUS_HOTSEAT, false, classLoader)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:573: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val hotseat = Class.forName(CLASS_OPLUS_HOTSEAT, false, classLoader)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:1227: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_OPLUS_PREVIEW_BACKGROUND, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:1282: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_FOLDER_ROUND_IMAGE_VIEW, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:1324: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val cls = Class.forName(CLASS_SCREEN_UTILS, false, classLoader)
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:1343: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val hotseat = Class.forName(CLASS_OPLUS_HOTSEAT, false, classLoader)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:1363: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val hotseat = Class.forName(CLASS_OPLUS_HOTSEAT, false, classLoader)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:247: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val cls = Class.forName(CLASS_ZUYQA_WINDOW_TILT, false, classLoader)
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:267: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val cls = Class.forName(CLASS_ZUYQA_TUNING, false, classLoader)
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:311: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val props = Class.forName(CLASS_SURFACE_PROPERTIES, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:318: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val params = Class.forName(CLASS_TRANSFORM_PARAMS, false, classLoader)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:326: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val helper = Class.forName(CLASS_RECT_TRANSFORM_HELPER, false, classLoader)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:334: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val updater = Class.forName(CLASS_ICON_LAYER_UPDATER, false, classLoader)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:341: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val tx = Class.forName("com.android.quickstep.util.SurfaceTransaction", false, classLoader)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:347: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val thumb = Class.forName(CLASS_THUMB_UTILS, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:353: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val target = Class.forName(CLASS_TARGET_COMPAT, false, classLoader)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:361: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val props = Class.forName(CLASS_SURFACE_PROPERTIES, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:367: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val st = Class.forName(CLASS_SURFACE_TRANSACTION, false, classLoader)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:374: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val spring = Class.forName(CLASS_SPRING_ANIM, false, classLoader)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:375: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            nullableAnimatorListenerCls = Class.forName(CLASS_NULLABLE_ANIMATOR_LISTENER, false, classLoader)
+                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:521: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            Class.forName(CLASS_RECT_TRANSFORM_HELPER, false, classLoader)
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:574: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_ICON_LAYER_UPDATER, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:624: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val clazz = Class.forName(CLASS_APP_LAUNCH_ANIM_LIGHT, false, classLoader)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:753: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val paramsCls = Class.forName(CLASS_TRANSFORM_PARAMS, false, classLoader)
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherTiltHook.kt:778: Warning: Accessing internal APIs via reflection is not supported and may not work on all devices or in the future [PrivateApi]
+            val recCls = Class.forName(CLASS_ANIMATION_RECORD, false, classLoader)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "PrivateApi":
+   Using reflection to access hidden/private Android APIs is not safe; it will
+   often not work on devices from other vendors, and it may suddenly stop
+   working (if the API is removed) or crash spectacularly (if the API behavior
+   changes, since there are no guarantees for compatibility).
+
+   https://developer.android.com/preview/restrictions-non-sdk-interfaces
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurCaptureHook.kt:860: Warning: Do not hardcode "/data/"; use Context.getFilesDir().getPath() instead [SdCardPath]
+                        val f = java.io.File("/data/user/0/com.oplus.blur/files/lg_capture_dump.png")
+                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SdCardPath":
+   Your code should not reference the /sdcard path directly; instead use
+   Environment.getExternalStorageDirectory().getPath().
+
+   Similarly, do not reference the /data/data/ path directly; it can vary in
+   multi-user scenarios. Instead, use Context.getFilesDir().getPath().
+
+   https://developer.android.com/training/data-storage#filesExternal
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\DreamActivity.kt:38: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+    private lateinit var master: Switch
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\DreamActivity.kt:202: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val icon = Switch(this).apply {
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:457: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switch = view.findViewById<Switch>(R.id.switchMaster)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:464: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchGlass = view.findViewById<Switch>(R.id.switchGlass)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:487: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchUnifiedCorner = view.findViewById<Switch>(R.id.switchUnifiedCorner)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1069: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchRetry = view.findViewById<Switch>(R.id.switchCaptureRetryEnabled)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1080: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchRegion = view.findViewById<Switch>(R.id.switchRegionCaptureExperimental)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1105: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchKeepBlur = view.findViewById<Switch>(R.id.switchKeepSystemCcBlur)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1116: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchRemoveMixColor = view.findViewById<Switch>(R.id.switchRemovePanelMixColor)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1130: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchTextContrast = view.findViewById<Switch>(R.id.switchTextContrast)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1141: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchHeadsUp = view.findViewById<Switch>(R.id.switchHeadsUpTextFollow)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1164: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchMask = view.findViewById<Switch>(R.id.switchMask)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1172: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchTextForceWhite = view.findViewById<Switch>(R.id.switchTextForceWhite)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1195: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchSeedling = view.findViewById<Switch>(R.id.switchSeedlingCardGlass)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1206: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchCapsule = view.findViewById<Switch>(R.id.switchSeedlingCapsuleGlass)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1233: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchForceT = view.findViewById<Switch>(R.id.switchSeedlingForceTransparentBg)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1249: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchDock = view.findViewById<Switch>(R.id.switchDockGlass)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1274: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switch = view.findViewById<Switch>(switchId)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1413: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switch = view.findViewById<Switch>(R.id.switchAnimTilt)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1436: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val notifSwitch = view.findViewById<Switch>(R.id.switchNotifTilt)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1463: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        val switchLogs = view.findViewById<Switch>(R.id.switchEnableLogs)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1746: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+    private fun refreshMasterSwitch(switch: Switch, listener: CompoundButton.OnCheckedChangeListener) {
+                                    ~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1782: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialCode from androidx.appcompat]
+        switch: Switch,
+        ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UseSwitchCompatOrMaterialCode":
+   Use SwitchCompat from AppCompat or MaterialSwitch from Material library
+
+   Vendor: Android Open Source Project
+   Identifier: androidx.appcompat
+   Feedback: https://issuetracker.google.com/issues/new?component=460343
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_anim_params.xml:15: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_anim.xml:23: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_anim.xml:75: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_anim.xml:127: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_background.xml:136: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_background.xml:152: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_background.xml:238: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_background.xml:254: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_desktop.xml:14: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_log.xml:13: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_mask.xml:13: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_mask.xml:28: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_master.xml:13: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_master.xml:27: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_material.xml:83: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_seedling.xml:13: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_seedling.xml:28: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_seedling.xml:104: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_text.xml:13: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_text.xml:28: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_tilt.xml:14: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_tilt.xml:100: Warning: Use SwitchCompat from AppCompat or MaterialSwitch from Material library [UseSwitchCompatOrMaterialXml from androidx.appcompat]
+        <Switch
+        ^
+
+   Explanation for issues of type "UseSwitchCompatOrMaterialXml":
+   Use SwitchCompat from AppCompat or MaterialSwitch from Material library
+
+   Vendor: Android Open Source Project
+   Identifier: androidx.appcompat
+   Feedback: https://issuetracker.google.com/issues/new?component=460343
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\gradle\wrapper\gradle-wrapper.properties:4: Warning: A newer version of Gradle than 8.14.2 is available: 8.14.6 [AndroidGradlePluginVersion]
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.2-bin.zip
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\gradle\libs.versions.toml:7: Warning: A newer version of com.android.application than 8.13.2 is available: 9.4.1 [AndroidGradlePluginVersion]
+agp = "8.13.2"
+      ~~~~~~~~
+
+   Explanation for issues of type "AndroidGradlePluginVersion":
+   This detector looks for usage of the Android Gradle Plugin where the
+   version you are using is not the current stable release. Using older
+   versions is fine, and there are cases where you deliberately want to stick
+   with an older version. However, you may simply not be aware that a more
+   recent version is available, and that is what this lint check helps find.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\gradle\libs.versions.toml:17: Warning: A newer version of androidx.appcompat:appcompat than 1.7.1 is available: 1.8.0 [GradleDependency]
+appcompat = "1.7.1"
+            ~~~~~~~
+
+   Explanation for issues of type "GradleDependency":
+   This detector looks for usages of libraries where the version you are using
+   is not the current stable release. Using older versions is fine, and there
+   are cases where you deliberately want to stick with an older version.
+   However, you may simply not be aware that a more recent version is
+   available, and that is what this lint check helps find.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\gradle\libs.versions.toml:9: Warning: A newer version of org.jetbrains.kotlin.android than 2.2.10 is available: 2.4.21 [NewerVersionAvailable]
+kotlin = "2.2.10"
+         ~~~~~~~~
+
+   Explanation for issues of type "NewerVersionAvailable":
+   This detector checks with a central repository to see if there are newer
+   versions available for the dependencies used by this project. This is
+   similar to the GradleDependency check, which checks for newer versions
+   available in the Android SDK tools and libraries, but this works with any
+   MavenCentral dependency, and connects to the library every time, which
+   makes it more flexible but also much slower.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:6987: Warning: Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. R.foo.bar) than by name (e.g. getIdentifier("bar", "foo", null)). [DiscouragedApi]
+                val resId = bgView.resources.getIdentifier(
+                                             ~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:8542: Warning: Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. R.foo.bar) than by name (e.g. getIdentifier("bar", "foo", null)). [DiscouragedApi]
+            val id = res.getIdentifier("status_bar_height", "dimen", "android")
+                         ~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:9770: Warning: Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. R.foo.bar) than by name (e.g. getIdentifier("bar", "foo", null)). [DiscouragedApi]
+            val id = hostView.resources.getIdentifier(
+                                        ~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:1417: Warning: Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. R.foo.bar) than by name (e.g. getIdentifier("bar", "foo", null)). [DiscouragedApi]
+            val id = res.getIdentifier("dp_20", "dimen", host.context.packageName)
+                         ~~~~~~~~~~~~~
+
+   Explanation for issues of type "DiscouragedApi":
+   Discouraged APIs are allowed and are not deprecated, but they may be unfit
+   for common use (e.g. due to slow performance or subtle behavior).
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\AndroidManifest.xml:58: Warning: Exported content providers can provide access to potentially sensitive data [ExportedContentProvider]
+        <provider
+         ~~~~~~~~
+
+   Explanation for issues of type "ExportedContentProvider":
+   Content providers are exported by default and any application on the system
+   can potentially use them to read and write data. If the content provider
+   provides access to sensitive data, it should be protected by specifying
+   export=false in the manifest or by protecting it with a permission that can
+   be granted to other applications.
+
+   https://goo.gle/ExportedContentProvider
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:1255: Warning: Unnecessary; SDK_INT is never < 33 [ObsoleteSdkInt]
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return // RuntimeShader 需 API 33
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:1401: Warning: Unnecessary; SDK_INT is always >= 33 [ObsoleteSdkInt]
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:1511: Warning: Unnecessary; SDK_INT is always >= 33 [ObsoleteSdkInt]
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:2295: Warning: Unnecessary; SDK_INT is never < 33 [ObsoleteSdkInt]
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:5857: Warning: Unnecessary; SDK_INT is never < 33 [ObsoleteSdkInt]
+        if (Build.VERSION.SDK_INT < 28) return null
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\HostVersion.kt:18: Warning: Unnecessary; SDK_INT is always >= 33 [ObsoleteSdkInt]
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:505: Warning: Unnecessary; SDK_INT is never < 33 [ObsoleteSdkInt]
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:2975: Warning: Unnecessary; SDK_INT is always >= 33 [ObsoleteSdkInt]
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:2303: Warning: Unnecessary; SDK_INT is never < 33 [ObsoleteSdkInt]
+        if (shaderBroken || Build.VERSION.SDK_INT < 33) return null
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\liquidglass\ShaderInstancePool.kt:56: Warning: Unnecessary; SDK_INT is never < 33 [ObsoleteSdkInt]
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\liquidglass\ShaderPreheat.kt:70: Warning: Unnecessary; SDK_INT is never < 33 [ObsoleteSdkInt]
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\entry\XposedEntry.kt:158: Warning: Unnecessary; SDK_INT is never < 33 [ObsoleteSdkInt]
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\mipmap-anydpi-v26: Warning: This folder configuration (v26) is unnecessary; minSdkVersion is 33. Merge all the resources in this folder into mipmap-anydpi. [ObsoleteSdkInt]
+
+   Explanation for issues of type "ObsoleteSdkInt":
+   This check flags version checks that are not necessary, because the
+   minSdkVersion (or surrounding known API level) is already at least as high
+   as the version checked for.
+
+   Similarly, it also looks for resources in -vNN folders, such as values-v14
+   where the version qualifier is less than or equal to the minSdkVersion,
+   where the contents should be merged into the best folder.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:1149: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    /** [doc/spec/105 P0-3] SystemUI 进程 context。
+    ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:1163: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    /** [doc/spec/105 P0-3] 宿主 View 的 context（registerHostView 登记时捕获）——SystemUI 窗口自带，
+    ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:11958: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    /** [spec/45] shade 窗口根 View 强引用缓存（registerHostView 登记 shade 根宿主时记录）。
+    ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\log\FileLog.kt:68: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    @Volatile
+    ^
+
+   Explanation for issues of type "StaticFieldLeak":
+   A static field will leak contexts.
+
+   Non-static inner classes have an implicit reference to their outer class.
+   If that outer class is for example a Fragment or Activity, then this
+   reference means that the long-running handler/loader/task will hold a
+   reference to the activity which prevents it from getting garbage
+   collected.
+
+   Similarly, direct field references to activities and fragments from these
+   longer running instances can cause leaks.
+
+   ViewModel classes should never point to Views or non-application Contexts.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\drawable\ic_launcher_background.xml:2: Warning: The resource R.drawable.ic_launcher_background appears to be unused [UnusedResources]
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\drawable\ic_launcher_foreground.xml:2: Warning: The resource R.drawable.ic_launcher_foreground appears to be unused [UnusedResources]
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\values\strings.xml:285: Warning: The resource R.string.settings_notif_fly_scale_desc appears to be unused [UnusedResources]
+    <string name="settings_notif_fly_scale_desc">横幅弹出和收回时的缩放幅度。0 表示只倾斜不缩放。</string>
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UnusedResources":
+   Unused resources make applications larger and slow down builds.
+
+
+   The unused resource check can ignore tests. If you want to include
+   resources that are only referenced from tests, consider packaging them in a
+   test source set instead.
+
+   You can include test sources in the unused resource check by setting the
+   system property lint.unused-resources.include-tests =true, and to exclude
+   them (usually for performance reasons), use
+   lint.unused-resources.exclude-tests =true.
+   ,
+
+   Available options:
+
+   **skip-libraries** (default is true):
+   Whether the unused resource check should skip reporting unused resources in libraries.
+
+   Many libraries will declare resources that are part of the library surface; other modules depending on the library will also reference the resources. To avoid reporting all these resources as unused (in the context of a library), the unused resource check normally skips reporting unused resources in libraries. Instead, run the unused resource check on the consuming app module (along with `checkDependencies=true`).
+
+   However, there are cases where you want to check that all the resources declared in a library are used; in that case, you can disable the skip option.
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UnusedResources">
+           <option name="skip-libraries" value="true" />
+       </issue>
+   </lint>
+   ```
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_material.xml:632: Warning: view_cat_material.xml has more than 80 views, bad for performance [TooManyViews]
+        <TextView
+         ~~~~~~~~
+
+   Explanation for issues of type "TooManyViews":
+   Using too many views in a single layout is bad for performance. Consider
+   using compound drawables or other tricks for reducing the number of views
+   in this layout.
+
+   The maximum view count defaults to 80 but can be configured with the
+   environment variable ANDROID_LINT_MAX_VIEW_COUNT.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\mipmap-anydpi-v26\ic_launcher.xml:2: Warning: The application adaptive icon is missing a monochrome tag [MonochromeLauncherIcon]
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+^
+
+   Explanation for issues of type "MonochromeLauncherIcon":
+   If android:roundIcon and android:icon are both in your manifest, you must
+   either remove the reference to android:roundIcon if it is not needed; or,
+   supply the monochrome icon in the drawable defined by the android:roundIcon
+   and android:icon attribute.
+
+   For example, if android:roundIcon and android:icon are both in the
+   manifest, a launcher might choose to use android:roundIcon over
+   android:icon to display the adaptive app icon. Therefore, your themed
+   application iconwill not show if your monochrome attribute is not also
+   specified in android:roundIcon.
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurCaptureHook.kt:367: Warning: Use the KTX extension function Bitmap.get instead? [UseKtx]
+                        val c1 = copy.getPixel(x, y)
+                                 ~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurCaptureHook.kt:368: Warning: Use the KTX extension function Bitmap.get instead? [UseKtx]
+                        val c2 = copy.getPixel(x + stepX, y)
+                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:1264: Warning: Use the KTX function createBitmap instead? [UseKtx]
+                    val srcBmp = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:6825: Warning: Use the KTX extension function Canvas.withSave instead? [UseKtx]
+        canvas.save()
+        ~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:7011: Warning: Use the KTX extension property View.isVisible instead? [UseKtx]
+            host.isAttachedToWindow && host.visibility == View.VISIBLE && host.width > 0 && host.height > 0
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:11758: Warning: Use the KTX extension function Bitmap.scale instead? [UseKtx]
+                val next = Bitmap.createScaledBitmap(cur, nw, nh, true)
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\BlurDrawHook.kt:12465: Warning: Use the KTX extension function Bitmap.get instead? [UseKtx]
+                    h = h * 31 + bmp.getPixel(x, y)
+                                 ~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\DreamActivity.kt:133: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                    Prefs.read(this@DreamActivity).edit().putBoolean(Prefs.KEY_MASTER, enabled).apply()
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\DreamActivity.kt:254: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            RuntimeStore.local(appContext).edit().putString("root_last_status", "上次操作：$report").apply()
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\DreamActivity.kt:303: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            if (block(p.edit()).commit()) notice("已保存到框架；已加载的玻璃参数将在缓存刷新后更新")
+                      ~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\log\FileLog.kt:37: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+    private val LOG_URI: Uri = Uri.parse("content://$AUTHORITY/log")
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:1388: Warning: Use the KTX extension function ViewGroup.isEmpty instead? [UseKtx]
+        if (sw.childCount == 0) {
+            ~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\hook\LauncherHook.kt:2606: Warning: Use the KTX function createBitmap instead? [UseKtx]
+                val scaled = Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888)
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\log\LogProvider.kt:132: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                prefs.edit().putString(Prefs.KEY_LG_HB_PREFIX + arg, extras?.getString("heartbeat").orEmpty().take(512))
+                ~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\diagnostics\RuntimeStore.kt:11: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+    val URI: Uri = Uri.parse("content://com.dreamglass.cos17.lgfile")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:237: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                                                             ~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:244: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                xmlPrefs.edit().putString(XML_KEY_IGNORED_UPDATE, latest.version).apply()
+                ~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:770: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        framework.edit().putString(Prefs.KEY_GLASS_PRESETS, GlassRegistry.encodePresets(list)).apply()
+        ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:780: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        xmlPrefs.edit().putString(Prefs.KEY_UI_GLASS_PRESET, Prefs.GLASS_PRESET_DEFAULT_ID).apply()
+        ~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:785: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        xmlPrefs.edit().putString(Prefs.KEY_UI_GLASS_PRESET, id).apply()
+        ~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:797: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        framework.edit().putInt(Prefs.KEY_GLASS_PRESET_SEQ, next).apply()
+        ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1683: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            val editor = prefs.edit()
+                         ~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1706: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/c16lg666")))
+                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1718: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/AYwlilwYA/ColorOS16-LiquidGlass")))
+                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1762: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            framework.edit().putBoolean(Prefs.KEY_MASTER, checked).apply()
+            ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1771: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                    Prefs.remote(service).edit().putBoolean(Prefs.KEY_MASTER, checked).apply()
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1797: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            framework.edit().putBoolean(key, value).apply()
+            ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1806: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                    Prefs.remote(service).edit().putBoolean(key, value).apply()
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1820: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            framework.edit().putString(key, value).apply()
+            ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1829: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                    Prefs.remote(service).edit().putString(key, value).apply()
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1887: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            framework.edit().putFloat(key, value).apply()
+            ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1896: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                    Prefs.remote(service).edit().putFloat(key, value).apply()
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:1998: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            framework.edit().putInt(key, value).apply()
+            ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:2007: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                    Prefs.remote(service).edit().putInt(key, value).apply()
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:2317: Warning: Use the KTX function createBitmap instead? [UseKtx]
+        val bmp = Bitmap.createBitmap(bw, h, Bitmap.Config.ARGB_8888)
+                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\SettingsActivity.kt:2363: Warning: Use the KTX extension function Bitmap.scale instead? [UseKtx]
+        bgLow = Bitmap.createScaledBitmap(
+                ^
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\liquidglass\ShaderPreheat.kt:108: Warning: Use the KTX function createBitmap instead? [UseKtx]
+            val bmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UseKtx":
+   The Android KTX libraries decorates the Android platform SDK as well as
+   various libraries with more convenient extension functions available from
+   Kotlin, allowing you to use default parameters, named parameters, and
+   more.
+
+   Available options:
+
+   **remove-defaults** (default is true):
+   Whether to skip arguments that match the defaults provided by the extension.
+
+   Extensions often provide default values for some of the parameters. For example:
+   ```kotlin
+   fun Path.readLines(charset: Charset = Charsets.UTF_8): List<String> { return Files.readAllLines(this, charset) }
+   ```
+   This lint check will by default automatically omit parameters that match the default, so if your code was calling
+
+   ```kotlin
+   Files.readAllLines(file, Charset.UTF_8)
+   ```
+   lint would replace this with
+   ```kotlin
+   file.readLines()
+   ```
+   rather than
+
+   ```kotlin
+   file.readLines(Charset.UTF_8
+   ```
+   You can turn this behavior off using this option.
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UseKtx">
+           <option name="remove-defaults" value="true" />
+       </issue>
+   </lint>
+   ```
+
+   **require-present** (default is true):
+   Whether to only offer extensions already available.
+
+   This option lets you only have lint suggest extension replacements if those extensions are already available on the class path (in other words, you're already depending on the library containing the extension method.)
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UseKtx">
+           <option name="require-present" value="true" />
+       </issue>
+   </lint>
+   ```
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\build.gradle.kts:71: Warning: Use version catalog instead [UseTomlInstead]
+    testImplementation("junit:junit:4.13.2")
+                       ~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UseTomlInstead":
+   If your project is using a libs.versions.toml file, you should place all
+   Gradle dependencies in the TOML file. This lint check looks for version
+   declarations outside of the TOML file and suggests moving them (and in the
+   IDE, provides a quickfix to performing the operation automatically).
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\DreamActivity.kt:124: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            text = "启用 DreamGlass"; textSize = 18f; setTextColor(ink); minHeight = dp(48)
+                    ~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\kotlin\com\coloros16\liquidglass\ui\DreamActivity.kt:249: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        state.text = "等待手机 Root 授权或重启结果…"
+                      ~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SetTextI18n":
+   When calling TextView#setText
+   * Never call Number#toString() to format numbers; it will not handle
+   fraction separators and locale-specific digits properly. Consider using
+   String#format with proper format specifications (%d or %f) instead.
+   * Do not pass a string literal (e.g. "Hello") to display text. Hardcoded
+   text can not be properly translated to other languages. Consider using
+   Android resource strings instead.
+   * Do not build messages by concatenating text chunks. Such messages can not
+   be properly translated.
+
+   https://developer.android.com/guide/topics/resources/localization.html
+
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\item_category.xml:37: Warning: Hardcoded string "›", should use @string resource [HardcodedText]
+                android:text="›"
+                ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_anim.xml:68: Warning: Hardcoded string "›", should use @string resource [HardcodedText]
+                    android:text="›"
+                    ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_anim.xml:120: Warning: Hardcoded string "›", should use @string resource [HardcodedText]
+                    android:text="›"
+                    ~~~~~~~~~~~~~~~~
+C:\Users\wjy25\Documents\Codex\2026-10-22\ui\outputs\DreamGlassforCOS17\app\src\main\res\layout\view_cat_anim.xml:172: Warning: Hardcoded string "›", should use @string resource [HardcodedText]
+                    android:text="›"
+                    ~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "HardcodedText":
+   Hardcoding text attributes directly in layout files is bad for several
+   reasons:
+
+   * When creating configuration variations (for example for landscape or
+   portrait) you have to repeat the actual text (and keep it up to date when
+   making changes)
+
+   * The application cannot be translated to other languages by just adding
+   new translations for existing string resources.
+
+   There are quickfixes to automatically extract this hardcoded string into a
+   resource lookup.
+
+0 errors, 182 warnings

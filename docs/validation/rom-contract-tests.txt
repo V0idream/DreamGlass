@@ -1,0 +1,10 @@
+test_api37_capture_family_matches_window_manager (__main__.RomContracts.test_api37_capture_family_matches_window_manager) ... ok
+test_apk_integrity_and_xposed_metadata (__main__.RomContracts.test_apk_integrity_and_xposed_metadata) ... ok
+test_launcher_fields_match_bytecode_and_reflection (__main__.RomContracts.test_launcher_fields_match_bytecode_and_reflection) ... ok
+test_module_entry_and_new_product_classes (__main__.RomContracts.test_module_entry_and_new_product_classes) ... ok
+test_systemui_core_signatures (__main__.RomContracts.test_systemui_core_signatures) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.074s
+
+OK

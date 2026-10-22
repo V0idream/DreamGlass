@@ -33,7 +33,7 @@ object FileLog {
     const val LEVEL_ERROR = 6
 
     /** 日志写入端 authority（LogProvider 在 manifest 里注册的 uri） */
-    private const val AUTHORITY = "com.coloros16.liquidglass.lgfile"
+    private const val AUTHORITY = "com.dreamglass.cos17.lgfile"
     private val LOG_URI: Uri = Uri.parse("content://$AUTHORITY/log")
 
     private const val QUEUE_CAPACITY = 512

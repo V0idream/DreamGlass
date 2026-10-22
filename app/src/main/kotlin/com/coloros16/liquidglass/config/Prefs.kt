@@ -261,8 +261,8 @@ object Prefs {
      *  [doc/spec/36 2026-08-13] **仅 SystemUI（BlurDrawHook 通知场景）读取**；Launcher 侧已移除周期
      *  抓屏（改跟随系统模糊活动 onBlurReady 触发，见 LauncherHook.mountOnBlurReady），不再读本键。 */
     const val KEY_BG_PERIODIC_CAPTURE_ENABLE = "bg_periodic_capture_enable"
-    /** 持续抓屏开关默认值（true = 默认开启：动态背景基本实时） */
-    const val DEFAULT_BG_PERIODIC_CAPTURE_ENABLE = true
+    /** DreamGlass 默认关闭持续抓屏；动态背景需要时由高级设置开启。 */
+    const val DEFAULT_BG_PERIODIC_CAPTURE_ENABLE = false
 
     /** 持续抓屏间隔毫秒（仅 KEY_BG_PERIODIC_CAPTURE_ENABLE=true 时生效），如 250/500/1000。
      *  [doc/spec/36 2026-08-13] 仅 SystemUI（BlurDrawHook）读取，Launcher 不再使用。 */
@@ -344,10 +344,10 @@ object Prefs {
 
     /** 保留系统控制中心背景模糊：true = 恢复系统模糊（力度可调、阻止缩小）；
      *  false = 短路背景模糊链（背景透明露壁纸）。
-     *  默认 **false**（2026-10-10 用户拍板「把关闭系统模糊默认开」，原默认 true）。改动需重启 SystemUI 生效。 */
+     *  DreamGlass 默认 true，保留系统模糊作为安全回退；改动需重启 SystemUI 生效。 */
     const val KEY_KEEP_SYSTEM_CC_BLUR = "keep_system_cc_blur"
-    /** 保留系统控制中心模糊默认值（false = 默认关闭系统模糊，背景透明露壁纸） */
-    const val DEFAULT_KEEP_SYSTEM_CC_BLUR = false
+    /** DreamGlass 保留系统控制中心模糊默认值。 */
+    const val DEFAULT_KEEP_SYSTEM_CC_BLUR = true
 
     /** [2026-09-16 面板材质底色] 移除系统面板背景的 MixColor 材质底色（用户反馈的"一层灰遮罩"）。
      *
@@ -1073,10 +1073,7 @@ object Prefs {
     /** hook 端回传日志通道心跳（写框架侧存储）。 */
     fun writeLogDiag(api: XposedInterface, slug: String, hb: String, chunk: String) {
         try {
-            read(api).edit()
-                .putString(KEY_LG_HB_PREFIX + slug, hb)
-                .putString(KEY_LG_CHUNK_PREFIX + slug, chunk)
-                .apply()
+            com.coloros16.liquidglass.diagnostics.RuntimeStore.sendLog(slug, hb, chunk)
         } catch (t: Throwable) {
             android.util.Log.w("Prefs", "writeLogDiag failed: $t")
         }
@@ -1085,10 +1082,7 @@ object Prefs {
     /** 模块 UI 进程回传（自身进程心跳，走框架服务通道）。 */
     fun writeLogDiag(service: XposedService, slug: String, hb: String, chunk: String) {
         try {
-            remote(service).edit()
-                .putString(KEY_LG_HB_PREFIX + slug, hb)
-                .putString(KEY_LG_CHUNK_PREFIX + slug, chunk)
-                .apply()
+            com.coloros16.liquidglass.diagnostics.RuntimeStore.sendLog(slug, hb, chunk)
         } catch (t: Throwable) {
             android.util.Log.w("Prefs", "writeLogDiag failed: $t")
         }

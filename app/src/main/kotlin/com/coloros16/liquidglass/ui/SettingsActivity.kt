@@ -80,6 +80,15 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var xmlPrefs: SharedPreferences
     private lateinit var contentFrame: FrameLayout
+    private val frameworkListener = object : App.ServiceStateListener {
+        override fun onServiceStateChanged(service: XposedService?) {
+            runOnUiThread {
+                if (!isDestroyed) {
+                    if (service != null) bindCurrentPage() else showServiceLostNotice()
+                }
+            }
+        }
+    }
 
     /** 当前所在二级大类（null = 正在一级列表页）。 */
     private var currentCategory: String? = null
@@ -154,23 +163,21 @@ class SettingsActivity : AppCompatActivity() {
         setupWindowInsets(toolbar)
 
         // TEMP-VERIFY: 配置链路真机验证用（验证后移除）——带 auto_enable=true 启动时自动写总开关
-        if (intent?.getBooleanExtra("auto_enable", false) == true) {
-            writeMasterEnabled(true)
-        }
 
         // 框架就绪后刷新回显（framework 侧为权威值；仅重新绑定当前大类控件）；
         // [2026-10-10] 服务死亡（null 回调）→ 提示用户自愈方式（binder 只在进程启动注入一次，无重连）。
-        App.addServiceStateListener(object : App.ServiceStateListener {
-            override fun onServiceStateChanged(service: XposedService?) {
-                if (service != null) bindCurrentPage()
-                else showServiceLostNotice()
-            }
-        }, false)
+        App.addServiceStateListener(frameworkListener, false)
 
-        showCategories()
+        val entryCategory = savedInstanceState?.getString("dream_category") ?: intent?.getStringExtra("category")
+        if (entryCategory != null && categories.any { it.id == entryCategory }) {
+            openCategory(entryCategory)
+            savedInstanceState?.getString("dream_anim_group")?.let { openAnimParams(it) }
+        } else {
+            finish()
+        }
 
         // [2026-09-17 升级提示] 应用启动即后台查一次最新版本，有新版本弹提示（不阻塞界面）
-        checkUpdateOnLaunch()
+        // DreamGlass has its own release identity; do not offer upstream APK updates.
     }
 
     // ------------------------------------------------------------ [2026-09-17] 启动升级提示 ------------------------------------------------------------
@@ -181,6 +188,17 @@ class SettingsActivity : AppCompatActivity() {
      * 网络在子线程（[UpdateChecker.fetchLatest] 阻塞），结果回主线程弹窗；
      * 检查失败/无新版本/该版本已被「忽略此版本」→ 全程静默，不打扰用户。
      */
+    override fun onDestroy() {
+        App.removeServiceStateListener(frameworkListener)
+        super.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("dream_category", currentCategory)
+        outState.putString("dream_anim_group", currentAnimGroup)
+        super.onSaveInstanceState(outState)
+    }
+
     private fun checkUpdateOnLaunch() {
         if (updateCheckStarted) return
         updateCheckStarted = true
@@ -397,7 +415,7 @@ class SettingsActivity : AppCompatActivity() {
         when {
             // [spec/64] 三级参数页 → 回二级「桌面动画」
             currentAnimGroup != null -> openCategory("anim")
-            currentCategory != null -> showCategories()
+            currentCategory != null -> finish()
             else -> finish()
         }
     }
@@ -729,8 +747,14 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /** 读探测到的玻璃类清单（类勾选对话框的数据源）。 */
-    private fun detectedGlassClasses(): List<String> =
-        GlassRegistry.parseClasses(frameworkPrefs()?.getString(Prefs.KEY_GLASS_CLASSES, null)).map { it.cls }
+    private fun detectedGlassClasses(): List<String> {
+        val saved = GlassRegistry.parseClasses(frameworkPrefs()?.getString(Prefs.KEY_GLASS_CLASSES, null))
+        val local = com.coloros16.liquidglass.diagnostics.RuntimeStore.local(this)
+        val observed = listOf("com.android.systemui", "com.android.launcher").flatMap {
+            GlassRegistry.parseClasses(local.getString("observed_" + it, null))
+        }
+        return (saved + observed).map { it.cls }.distinct().sorted()
+    }
 
     /** 改一次预设列表后写回框架侧；框架未就绪 → 提示并放弃（不用空表覆盖已有数据）。 */
     private fun editGlassPresets(block: (MutableList<GlassRegistry.Preset>) -> Unit): Boolean {
@@ -1454,7 +1478,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun refreshLogDiag(row: TextView) {
         row.setText(R.string.settings_log_diag_busy)
         Thread {
-            val prefs = frameworkPrefs()
+            val prefs = com.coloros16.liquidglass.diagnostics.RuntimeStore.local(this)
             val text = if (prefs == null) {
                 getString(R.string.settings_log_diag_noframe)
             } else {
@@ -1517,7 +1541,7 @@ class SettingsActivity : AppCompatActivity() {
     /** 拼接回传尾部与主日志为临时分享文件；无可分享内容返回 null。 */
     private fun buildShareFile(main: File): File? {
         val hasMain = main.exists() && main.length() > 0L
-        val prefs = frameworkPrefs()
+        val prefs = com.coloros16.liquidglass.diagnostics.RuntimeStore.local(this)
         val chunks = if (prefs != null) {
             listOf("systemui", "launcher", "app").mapNotNull { slug ->
                 val c = prefs.getString(Prefs.KEY_LG_CHUNK_PREFIX + slug, "") ?: ""
@@ -2171,7 +2195,27 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             if (cw > 0 && ch > 0) drawGlass(canvas, pad, cw, ch)
         }
         // 只在可见时续帧：切走/脱离窗口后链条自动断开，动画即停，无泄漏
-        if (isShown) postInvalidateDelayed(FRAME_INTERVAL_MS)
+        if (isShown && windowVisibility == View.VISIBLE) postInvalidateDelayed(FRAME_INTERVAL_MS)
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == View.VISIBLE) postInvalidate()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (bg == null && width > 0 && height > 0) buildBackground(width, height)
+        postInvalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        bgShader = null
+        bgLowShader = null
+        bg = null
+        bgLow = null
+        shader = null
+        super.onDetachedFromWindow()
     }
 
     /** 渲染示例玻璃；shader 不可用时降级为半透明圆角。 */

@@ -22,6 +22,7 @@ import android.view.SurfaceControl
 import android.view.View
 import android.view.ViewGroup
 import com.coloros16.liquidglass.config.Prefs
+import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.liquidglass.ShaderInstancePool
@@ -97,15 +98,15 @@ object LauncherHook {
     /** 17.3.12 blurShaderPaint getter 被拆 → public final 字段 M */
     private const val FIELD_BLUR_SHADER_PAINT_17 = "M"
     /** 17.3.12 paint getter 被拆 → public final 字段 f28547f */
-    private const val FIELD_PAINT_17 = "f28547f"
+    private const val FIELD_PAINT_17 = "f"
     /** 17.3.12 renderNode → f28549h（路径 A 自录用） */
-    private const val FIELD_RENDER_NODE_17 = "f28549h"
+    private const val FIELD_RENDER_NODE_17 = "h"
     /** 17.3.12 drawablePath → f28550i（路径 A 自录用） */
-    private const val FIELD_DRAWABLE_PATH_17 = "f28550i"
+    private const val FIELD_DRAWABLE_PATH_17 = "i"
     /** 17.3.12 paintAlpha → F（路径 A 自录用，等价旧 drawBlurShader 的 setAlpha） */
     private const val FIELD_PAINT_ALPHA_17 = "F"
     /** 17.3.12 enableBlurShader → f28542a（false 时系统跳过 shader 分支） */
-    private const val FIELD_ENABLE_BLUR_SHADER_17 = "f28542a"
+    private const val FIELD_ENABLE_BLUR_SHADER_17 = "a"
     /** 17.3.12 drawBlurShader 内联目标：static void a(d)，按指纹确认防撞名 */
     private const val INLINE_RECORD_STATIC_NAME = "a"
     /** 17.3.12 onBlurReady 单 drawable 重载改名 f（同签名 List,HardwareBuffer,int,float） */
@@ -306,6 +307,8 @@ object LauncherHook {
     private var mEnableBlurShaderField: Field? = null
     /** 17.3.12 内联录制方法 static void a(d)（16.x 恒 null） */
     private var mInlineRecordMethod: Method? = null
+    private var mContentDirtyField: Field? = null
+    private val restoringNativeRecord = ThreadLocal.withInitial { false }
     /** CornerType.CONIC 兼容解析结果（旧 getField(CONIC) / 17.x values()[2]；当前渲染未消费，兼容链预留） */
     @Suppress("unused")
     private var mCornerTypeConic: Any? = null
@@ -486,7 +489,7 @@ object LauncherHook {
     // 宿主 ClassLoader 加载 hide/宿主类：宿主 loader miss 时回退裸加载（保留原降级行为）
     private fun hostForName(name: String): Class<*> {
         val cl = hostClassLoader
-        return if (cl != null) Class.forName(name, true, cl) else Class.forName(name)
+        return CaptureApi.load(name, cl)
     }
 
     fun install(api: XposedInterface, classLoader: ClassLoader) {
@@ -674,7 +677,7 @@ object LauncherHook {
             Lg.i(TAG_FINGERPRINT, "launcher-glass: getBlurShaderPaint @ method (old-name)")
         } catch (_: NoSuchMethodException) {
             try {
-                mBlurShaderPaintField = base.getDeclaredField(FIELD_BLUR_SHADER_PAINT_17)
+                mBlurShaderPaintField = checkedField(base, FIELD_BLUR_SHADER_PAINT_17, Paint::class.java)
                 Lg.i(TAG_FINGERPRINT, "launcher-glass: getBlurShaderPaint @ field $FIELD_BLUR_SHADER_PAINT_17 (17.3.12)")
             } catch (t: Throwable) {
                 Lg.e(TAG_FINGERPRINT, "launcher-glass: getBlurShaderPaint unresolved (no method, no field $FIELD_BLUR_SHADER_PAINT_17)", t)
@@ -688,7 +691,7 @@ object LauncherHook {
             Lg.i(TAG_FINGERPRINT, "launcher-glass: getPaint @ method (old-name)")
         } catch (_: NoSuchMethodException) {
             try {
-                mPaintField = base.getDeclaredField(FIELD_PAINT_17)
+                mPaintField = checkedField(base, FIELD_PAINT_17, Paint::class.java)
                 Lg.i(TAG_FINGERPRINT, "launcher-glass: getPaint @ field $FIELD_PAINT_17 (17.3.12)")
             } catch (t: Throwable) {
                 Lg.w(TAG_FINGERPRINT, "launcher-glass: getPaint unresolved (no method, no field $FIELD_PAINT_17)", t)
@@ -722,10 +725,11 @@ object LauncherHook {
         // 路径 A 自录所需字段（仅 17.3.12；16.x 不解析不触发）
         if (isLauncher17Plus() && mInlineRecordMethod != null) {
             try {
-                mRenderNodeField = base.getDeclaredField(FIELD_RENDER_NODE_17)
-                mDrawablePathField = base.getDeclaredField(FIELD_DRAWABLE_PATH_17)
-                mPaintAlphaField = base.getDeclaredField(FIELD_PAINT_ALPHA_17)
-                mEnableBlurShaderField = base.getDeclaredField(FIELD_ENABLE_BLUR_SHADER_17)
+                mRenderNodeField = checkedField(base, FIELD_RENDER_NODE_17, RenderNode::class.java)
+                mDrawablePathField = checkedField(base, FIELD_DRAWABLE_PATH_17, Path::class.java)
+                mPaintAlphaField = checkedField(base, FIELD_PAINT_ALPHA_17, Int::class.javaPrimitiveType!!)
+                mEnableBlurShaderField = checkedField(base, FIELD_ENABLE_BLUR_SHADER_17, Boolean::class.javaPrimitiveType!!)
+                mContentDirtyField = checkedField(base, "w", Boolean::class.javaPrimitiveType!!)
                 Lg.i(
                     TAG_FINGERPRINT,
                     "launcher-glass: inline record fields @ $FIELD_RENDER_NODE_17/$FIELD_DRAWABLE_PATH_17/" +
@@ -742,6 +746,12 @@ object LauncherHook {
     }
 
     /** [spec/117 §6 路径 A] 定位内联录制方法：static void a(d)，d 为 BaseDrawable 子类，防单字母撞名。 */
+    private fun checkedField(owner: Class<*>, name: String, type: Class<*>): Field =
+        owner.getDeclaredField(name).apply {
+            require(this.type == type) { "Unexpected field type: ${owner.name}#$name" }
+            isAccessible = true
+        }
+
     private fun resolveInlineRecordMethod(base: Class<*>): Method? {
         var fallback: Method? = null
         for (m in base.declaredMethods) {
@@ -776,8 +786,8 @@ object LauncherHook {
                     Lg.i(TAG_FINGERPRINT, "launcher-glass: CornerType.CONIC @ values()[2] ($CLASS_CORNER_TYPE_17)")
                 } else {
                     try {
-                        mCornerTypeConic = ct17.getField("f28674c").get(null)
-                        Lg.i(TAG_FINGERPRINT, "launcher-glass: CornerType.CONIC @ field f28674c ($CLASS_CORNER_TYPE_17)")
+                        mCornerTypeConic = ct17.getField("c").get(null)
+                        Lg.i(TAG_FINGERPRINT, "launcher-glass: CornerType.CONIC @ raw DEX field c ($CLASS_CORNER_TYPE_17)")
                     } catch (t: Throwable) {
                         Lg.w(TAG_FINGERPRINT, "launcher-glass: CornerType.CONIC unresolved on 17.3.12", t)
                     }
@@ -994,8 +1004,9 @@ object LauncherHook {
     private fun isLauncher17Plus(): Boolean {
         launcherVer17Plus?.let { return it }
         val ver = HostVersion.hostVersionCode("com.android.launcher")
-        val v = ver >= VERSION_LAUNCHER_17_3_12
-        launcherVer17Plus = v
+        val v = ver >= VERSION_LAUNCHER_17_3_12 || Cos17Contract.launcherInline(hostClassLoader)
+        // Unknown version is not a negative cache entry: Application may not yet exist.
+        if (ver >= 0 || v) launcherVer17Plus = v
         Lg.i(TAG_FINGERPRINT, "launcher-glass: host versionCode=$ver,17.3.12+=$v")
         return v
     }
@@ -1068,9 +1079,8 @@ object LauncherHook {
     }
 
     /**
-     * [spec/117 §6 路径 A] 17.3.12 渲染主链：hook static void a(d) before。
-     * 玻璃就绪 → 自行 beginRecording/drawPath/endRecording 后 skip proceed；
-     * 任一步失败 → ERROR 并 proceed 原方法（系统模糊），不留半残状态。16.x 不触发（mInlineRecordMethod 恒 null）。
+     * COS17 渲染主链：先调用 static a(d) 保留系统准备，再覆盖已准备的 RenderNode 内容。
+     * 玻璃不可用保留系统录制；录制失败尝试以重入保护恢复系统内容。16.x 不走此入口。
      */
     private fun mountInlineRecordPathA(api: XposedInterface) {
         val method = mInlineRecordMethod
@@ -1090,25 +1100,33 @@ object LauncherHook {
             api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
+                    if (restoringNativeRecord.get() == true) return@intercept chain.proceed()
+                    RuntimeDiagnostics.mark("invoked", "桌面内联录制入口已被系统调用")
                     val drawable = try {
                         chain.getArgs()?.getOrNull(0)
                     } catch (t: Throwable) {
                         Lg.e(TAG_FINGERPRINT, "launcher-glass: inline getArgs failed", t); null
                     }
-                    var handled = false
+                    // Preserve e()/preDraw geometry, pending-buffer adoption and dirty bookkeeping.
+                    // The system records first; only then replace its prepared content with glass.
+                    val originalResult = chain.proceed()
                     if (drawable != null) {
-                        handled = try {
-                            recordGlassInline(drawable)
+                        try {
+                            val nativeNode = mRenderNodeField?.get(drawable) as? RenderNode
+                            if (mContentDirtyField?.getBoolean(drawable) == false && nativeNode?.hasDisplayList() == true) {
+                                recordGlassInline(drawable)
+                            }
                         } catch (t: Throwable) {
-                            Lg.e(TAG_FINGERPRINT, "launcher-glass: inline record error, fallback proceed", t)
-                            false
+                            restoreNativeRecord(drawable)
+                            Lg.e(TAG_FINGERPRINT, "launcher-glass: inline record error, restore native content", t)
                         }
                     }
-                    if (!handled) chain.proceed()
+                    originalResult
                 }
+            RuntimeDiagnostics.mark("mounted", "${method.declaringClass.name}#${method.name}(d) 注册成功")
             Lg.i(
                 TAG_FINGERPRINT,
-                "launcher-glass: mounted path A ${method.declaringClass.name}#${method.name}(d) (inline record + skip proceed)",
+                "launcher-glass: mounted path A ${method.declaringClass.name}#${method.name}(d) (native prepare then glass record)",
             )
         } catch (t: Throwable) {
             Lg.e(TAG_FINGERPRINT, "launcher-glass: path A mount FAILED, system blur fallback", t)
@@ -1116,9 +1134,21 @@ object LauncherHook {
     }
 
     /**
-     * [spec/117 路径 A] 自录玻璃：替换 shader 后 beginRecording → drawPath(glassPaint) → endRecording。
-     * 返回 true = 已自录，调用方 skip proceed；false = 回退原方法。
+     * 重建系统录制：仅在玻璃录制异常后调用，线程内保护避免再次进入玻璃接管。
      */
+    private fun restoreNativeRecord(drawable: Any) {
+        if (restoringNativeRecord.get() == true) return
+        try {
+            mContentDirtyField?.setBoolean(drawable, true)
+            restoringNativeRecord.set(true)
+            mInlineRecordMethod?.invoke(null, drawable)
+        } catch (t: Throwable) {
+            Lg.e(TAG_FINGERPRINT, "native record recovery failed", t)
+        } finally {
+            restoringNativeRecord.set(false)
+        }
+    }
+
     private fun recordGlassInline(drawable: Any): Boolean {
         // enableBlurShader=false 时系统跳过 shader 分支 → 我们也回退原方法
         val enable = try {
@@ -1161,8 +1191,11 @@ object LauncherHook {
                 Lg.e(TAG_FINGERPRINT, "launcher-glass: endRecording failed", t)
                 recorded = false
             }
+            if (!recorded) restoreNativeRecord(drawable)
         }
         if (recorded) {
+            RuntimeDiagnostics.mark("source", "玻璃材质已有可用背景源")
+            RuntimeDiagnostics.mark("render", "文件夹玻璃 RenderNode 录制完成；视觉待核验")
             logRenderMode(System.identityHashCode(drawable), "GLASS")
         }
         return recorded
@@ -2130,6 +2163,7 @@ object LauncherHook {
                         prev.wallpaperZoomAtCapture == bg.wallpaperZoomAtCapture &&
                         sameBitmapContent(prev.bitmap, bg.bitmap)
                     screenSnapshot = bg
+                    RuntimeDiagnostics.mark("source", "成功取得桌面背景缓冲")
                     elementCaptureRetries[id] = 0
                     elementCaptureQuitAt.remove(id)
                     if (unchanged) {
@@ -2470,6 +2504,9 @@ object LauncherHook {
      * - 动态壁纸（getWallpaperInfo != null）：返回 null（调用方回退 captureDisplay）。
      * - 记录逻辑原生尺寸 [logicalWidth/Height]（滚动裁剪折算用）与壁纸 id（变化检测用）。
      */
+    // Runs in Launcher (provided manifest declares READ_WALLPAPER_INTERNAL), not the module app.
+    // wallpaperManager() checks the host grant and the existing catch falls back to captureDisplay.
+    @android.annotation.SuppressLint("MissingPermission")
     private fun decodeWallpaperSource(): WallpaperSource? {
         return try {
             val wm = wallpaperManager() ?: return null
@@ -2621,6 +2658,8 @@ object LauncherHook {
         return try {
             val app = hostForName("android.app.ActivityThread")
                 .getMethod("currentApplication").invoke(null) as? android.content.Context ?: return null
+            if (app.checkSelfPermission("android.permission.READ_WALLPAPER_INTERNAL") !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED) return null
             WallpaperManager.getInstance(app)
         } catch (t: Throwable) {
             Lg.w(TAG, "bg-wallpaper: WallpaperManager.getInstance failed", t)

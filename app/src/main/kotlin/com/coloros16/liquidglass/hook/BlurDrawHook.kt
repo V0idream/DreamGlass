@@ -28,6 +28,7 @@ import android.view.ViewParent
 import android.view.WindowManager
 import android.widget.TextView
 import com.coloros16.liquidglass.config.Prefs
+import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.liquidglass.ShaderInstancePool
@@ -1179,24 +1180,24 @@ object BlurDrawHook {
     // 宿主 ClassLoader 加载 hide 类：模块类做 caller 会按模块签名判 hidden API 名单被拦成 CNFE
     private fun hostForName(name: String): Class<*> {
         val cl = systemUiContext()?.classLoader
-        return if (cl != null) Class.forName(name, true, cl) else Class.forName(name)
+        return CaptureApi.load(name, cl)
     }
 
     // hide/宿主类加载（带回退链）：宿主 context loader → 调用方传入 loader → 裸加载；CNFE 才走下一跳
     private fun hostForName(name: String, fallbackLoader: ClassLoader?): Class<*> {
         systemUiContext()?.classLoader?.let { cl ->
             try {
-                return Class.forName(name, false, cl)
+                return CaptureApi.load(name, cl)
             } catch (_: ClassNotFoundException) {
             }
         }
         fallbackLoader?.let { cl ->
             try {
-                return Class.forName(name, false, cl)
+                return CaptureApi.load(name, cl)
             } catch (_: ClassNotFoundException) {
             }
         }
-        return Class.forName(name)
+        return CaptureApi.load(name, null)
     }
 
     /** [doc/spec/105 P0-3] 多源解析 SystemUI context（任一成功即用；全部失败返回 null → 下次限频重试）：
@@ -10006,14 +10007,16 @@ object BlurDrawHook {
             api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
+                    RuntimeDiagnostics.mark("invoked", "drawBlurShader 已被系统调用")
                     val drawable = try {
                         chain.getThisObject()
                     } catch (t: Throwable) {
                         Lg.e(TAG, "drawBlurShader: getThisObject failed", t); null
                     }
+                    var glassApplied = false
                     if (drawable != null) {
                         try {
-                            replaceShaderIfPossible(drawable)
+                            glassApplied = replaceShaderIfPossible(drawable)
                         } catch (t: Throwable) {
                             Lg.e(TAG, "render: drawBlurShader intercept error", t)
                         }
@@ -10074,8 +10077,11 @@ object BlurDrawHook {
                             }
                         }
                     }
-                    chain.proceed()
+                    val result = chain.proceed()
+                    if (glassApplied) RuntimeDiagnostics.mark("render", "玻璃 drawBlurShader 调用完成；视觉待核验")
+                    result
                 }
+            RuntimeDiagnostics.mark("mounted", "BaseDrawable.drawBlurShader(Canvas) 注册成功")
             Lg.i(TAG, "Hook B mounted: $CLASS_BASE_DRAWABLE#$METHOD_DRAW_BLUR_SHADER(Canvas)")
         } catch (t: Throwable) {
             Lg.e(TAG, "Hook B mount FAILED: $CLASS_BASE_DRAWABLE#$METHOD_DRAW_BLUR_SHADER", t)
@@ -12565,6 +12571,7 @@ object BlurDrawHook {
             }
             lastSnapshotFingerprint = fp
             screenSnapshot = bg
+            RuntimeDiagnostics.mark("source", "成功取得系统背景缓冲")
             if (mainThreadSync) diagFirstLog("snapshot-replace", " source=$source")
             if (textContrastEnabled && !isMotionActive) {
                 runTextContrastScanAsync(bg)

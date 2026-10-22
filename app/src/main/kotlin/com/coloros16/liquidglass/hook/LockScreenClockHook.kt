@@ -173,7 +173,7 @@ object LockScreenClockHook {
     // 宿主 ClassLoader 加载 hide 类：宿主 loader miss 时回退裸加载（保留原降级行为）
     private fun hostForName(name: String): Class<*> {
         val cl = hostClassLoader
-        return if (cl != null) Class.forName(name, true, cl) else Class.forName(name)
+        return CaptureApi.load(name, cl)
     }
 
     /** SystemUI 进程安装（XposedEntry.installHooks 调用）。 */
@@ -597,6 +597,8 @@ object LockScreenClockHook {
         return try {
             val app = hostForName("android.app.ActivityThread")
                 .getMethod("currentApplication").invoke(null) as? android.content.Context ?: return null
+            if (app.checkSelfPermission("android.permission.READ_WALLPAPER_INTERNAL") !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED) return null
             WallpaperManager.getInstance(app)
         } catch (t: Throwable) {
             Lg.w(TAG, "lockscreen-clock: WallpaperManager.getInstance failed", t)
@@ -608,6 +610,8 @@ object LockScreenClockHook {
      * 刷新原始壁纸（清晰）：静态壁纸 `WallpaperManager.getWallpaperFile(FLAG_SYSTEM)` 解码；
      * id 未变直接返回缓存；动态壁纸（无文件）返回 null → 调用方回退投递位图。
      */
+    // Host permission is checked by wallpaperManager(); SystemUI declares the permission.
+    @android.annotation.SuppressLint("MissingPermission")
     private fun refreshOriginalWallpaper(): Bitmap? {
         val cur = originalWallpaper
         if (cur != null && !cur.isRecycled) return cur

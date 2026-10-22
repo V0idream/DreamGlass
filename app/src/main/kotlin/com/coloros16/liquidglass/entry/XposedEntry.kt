@@ -1,9 +1,11 @@
 package com.coloros16.liquidglass.entry
 
 import android.os.Build
+import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.hook.BlurDrawHook
 import com.coloros16.liquidglass.hook.HostVersion
+import com.coloros16.liquidglass.hook.Cos17Contract
 import com.coloros16.liquidglass.hook.LauncherAnimHook
 import com.coloros16.liquidglass.hook.LauncherHook
 import com.coloros16.liquidglass.hook.LauncherTiltHook
@@ -142,12 +144,15 @@ class XposedEntry : XposedModule() {
 
     /** [doc/spec/110] 安装主入口（onPackageLoaded 与 onHotReloaded 共用同一套门槛与分发）。 */
     private fun doInstall(packageName: String, classLoader: ClassLoader) {
+        RuntimeDiagnostics.begin(packageName)
         Lg.e("lg-boot", "host=$packageName pid=${android.os.Process.myPid()}")
         // 模块默认全关（Prefs.masterEnabled=false 直接跳过，零侵入）。
         if (!Prefs.masterEnabled(this)) {
+            RuntimeDiagnostics.mark("configured", "总开关关闭，未安装效果 Hook")
             Lg.d(TAG, "package loaded but master disabled, skip install")
             return
         }
+        RuntimeDiagnostics.mark("configured", "总开关已读取：开启")
         // 热重载后新类静态为空，重装一次文件日志门控
         installLogGate()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -172,10 +177,15 @@ class XposedEntry : XposedModule() {
             // >=17.3.12 禁用 anim hook，tilt 改走原生 zuyqa 参数注入路径。
             PACKAGE_LAUNCHER -> {
                 val hostVer = HostVersion.hostVersionCode(PACKAGE_LAUNCHER)
-                if (hostVer >= VERSION_LAUNCHER_17_3_12) {
+                if (hostVer >= VERSION_LAUNCHER_17_3_12 || Cos17Contract.launcherInline(classLoader)) {
                     Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=17.3.12+: skip LauncherAnimHook (17.x fields obfuscated), tilt=native zuyqa path")
                     LauncherHook.install(this, classLoader)
-                    LauncherTiltHook.installNativeZuyqa(this, classLoader)
+                    if (Cos17Contract.nativeTilt(classLoader)) {
+                        LauncherTiltHook.installNativeZuyqa(this, classLoader)
+                    } else {
+                        RuntimeDiagnostics.mark("extensions", "旧版弹簧及 Zuyqa 原生倾斜入口不可用；系统动画保留")
+                        Lg.i(TAG, "native tilt entry absent; preserve system animations")
+                    }
                 } else {
                     Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=<17.3.12 (or unknown -1): install all 3 hooks")
                     LauncherHook.install(this, classLoader)

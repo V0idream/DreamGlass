@@ -17,7 +17,7 @@ android {
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.coloros16.liquidglass"
+        applicationId = "com.dreamglass.cos17"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         // [Drip 适配] Drip 按 versionCode 判定模块 APK 是否更新：固定值会让框架一直复用已解析的
@@ -25,8 +25,8 @@ android {
         // 「代码改了、编译安装也成功、设备上 APK 的 md5 也一致，但功能就是不生效」。
         // 改用构建时间戳（秒）保证每次构建都递增，框架必然走 `module apk changed: rebuilding cache`
         // 重新解析。注：秒级时间戳 2038-01 起溢出 Int，本项目调试期足够。
-        versionCode = (System.currentTimeMillis() / 1000L).toInt()
-        versionName = "0.2.1"
+        versionCode = 10002
+        versionName = "0.1.1-COS17-Preview2"
     }
 
     signingConfigs {
@@ -68,6 +68,7 @@ kotlin {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     // LibXposed API：仅编译期可见（compileOnly），打包时排除，避免与框架注入冲突。
     compileOnly(libs.libxposed.api)
 
