@@ -2029,6 +2029,14 @@ object BlurDrawHook {
      * - bounds=：drawable getBounds（元素自身尺寸）。GLASS 保持原样（id 即可，不附带防刷屏）。
      */
     private fun logRenderMode(id: Int, mode: String, reason: String? = null, drawable: Any? = null, bounds: Rect? = null) {
+        val host = screenRegionMap[id]?.hostViewName
+        val stage = when {
+            host?.contains("NotificationBackgroundView") == true -> if (mode == "GLASS") "notification_glass" else "notification_blur"
+            host?.contains(".qs.") == true || host?.contains("QSTile") == true -> if (mode == "GLASS") "qs_glass" else "qs_blur"
+            else -> null
+        }
+        if (stage != null && !RuntimeDiagnostics.hasStage(stage)) RuntimeDiagnostics.mark(stage,
+            "已选择 $mode 路径：${reason ?: "背景/几何已匹配"}；外观待核验")
         if (!moduleLogEnabled) return
         val prev = lastRenderModeMap[id]
         val extra = if (mode == "BLUR") buildBlurInfo(id, drawable, bounds) else ""
@@ -10109,7 +10117,7 @@ object BlurDrawHook {
         }
     }
 
-    // ------------------------------------------------------------ Hook 2：onDrawContent（shader 不可用兜底）
+    // ------------------------------------------------------------ Hook 2：onDrawContent（模块背景录制控件/卡片内容）
 
     private fun mountOnDrawContent(api: XposedInterface, classLoader: ClassLoader) {
         // 同时挂 BlendDrawable（面板/tile 主绘制，16.1）与 BaseDrawable（基类空实现兜底）
@@ -10130,15 +10138,11 @@ object BlurDrawHook {
                         } catch (t: Throwable) {
                             Lg.e(TAG, "onDrawContent: getArg(0) failed", t); null
                         }
-                        var handled = false
-                        if (drawable != null && canvas != null) {
-                            try {
-                                handled = tryRenderOnDrawContent(drawable, canvas)
-                            } catch (t: Throwable) {
-                                Lg.e(TAG, "onDrawContent: intercept error", t)
-                            }
-                        }
-                        if (!handled) chain.proceed()
+                        ContentDrawBridge.dispatch(
+                            ownedDraw = { drawable != null && canvas != null && tryRenderOnDrawContent(drawable, canvas) },
+                            original = { chain.proceed() },
+                            onOwnedFailure = { Lg.e(TAG, "onDrawContent: intercept error", it) },
+                        )
                     }
                 Lg.i(TAG, "Hook B mounted: $clsName#$METHOD_ON_DRAW_CONTENT(Canvas)")
             } catch (t: Throwable) {
@@ -10203,43 +10207,18 @@ object BlurDrawHook {
         }
     }
 
-    /**
-     * onDrawContent 兜底：仅当系统 shader 路径不可用（将走 drawBitmapContent 位图平铺）时接管。
-     * 系统 shader 可用时返回 false，让系统 proceed → 内部走 drawBlurShader → Hook 1 替换。
+    /** Render registered glass content from our own capture before the native image/placeholder decision.
+     * A valid native shader does NOT imply a native image exists (BlendDrawable 17.99.02).
+     * Missing geometry/source, disabled glass and excluded scenes still fall back to the original once.
      */
     private fun tryRenderOnDrawContent(drawable: Any, canvas: Canvas): Boolean {
-        // [spec/85 省电模式] 省电开启 → 不接管：先还原可能残留的模块 shader，再交回系统原绘制
-        //（return false → chain.proceed() 走系统 onDrawContent 分支，enableShader=false 时系统自己
-        // 走 drawBitmapContent 位图平铺 = 恢复系统表现）。
-        if (isPowerSaveGlassOff()) {
-            restoreSystemShaderIfReplaced(drawable)
-            return false
-        }
-        val drawableShader = try {
-            mGetDrawableShader?.invoke(drawable)
-        } catch (t: Throwable) {
-            Lg.e(TAG, "onDrawContent: getDrawableShader failed", t); null
-        }
-        if (drawableShader != null) {
-            val sysShader = try {
-                mGetShaderOrNull?.invoke(drawableShader)
-            } catch (t: Throwable) {
-                Lg.e(TAG, "onDrawContent: getShaderOrNull failed", t); null
-            }
-            // [修4 2026-08-12] 系统 onDrawContent 三分支（BlendDrawable.java:52-65）：enableShader=false 时
-            // 即使 sysShader 非 null 也走 drawBitmapContent（画模糊位图+foregroundBlend 色层）→ 磨砂。
-            // 必须同时判 getEnableShader()，false 时接管画玻璃。反射失败默认 true（维持原放行语义）。
-            val enableShader = try {
-                (mGetEnableShader?.invoke(drawable) as? Boolean) ?: true
-            } catch (t: Throwable) {
-                Lg.e(TAG, "onDrawContent: getEnableShader failed, assume true", t); true
-            }
-            if (sysShader != null && enableShader) return false  // 系统走 drawBlurShader，Hook 1 处理
-        }
-        // 系统 shader 不可用 → 接管：替换 shader 并手动画液态玻璃 path
+        // Whole-panel scrims have a separate policy; this route is for glass controls/cards.
+        if (isBackgroundScrimById(drawable)) return false
+        val draw = mDrawBlurShader ?: return false
         if (!replaceShaderIfPossible(drawable)) return false
         return try {
-            mDrawBlurShader?.invoke(drawable, canvas)  // 触发 Hook 1（幂等跳过重建），画液态玻璃
+            draw.invoke(drawable, canvas)
+            RuntimeDiagnostics.mark("content_render", "模块背景已完成内容绘制调用；外观待核验")
             // 模拟系统 onDrawContent 结尾的 getPaint().reset()，防 paint 脏状态残留
             try {
                 (mGetPaint?.invoke(drawable) as? Paint)?.reset()

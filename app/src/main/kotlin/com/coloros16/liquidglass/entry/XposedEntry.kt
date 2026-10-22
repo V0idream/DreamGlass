@@ -5,6 +5,9 @@ import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.hook.BlurDrawHook
 import com.coloros16.liquidglass.hook.HostVersion
+import com.coloros16.liquidglass.hook.SystemUiLifecycle
+import com.coloros16.liquidglass.hook.SystemUiInstallGate
+import io.github.libxposed.api.XposedInterface.ExceptionMode
 import com.coloros16.liquidglass.hook.Cos17Contract
 import com.coloros16.liquidglass.hook.LauncherAnimHook
 import com.coloros16.liquidglass.hook.LauncherHook
@@ -31,10 +34,12 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
  *
  * 生命周期（XposedModuleInterface，可重写）：
  * - onModuleLoaded：模块注入目标进程时调用一次（此时 SystemUI 类未就绪）
- * - onPackageLoaded：目标包默认 classLoader 就绪后调用（本工程在此安装 hook）
+ * - onPackageLoaded：宿主类可用后分发；SystemUI 在实际 Application.onCreate 完成后安装。
  * - [doc/spec/110] onHotReloading / onHotReloaded：热重载两段回调（见下）
  */
 class XposedEntry : XposedModule() {
+    private val systemUiInstall = SystemUiInstallGate()
+    private var systemUiStartupMounted = false
 
     override fun onModuleLoaded(param: io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam) {
         // 先装文件日志门控，后面的日志才按「运行日志」开关入文件
@@ -75,7 +80,36 @@ class XposedEntry : XposedModule() {
         // [doc/spec/110] 存宿主 classLoader：同 ClassLoader 复用重载时 onHotReloaded 直接取用；
         // 新 ClassLoader 场景下新类静态为空，由 resolveClassLoader 的兜底链接管。
         cacheClassLoader(param.packageName, classLoader)
-        doInstall(param.packageName, classLoader)
+        if (param.packageName == PACKAGE_SYSTEMUI) installSystemUiAfterApplication(classLoader)
+        else doInstall(param.packageName, classLoader)
+    }
+
+    /** Match the lifecycle owner verified on COS17; original onCreate must complete first. */
+    @Synchronized private fun installSystemUiAfterApplication(classLoader: ClassLoader) {
+        if (systemUiStartupMounted) return
+        RuntimeDiagnostics.begin(PACKAGE_SYSTEMUI)
+        try {
+            val method = SystemUiLifecycle.resolveOnCreate(classLoader)
+            hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val result = chain.proceed() // Preserve host exception/return; do not install into a failed startup.
+                try {
+                    systemUiInstall.installOnce {
+                        doInstall(PACKAGE_SYSTEMUI, classLoader)
+                        RuntimeDiagnostics.mark("startup", "应用初始化完成后安装：${method.declaringClass.simpleName}.onCreate")
+                    }
+                } catch (t: Throwable) {
+                    RuntimeDiagnostics.mark("startup", "初始化后安装失败：${t.javaClass.simpleName}")
+                    Lg.e(TAG, "SystemUI hooks failed after application initialization", t)
+                }
+                result
+            }
+            systemUiStartupMounted = true
+            RuntimeDiagnostics.mark("startup", "等待 ${method.declaringClass.name}.onCreate 完成")
+            Lg.i(TAG, "SystemUI startup hook mounted: $method")
+        } catch (t: Throwable) {
+            RuntimeDiagnostics.mark("startup", "应用初始化入口未匹配：${t.javaClass.simpleName}")
+            Lg.e(TAG, "SystemUI application lifecycle hook unavailable", t)
+        }
     }
 
     /**
@@ -139,10 +173,11 @@ class XposedEntry : XposedModule() {
         }
         Lg.i(TAG, "hot-reload: old hooks unhooked=$unhooked/$pkg, reinstalling into $pkg")
         doInstall(pkg, cl)
+        RuntimeDiagnostics.mark("startup", "已在现有应用进程中完成热重载安装")
         Lg.i(TAG, "hot-reload: reinstall done for $pkg, version=$MODULE_VERSION")
     }
 
-    /** [doc/spec/110] 安装主入口（onPackageLoaded 与 onHotReloaded 共用同一套门槛与分发）。 */
+    /** 安装主入口：SystemUI 初始化回调、Launcher 包加载和热重载共用门槛与分发。 */
     private fun doInstall(packageName: String, classLoader: ClassLoader) {
         RuntimeDiagnostics.begin(packageName)
         Lg.e("lg-boot", "host=$packageName pid=${android.os.Process.myPid()}")
@@ -273,7 +308,7 @@ class XposedEntry : XposedModule() {
         private var cachedSystemUiLoader: ClassLoader? = null
         private var cachedLauncherLoader: ClassLoader? = null
         /** [doc/spec/110] 模块版本标记（热重载完成日志用，便于 daemon 侧对账 loaded version）。 */
-        private const val MODULE_VERSION = "spec-113"
+        private const val MODULE_VERSION = "0.1.1-COS17-Refine3"
         /** [spec/116 P0] 桌面 17.3.12 versionCode：达到该版本后禁用 LauncherAnimHook（弹簧字段全灭）。 */
         private const val VERSION_LAUNCHER_17_3_12 = 170030012L
         private const val TAG = "LiquidGlass"

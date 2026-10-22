@@ -1,0 +1,17 @@
+{
+  "versionName": "0.1.1-COS17-Refine3",
+  "versionCode": 10008,
+  "baseline": "4819d6216c54326d6a9984aaac867bdfa98b8f12",
+  "parent": "fa1a3d5dc10d0d71489a106efb4d45af388109d7",
+  "apkSha256": "a50af0172cd23f3a7dabf430d622dc08c16c2637ff8c57577672523da3ca8b1f",
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "unitTestsPassed": 18,
+  "romContractsPassed": 8,
+  "lintErrors": 0,
+  "lintWarnings": 182,
+  "deviceInstallationPerformed": false,
+  "thisRevisionVisualTested": false,
+  "shaderUnchangedFromRefine2": true,
+  "manifestUnchangedFromRefine2": true,
+  "elbowImplementationOrNativeLibraryCopied": false
+}

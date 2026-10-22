@@ -1,6 +1,6 @@
-# ColorOS 17 兼容性报告 — Preview 2
+# ColorOS 17 兼容性报告 — Preview2 Refine3
 
-结论：Preview2 已在 PJZ110 / API 37 覆盖安装，用户反馈测试通过。下方逐功能表保留初版静态检查范围，不代表每项均完成专项设备测试。实际设备修复见 docs/DEVICE_DIAGNOSIS_2026-10-22.md。
+结论：初版 Preview2 曾验证安装、返回路径和图标开关；后续用户明确反馈按钮与通知卡片的玻璃效果仍无效。当前 Refine3 修订生命周期与内容录制接入，已通过构建、18 项 JVM 测试与 8 项 ROM 接口合约，但主视觉仍待本版真机验收。见 docs/PREVIEW2_REFINE3.md。历史设备诊断保存在 docs/DEVICE_DIAGNOSIS_2026-10-22.md。
 
 ## 样本信息
 
@@ -20,7 +20,7 @@ SystemLauncher af89139f18857f5c9e130cd492f08dc1a3e26b131aec74490432b2c590ac972e
 ElbowHitColor  f94f0fe3456029d7ebbbbfd7d14c41f3fbd3bf27cff1a0c3b3cf32e3acd70f4d
 ```
 
-ElbowHitColor 只读取 ZIP、Manifest 和 DEX 元数据，没有反编译或复制其实现。所有系统 APK 分析在本机完成，未上传设备包、日志或私人文件。
+初版只检查 ElbowHitColor 的包信息；Refine3 参考分支对话已核验的生命周期接口分析。本项目没有复制 Elbow 的实现或原生库。所有系统 APK 分析在本机完成，未上传设备包、日志或私人文件。
 
 ## 加载与配置诊断
 
@@ -34,12 +34,13 @@ ElbowHitColor 只读取 ZIP、Manifest 和 DEX 元数据，没有反编译或复
 
 ## 功能与 Hook 对照
 
-所有运行结果均待真机。注册函数级索引有 63 项，见 `docs/HOOK_AUDIT.md` / `docs/HOOK_MAP.csv`；真实 DEX 方法描述符见 `docs/DEX_TARGETS.md`。下表归纳主要路径。
+下表未单独注明的视觉结果均待本版真机验收。初版函数级索引有 63 项，见 `docs/HOOK_AUDIT.md` / `docs/HOOK_MAP.csv`；Refine3 的新增生命周期入口和内容接入修订见 `docs/PREVIEW2_REFINE3.md`。历史方法描述符见 `docs/DEX_TARGETS.md`。
 
 | 功能 | 参考目标 / 源码 | 本次样本与处理 | 状态 |
 | --- | --- | --- | --- |
-| SystemUI 主玻璃 | BaseDrawable.drawBlurShader(Canvas)，BlurDrawHook.mountDrawBlurShader | 类和精确签名仍存在；保留接入，增加注册、调用、绘制阶段记录 | 静态匹配；未观测到设备调用 |
-| 无系统 shader 时的绘制 | BaseDrawable / BlendDrawable.onDrawContent(Canvas)，mountOnDrawContent | 两个精确签名存在；保留成功接管、失败 proceed 的机制 | 静态匹配；效果待验 |
+| SystemUI 初始化 | SystemUIApplicationImpl.onCreate() | 原方法完成后安装，声明方法精确匹配，门控避免重复安装 | DEX 与 JVM 通过；真机待验 |
+| SystemUI 主玻璃 | BaseDrawable.drawBlurShader(Canvas)，BlurDrawHook.mountDrawBlurShader | 类和精确签名仍存在；与内容绘制接管配合 | 旧版曾收到调用；Refine3 效果待验 |
+| 控件与卡片内容绘制 | BaseDrawable / BlendDrawable.onDrawContent(Canvas)，mountOnDrawContent | 模块背景与几何就绪时直接录制玻璃；不再依赖原生图像分支是否绘制；未就绪保留原生一次 | DEX 与离线路由测试通过；像素效果待验 |
 | shader 取值 | DrawableShader.getShaderOrNull()、BaseDrawable.getDrawableShaderPaint() | 返回 RuntimeShader / Paint 的签名存在 | 静态匹配 |
 | 背景完成回调 | BlurDrawableManager.onBlurReady(List, HardwareBuffer, int, float, Rect) | SystemUI 精确签名存在；不将模糊结果冒充未模糊原图 | 静态匹配 |
 | 通知卡 / heads-up | AutoBlurDrawable、NotificationBackgroundView、ViewBlurProxy，BlurDrawHook | 主类存在；继续复用场景映射、截屏排除与回退逻辑 | 仍需实例映射和层级视觉验证 |

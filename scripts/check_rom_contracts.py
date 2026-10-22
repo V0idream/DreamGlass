@@ -38,6 +38,20 @@ class RomContracts(unittest.TestCase):
         for cls,methods in targets.items():
             for method in methods:self.assertIn(method,system[cls]['methods'])
 
+    def test_systemui_lifecycle_owner_and_content_draw_bridge(self):
+        app=system['com.android.systemui.application.impl.SystemUIApplicationImpl']
+        self.assertIn('onCreate()V',app['methods'])
+        base=system['com.oplus.posteffect.drawable.BaseDrawable']
+        self.assertIn('getPaint()Landroid/graphics/Paint;',base['methods'])
+        self.assertIn('drawBlurShader(Landroid/graphics/Canvas;)V',base['methods'])
+        blend=system['com.oplus.posteffect.drawable.BlendDrawable']
+        self.assertIn('onDrawContent(Landroid/graphics/Canvas;)V',blend['methods'])
+        for cls in ['hook.SystemUiLifecycle','hook.SystemUiInstallGate','hook.ContentDrawBridge']:
+            self.assertIn('com.coloros16.liquidglass.'+cls,module)
+        # Host fixtures are for JVM tests only, never ship replacement SystemUI classes.
+        self.assertNotIn('com.android.systemui.application.impl.SystemUIApplicationImpl',module)
+        self.assertNotIn('com.android.systemui.SystemUIApplication',module)
+
     def test_volume_mask_host_contract(self):
         wrapper=system['com.oplusos.systemui.common.blurability.platformblur.PlatformBlurDrawable']
         self.assertIn('getHostViewName:Lkotlin/jvm/functions/Function0;',wrapper['fields'])

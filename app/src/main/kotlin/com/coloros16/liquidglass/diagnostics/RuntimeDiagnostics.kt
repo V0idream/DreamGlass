@@ -30,6 +30,8 @@ object RuntimeDiagnostics {
         mark("loaded", "入口已执行；PID=${Process.myPid()}")
     }
 
+    fun hasStage(stage: String): Boolean = stages.containsKey(stage)
+
     fun mark(stage: String, detail: String = "已到达") {
         if (host.isEmpty()) return
         if (stages.putIfAbsent(stage, detail.take(500)) == null) revision.incrementAndGet()
@@ -48,7 +50,7 @@ object RuntimeDiagnostics {
         val version = revision.get()
         val snapshot = JSONObject().apply {
             put("host", host); put("pid", Process.myPid()); put("at", System.currentTimeMillis())
-            put("version", "0.1.1-COS17-Refine2"); put("stages", JSONObject(stages.toMap()))
+            put("version", "0.1.1-COS17-Refine3"); put("stages", JSONObject(stages.toMap()))
         }.toString()
         val classes = classesSnapshot
         val accepted = try {

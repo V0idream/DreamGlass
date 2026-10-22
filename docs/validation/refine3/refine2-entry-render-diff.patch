@@ -1,0 +1,195 @@
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/entry/XposedEntry.kt b/app/src/main/kotlin/com/coloros16/liquidglass/entry/XposedEntry.kt
+index e1f32f3..78be1a4 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/entry/XposedEntry.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/entry/XposedEntry.kt
+@@ -7,0 +8,3 @@ import com.coloros16.liquidglass.hook.HostVersion
++import com.coloros16.liquidglass.hook.SystemUiLifecycle
++import com.coloros16.liquidglass.hook.SystemUiInstallGate
++import io.github.libxposed.api.XposedInterface.ExceptionMode
+@@ -34 +37 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
+- * - onPackageLoaded：目标包默认 classLoader 就绪后调用（本工程在此安装 hook）
++ * - onPackageLoaded：宿主类可用后分发；SystemUI 在实际 Application.onCreate 完成后安装。
+@@ -37,0 +41,2 @@ class XposedEntry : XposedModule() {
++    private val systemUiInstall = SystemUiInstallGate()
++    private var systemUiStartupMounted = false
+@@ -78 +83,30 @@ class XposedEntry : XposedModule() {
+-        doInstall(param.packageName, classLoader)
++        if (param.packageName == PACKAGE_SYSTEMUI) installSystemUiAfterApplication(classLoader)
++        else doInstall(param.packageName, classLoader)
++    }
++
++    /** Match the lifecycle owner verified on COS17; original onCreate must complete first. */
++    @Synchronized private fun installSystemUiAfterApplication(classLoader: ClassLoader) {
++        if (systemUiStartupMounted) return
++        RuntimeDiagnostics.begin(PACKAGE_SYSTEMUI)
++        try {
++            val method = SystemUiLifecycle.resolveOnCreate(classLoader)
++            hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
++                val result = chain.proceed() // Preserve host exception/return; do not install into a failed startup.
++                try {
++                    systemUiInstall.installOnce {
++                        doInstall(PACKAGE_SYSTEMUI, classLoader)
++                        RuntimeDiagnostics.mark("startup", "应用初始化完成后安装：${method.declaringClass.simpleName}.onCreate")
++                    }
++                } catch (t: Throwable) {
++                    RuntimeDiagnostics.mark("startup", "初始化后安装失败：${t.javaClass.simpleName}")
++                    Lg.e(TAG, "SystemUI hooks failed after application initialization", t)
++                }
++                result
++            }
++            systemUiStartupMounted = true
++            RuntimeDiagnostics.mark("startup", "等待 ${method.declaringClass.name}.onCreate 完成")
++            Lg.i(TAG, "SystemUI startup hook mounted: $method")
++        } catch (t: Throwable) {
++            RuntimeDiagnostics.mark("startup", "应用初始化入口未匹配：${t.javaClass.simpleName}")
++            Lg.e(TAG, "SystemUI application lifecycle hook unavailable", t)
++        }
+@@ -141,0 +176 @@ class XposedEntry : XposedModule() {
++        RuntimeDiagnostics.mark("startup", "已在现有应用进程中完成热重载安装")
+@@ -145 +180 @@ class XposedEntry : XposedModule() {
+-    /** [doc/spec/110] 安装主入口（onPackageLoaded 与 onHotReloaded 共用同一套门槛与分发）。 */
++    /** 安装主入口：SystemUI 初始化回调、Launcher 包加载和热重载共用门槛与分发。 */
+@@ -276 +311 @@ class XposedEntry : XposedModule() {
+-        private const val MODULE_VERSION = "spec-113"
++        private const val MODULE_VERSION = "0.1.1-COS17-Refine3"
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
+index c36f214..5eb2f07 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
+@@ -2031,0 +2032,8 @@ object BlurDrawHook {
++        val host = screenRegionMap[id]?.hostViewName
++        val stage = when {
++            host?.contains("NotificationBackgroundView") == true -> if (mode == "GLASS") "notification_glass" else "notification_blur"
++            host?.contains(".qs.") == true || host?.contains("QSTile") == true -> if (mode == "GLASS") "qs_glass" else "qs_blur"
++            else -> null
++        }
++        if (stage != null && !RuntimeDiagnostics.hasStage(stage)) RuntimeDiagnostics.mark(stage,
++            "已选择 $mode 路径：${reason ?: "背景/几何已匹配"}；外观待核验")
+@@ -10112 +10120 @@ object BlurDrawHook {
+-    // ------------------------------------------------------------ Hook 2：onDrawContent（shader 不可用兜底）
++    // ------------------------------------------------------------ Hook 2：onDrawContent（模块背景录制控件/卡片内容）
+@@ -10133,9 +10141,5 @@ object BlurDrawHook {
+-                        var handled = false
+-                        if (drawable != null && canvas != null) {
+-                            try {
+-                                handled = tryRenderOnDrawContent(drawable, canvas)
+-                            } catch (t: Throwable) {
+-                                Lg.e(TAG, "onDrawContent: intercept error", t)
+-                            }
+-                        }
+-                        if (!handled) chain.proceed()
++                        ContentDrawBridge.dispatch(
++                            ownedDraw = { drawable != null && canvas != null && tryRenderOnDrawContent(drawable, canvas) },
++                            original = { chain.proceed() },
++                            onOwnedFailure = { Lg.e(TAG, "onDrawContent: intercept error", it) },
++                        )
+@@ -10206,3 +10210,3 @@ object BlurDrawHook {
+-    /**
+-     * onDrawContent 兜底：仅当系统 shader 路径不可用（将走 drawBitmapContent 位图平铺）时接管。
+-     * 系统 shader 可用时返回 false，让系统 proceed → 内部走 drawBlurShader → Hook 1 替换。
++    /** Render registered glass content from our own capture before the native image/placeholder decision.
++     * A valid native shader does NOT imply a native image exists (BlendDrawable 17.99.02).
++     * Missing geometry/source, disabled glass and excluded scenes still fall back to the original once.
+@@ -10211,29 +10215,3 @@ object BlurDrawHook {
+-        // [spec/85 省电模式] 省电开启 → 不接管：先还原可能残留的模块 shader，再交回系统原绘制
+-        //（return false → chain.proceed() 走系统 onDrawContent 分支，enableShader=false 时系统自己
+-        // 走 drawBitmapContent 位图平铺 = 恢复系统表现）。
+-        if (isPowerSaveGlassOff()) {
+-            restoreSystemShaderIfReplaced(drawable)
+-            return false
+-        }
+-        val drawableShader = try {
+-            mGetDrawableShader?.invoke(drawable)
+-        } catch (t: Throwable) {
+-            Lg.e(TAG, "onDrawContent: getDrawableShader failed", t); null
+-        }
+-        if (drawableShader != null) {
+-            val sysShader = try {
+-                mGetShaderOrNull?.invoke(drawableShader)
+-            } catch (t: Throwable) {
+-                Lg.e(TAG, "onDrawContent: getShaderOrNull failed", t); null
+-            }
+-            // [修4 2026-08-12] 系统 onDrawContent 三分支（BlendDrawable.java:52-65）：enableShader=false 时
+-            // 即使 sysShader 非 null 也走 drawBitmapContent（画模糊位图+foregroundBlend 色层）→ 磨砂。
+-            // 必须同时判 getEnableShader()，false 时接管画玻璃。反射失败默认 true（维持原放行语义）。
+-            val enableShader = try {
+-                (mGetEnableShader?.invoke(drawable) as? Boolean) ?: true
+-            } catch (t: Throwable) {
+-                Lg.e(TAG, "onDrawContent: getEnableShader failed, assume true", t); true
+-            }
+-            if (sysShader != null && enableShader) return false  // 系统走 drawBlurShader，Hook 1 处理
+-        }
+-        // 系统 shader 不可用 → 接管：替换 shader 并手动画液态玻璃 path
++        // Whole-panel scrims have a separate policy; this route is for glass controls/cards.
++        if (isBackgroundScrimById(drawable)) return false
++        val draw = mDrawBlurShader ?: return false
+@@ -10242 +10220,2 @@ object BlurDrawHook {
+-            mDrawBlurShader?.invoke(drawable, canvas)  // 触发 Hook 1（幂等跳过重建），画液态玻璃
++            draw.invoke(drawable, canvas)
++            RuntimeDiagnostics.mark("content_render", "模块背景已完成内容绘制调用；外观待核验")
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/ContentDrawBridge.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/ContentDrawBridge.kt
+new file mode 100644
+index 0000000..c7f45d5
+--- /dev/null
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/ContentDrawBridge.kt
+@@ -0,0 +1,15 @@
++package com.coloros16.liquidglass.hook
++
++/** Native shader availability does not imply that the native image/blur branch will draw it. */
++object ContentDrawBridge {
++    inline fun dispatch(ownedDraw: () -> Boolean, original: () -> Any?, onOwnedFailure: (Throwable) -> Unit): Any? {
++        val handled = try {
++            ownedDraw()
++        } catch (failure: Throwable) {
++            try { onOwnedFailure(failure) } catch (_: Throwable) { }
++            false
++        }
++        // Keep native invocation OUTSIDE the catch: preserve its original return and exception.
++        return if (handled) null else original()
++    }
++}
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/SystemUiLifecycle.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/SystemUiLifecycle.kt
+new file mode 100644
+index 0000000..b4de59a
+--- /dev/null
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/SystemUiLifecycle.kt
+@@ -0,0 +1,39 @@
++package com.coloros16.liquidglass.hook
++
++import java.lang.reflect.Method
++
++/** COS17's application implementation owns onCreate; its public facade is not the lifecycle owner. */
++object SystemUiLifecycle {
++    fun resolveOnCreate(loader: ClassLoader): Method {
++        for (name in arrayOf(
++            "com.android.systemui.application.impl.SystemUIApplicationImpl",
++            "com.android.systemui.SystemUIApplication",
++        )) {
++            try {
++                val method = Class.forName(name, false, loader).getDeclaredMethod("onCreate")
++                if (method.returnType == Void.TYPE) return method
++            } catch (_: ClassNotFoundException) {
++            } catch (_: NoSuchMethodException) {
++            }
++        }
++        throw NoSuchMethodException("No declared SystemUI application onCreate()V")
++    }
++}
++
++/** Normal startup can notify more than once; a failed install remains retryable. */
++class SystemUiInstallGate {
++    private var installed = false
++    private var installing = false
++
++    @Synchronized fun installOnce(install: () -> Unit): Boolean {
++        if (installed || installing) return false
++        installing = true
++        try {
++            install()
++            installed = true
++            return true
++        } finally {
++            installing = false
++        }
++    }
++}
