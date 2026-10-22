@@ -4950,6 +4950,9 @@ object BlurDrawHook {
         if (pbd == null) {
             chain.proceed(); return
         }
+        if (VolumeMaskGuard.preserveMask(pbd)) {
+            chain.proceed(); return
+        }
         val original = try {
             mPlatformBlurMaskColor?.getInt(pbd)
         } catch (t: Throwable) {

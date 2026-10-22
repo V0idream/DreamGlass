@@ -1,23 +1,23 @@
-# DreamGlassforCOS17 Preview2 验证报告
+# Preview2 Refine1：仅边缘与音量遮罩的小修版
 
-日期：2026-10-22。版本 0.1.1-COS17-Preview2，versionCode 10002。
+基线为最早上传 GitHub、用户确认测试通过的 `v0.1.1-preview2`，提交 `4819d6216c54326d6a9984aaac867bdfa98b8f12`。此分支直接从该提交创建，没有合入后续 Preview3、4、5 的材质与场景改动。
 
-| 检查 | 结果 |
-| --- | --- |
-| assembleDebug / testDebugUnitTest / lintDebug | BUILD SUCCESSFUL |
-| JVM 类族解析测试 | 2 项通过，0 失败 |
-| 实际 APK 与设备框架合约 | 5 项通过 |
-| Android Lint | 0 错误，182 警告；未全局忽略 |
-| APK CRC / DEX 校验 / 元数据 | 通过 |
-| APK 签名 | v2 验证通过，与 Preview1 同一调试证书 |
-| 普通 ADB 覆盖安装 | 成功，保留配置 |
-| 子菜单返回 | 真机确认回到 DreamGlass 设置页 |
-| 图标开关 | 真机 LAUNCHER 隐藏/恢复通过，MODULE_SETTINGS 保留 |
-| 设备功能验收 | 用户反馈“测试通过” |
-| 长时间稳定性 / 帧率 / 多 ROM | 未完成专项测试 |
+## 唯二业务改动
 
-APK SHA-256：`29d426c2a12486ae334f6f491d6ad71aed847c5df2bc65f323e6679909b5b694`
+1. `LiquidGlassShader` 只把原高光带宽度乘 0.75，并相应内移带中心。高光强度、折射算法与强度、色散、模糊、鲜艳度、背景采样保持原样。
+2. `BlurDrawHook.suppressPlatformBlurMaskColor` 增加三行条件：识别独立音量窗口的实际宿主时保留原遮罩，继续原始绘制。新增 VolumeMaskGuard 只负责这项识别；没有替换音量玻璃管线，没有修改层名过滤，没有增加全局/线程渲染旁路。
 
-证书 SHA-256：`12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96`
+其余应用主源码只更新两个版本文字。Manifest、设置功能、UI 布局、预设、控制中心按钮、桌面、截屏适配和作用域全部沿用基线。没有引入柔光开关、42% 折射衰减、后续去小圈 Hook 等改动。
 
-本版修复 API 37 截屏类族和只读宿主配置导致的运行记录丢失；加入本应用 Root 快速重启、可隐藏图标及返回路径修复。具体证据与测试边界见 docs/DEVICE_DIAGNOSIS_2026-10-22.md。GPL 与第三方声明完整保留。旧 Preview1 报告见 docs/PREVIEW1_TEST_REPORT.md。
+版本名称 `0.1.1-COS17-Refine1`；versionCode 为 10006，使已经安装后续实验版的设备也可以同签名直接覆盖，不需要清数据。
+
+## 验证
+
+- assembleDebug / testDebugUnitTest / lintDebug：BUILD SUCCESSFUL。
+- JVM 测试 4 项通过，ROM 合约 6 项通过。
+- Lint 0 错误，182 警告。
+- v2 签名验证通过，证书与最早上传版一致。
+- 已核对与基线的差异，两个绘制文件的完整差异保存在 docs/validation/refine1/preview2-render-diff.patch。
+- 按用户选择未自动安装或重启手机；本修订的音量面板观感与边缘效果尚待用户安装后验证。
+
+APK SHA-256：`65dd80d1f60d532122002f811d7440183f9f0cc8071e448280c4200e52d3ee10`。

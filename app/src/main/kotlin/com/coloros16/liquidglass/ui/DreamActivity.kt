@@ -152,7 +152,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, false) }
         }
         action(safe, "恢复玻璃效果", true) { write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, true) } }
-        body.addView(text("DreamGlassforCOS17  ·  0.1.1 Preview 2\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
+        body.addView(text("DreamGlassforCOS17  ·  0.1.1 Refine 1\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
     }
 
     private fun attachPreview(parent: LinearLayout) {

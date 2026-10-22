@@ -1,10 +1,14 @@
 # DreamGlassforCOS17
 
-面向 ColorOS 17 的 LSPosed 玻璃材质软件，当前版本 **0.1.1-COS17-Preview2**。
+面向 ColorOS 17 的 LSPosed 玻璃材质软件，当前版本 **0.1.1-COS17-Refine1**。
 
 提供原创概览、材质实验室、运行诊断、设置四个页面，以及完整高级参数控制。清透、柔雾、棱光三个预设使用现有 AGSL 能力，方便先预览再应用。参考渲染实现来自 ColorOS16-LiquidGlass，完整授权见 LICENSE 和 THIRD-PARTY-NOTICES.md。
 
 此版已在目标手机普通 ADB 覆盖安装并验证返回路径、图标开关，用户反馈测试通过。长期性能与所有子功能仍需分项验证。具体结果见 TEST_REPORT.md，支持范围见 COMPATIBILITY.md。
+
+## 本修订范围
+
+基于首次上传 GitHub 的 Preview2，只收窄原高光边缘并修正独立音量面板遮罩被清除的问题。保留原玻璃、折射、采样、参数和页面。未合入后续实验版。具体差异见 docs/PREVIEW2_REFINE1.md；本修订仍待用户安装验证。
 
 ## 条件
 
@@ -15,7 +19,7 @@
 
 ## 安装和逐步启用
 
-1. 安装 `DreamGlassforCOS17-0.1.1-Preview2.apk`，先不要启用 SystemUI 作用域。
+1. 安装 `DreamGlassforCOS17-Preview2-Refine1.apk`，先不要启用 SystemUI 作用域。
 2. 打开 DreamGlass，确认首页显示“框架配置通道已连接”。这只证明设置能写入框架，不证明 Hook 或效果已生效。
 3. 在 LSPosed 中先选择 `com.android.launcher`。开启软件总开关，手动重启目标桌面进程/手机，让入口重新读取配置。
 4. 从“材质”选一个预设应用，打开文件夹并检查玻璃、图标、关闭动画、壁纸切换等。Dock 是单独功能，需在桌面高级设置中启用。

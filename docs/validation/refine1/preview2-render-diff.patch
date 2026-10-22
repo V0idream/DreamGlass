@@ -1,0 +1,30 @@
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
+index 4383abb..8db5e1d 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
+@@ -4950,6 +4950,9 @@ object BlurDrawHook {
+         if (pbd == null) {
+             chain.proceed(); return
+         }
++        if (VolumeMaskGuard.preserveMask(pbd)) {
++            chain.proceed(); return
++        }
+         val original = try {
+             mPlatformBlurMaskColor?.getInt(pbd)
+         } catch (t: Throwable) {
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt b/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
+index ee2463b..fbbc722 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
+@@ -783,7 +783,10 @@ object LiquidGlassShader {
+             //    [2026-08-23 修复] 原实现带中心在边界（abs(sdRaw)），而 shapeAlpha 在边界（sdRaw=0）=0，
+             //    圆角边缘高光被裁掉（外半全裁 + 内半 0~-2 羽化削弱）。偏移内侧后高光带中心落在 alpha=1
+             //    区域，完整可见、不超圆角；直边元素同样内侧亮边（不跨边界）。
+-            float band = 1.0 - smoothstep(0.0, hw, abs(dIn - bandCenter));
++            // Refine only the perimeter width; keep Preview2's refraction, sampling and light strength.
++            float edgeWidth = max(hw * 0.75, 1.0);
++            float edgeCenter = max(edgeWidth * 0.5, 2.0);
++            float band = 1.0 - smoothstep(0.0, edgeWidth, abs(dIn - edgeCenter));
+             // [2026-09-16 圆角弧线高光修复·方案 C] `sdfGrad` 是**边缘法线**：直边法线固定（与光源夹角恒定
+             // → 高光恒定），而圆角弧线法线要**旋转 90°**，其中**必然经过与光源垂直的位置** → 原
+             // `pow(abs(dot),fo)` 在该处精确归零，弧线约 60% 跨度高光消失（真机实证：192×192 圆磁贴整圈

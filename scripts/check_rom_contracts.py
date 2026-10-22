@@ -38,6 +38,15 @@ class RomContracts(unittest.TestCase):
         for cls,methods in targets.items():
             for method in methods:self.assertIn(method,system[cls]['methods'])
 
+    def test_volume_mask_host_contract(self):
+        wrapper=system['com.oplusos.systemui.common.blurability.platformblur.PlatformBlurDrawable']
+        self.assertIn('getHostViewName:Lkotlin/jvm/functions/Function0;',wrapper['fields'])
+        self.assertIn('blurMaskColor:I',wrapper['fields'])
+        self.assertIn('draw(Landroid/graphics/Canvas;)V',wrapper['methods'])
+        helper=system['com.oplusos.systemui.common.blurability.platformblur.PlatformBlurHelper']
+        self.assertIn('hostView:Landroid/view/View;',helper['fields'])
+        self.assertIn('com.coloros16.liquidglass.hook.VolumeMaskGuard',module)
+
     def test_module_entry_and_new_product_classes(self):
         for name in ['entry.XposedEntry','ui.DreamActivity','ui.SettingsActivity','diagnostics.RuntimeDiagnostics','diagnostics.RuntimeStore','root.ScopeRestarter','hook.CaptureApi','hook.BlurDrawHook','hook.LauncherHook','liquidglass.LiquidGlassShader']:
             self.assertIn('com.coloros16.liquidglass.'+name,module)
