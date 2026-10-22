@@ -152,7 +152,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, false) }
         }
         action(safe, "恢复玻璃效果", true) { write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, true) } }
-        body.addView(text("DreamGlassforCOS17  ·  0.1.1 Refine 1\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
+        body.addView(text("DreamGlassforCOS17  ·  0.1.1 Refine 2\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
     }
 
     private fun attachPreview(parent: LinearLayout) {
@@ -276,7 +276,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         tools.addView(text("验证与恢复", 18f, ink, true))
         tools.addView(text("1. 安装后先打开设置检查框架通道。\n2. 在 LSPosed 启用桌面作用域，保存总开关，手动重启桌面后检查文件夹。\n3. 确认可用后，再启用 SystemUI 并手动重启。\n4. 如遇异常，通过 LSPosed 禁用本模块并重启；不要清除桌面数据。", 13f, muted))
         action(tools, "复制诊断摘要", true) {
-            val report = "DreamGlassforCOS17 0.1.1 Preview2\n${frameworkLabel.text}\n" + listOf("com.android.launcher", "com.android.systemui").joinToString("\n") { "$it\n${readReport(it)}" }
+            val report = "DreamGlassforCOS17 0.1.1 Refine2\n${frameworkLabel.text}\n" + listOf("com.android.launcher", "com.android.systemui").joinToString("\n") { "$it\n${readReport(it)}" }
             (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DreamGlass", report))
             notice("已复制；摘要不含截图或应用内容")
         }
@@ -292,7 +292,9 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         else {
             val o = JSONObject(raw); val s = o.getJSONObject("stages")
             val stamp = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(o.getLong("at")))
-            "上次记录 $stamp  ·  PID ${o.optInt("pid")}\n" + listOf("loaded" to "入口", "configured" to "配置", "mounted" to "Hook", "invoked" to "调用", "source" to "背景", "render" to "绘制", "extensions" to "扩展").joinToString("\n") { (k, n) -> "$n：${s.optString(k, "尚未收到")}" } + "\n历史记录不代表此刻仍在运行。"
+            val fields = listOf("loaded" to "入口", "configured" to "配置", "mounted" to "Hook", "invoked" to "调用", "source" to "背景", "render" to "绘制", "extensions" to "扩展") +
+                if (pkg == "com.android.systemui") listOf("qs_seekbar_hook" to "进度接口", "qs_seekbar_active" to "进度对象", "qs_seekbar_tint" to "进度填充", "qs_tile_mask" to "按钮遮罩") else emptyList()
+            "宿主模块版本：${o.optString("version", "未知")}\n上次记录 $stamp  ·  PID ${o.optInt("pid")}\n" + fields.joinToString("\n") { (k, n) -> "$n：${s.optString(k, "尚未收到")}" } + "\n历史记录不代表此刻仍在运行。"
         }
     } catch (_: Throwable) { "诊断通道暂不可读，请刷新框架连接。" }
 

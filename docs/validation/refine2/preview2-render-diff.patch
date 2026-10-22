@@ -1,0 +1,227 @@
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
+index 4383abb..c36f214 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
+@@ -1778,12 +1778,2 @@ object BlurDrawHook {
+-    /**
+-     * [spec/86 音量条] QS 音量/亮度条**进度填充层** drawable → 登记表。
+-     * 由 [mountQsSeekBarActiveDrawable] 在 `QsSeekBarBlurManager.getSeekBarActiveDrawable(View)`
+-     * 返回时登记（该方法唯一调用点 = `OplusQsVerticalSeekBar:82` 赋给 `activeMixColorDrawable`）。
+-     * [replaceShaderIfPossible] 命中 → 不套玻璃，改画半透明白 tint（见那里）。
+-     *
+-     * 用 **WeakHashMap**（drawable 无重写 equals/hashCode → 天然身份语义）：seekbar 重建后旧实例被 GC
+-     * 即自动淘汰，既不泄漏也不需要「超限 clear」（clear 会把还在用的条目一起删掉 → tint 静默失效）。
+-     * 同步包装：登记在 hook 线程、查询在 UI 绘制线程。
+-     */
+-    private val seekbarActiveDrawables: MutableMap<Any, Boolean> =
+-        java.util.Collections.synchronizedMap(java.util.WeakHashMap<Any, Boolean>())
++    /** COS17 factories return AutoBlurDrawable wrappers, not drawBlurShader's inner target. */
++    private val qsSeekbars = QsSeekbarCompat()
+@@ -2497 +2487,3 @@ object BlurDrawHook {
+-        if (!hasMethod(CLASS_QS_SEEKBAR_BLUR_MANAGER, METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE, View::class.java)) {
++        try {
++            qsSeekbars.resolveActiveFactory(Class.forName(CLASS_QS_SEEKBAR_BLUR_MANAGER, false, classLoader))
++        } catch (_: ReflectiveOperationException) {
+@@ -4148 +4140,3 @@ object BlurDrawHook {
+-        return registerScreenRegionCore(proxy, hostView, defaultDrawable, autoBounds, "map", hostClip, cardClass)
++        val seekbarWrapper = auto.takeIf { qsSeekbars.isActiveWrapper(it) }
++        return registerScreenRegionCore(proxy, hostView, defaultDrawable, autoBounds, "map", hostClip, cardClass,
++            seekbarWrapper)
+@@ -4274,0 +4269 @@ object BlurDrawHook {
++            RuntimeDiagnostics.mark("qs_tile_mask", "原生选中遮罩跳过路径已执行；按钮外观待核验")
+@@ -4392,0 +4388 @@ object BlurDrawHook {
++        seekbarWrapper: Any? = null,
+@@ -4407 +4403,3 @@ object BlurDrawHook {
+-        val cachedTarget = registerTargetCache[proxyKey]?.target
++        // An active seekbar's native material can be recreated on theme/layout changes.
++        // Re-resolve these two small layers instead of retaining an obsolete rendering target.
++        val cachedTarget = if (seekbarWrapper == null) registerTargetCache[proxyKey]?.target else null
+@@ -4429,2 +4427,4 @@ object BlurDrawHook {
+-            if (registerTargetCache.size >= REGISTER_TARGET_CACHE_MAX) registerTargetCache.clear()
+-            registerTargetCache[proxyKey] = RegisterTargetCache(resolved)
++            if (seekbarWrapper == null) {
++                if (registerTargetCache.size >= REGISTER_TARGET_CACHE_MAX) registerTargetCache.clear()
++                registerTargetCache[proxyKey] = RegisterTargetCache(resolved)
++            }
+@@ -4432,0 +4433,3 @@ object BlurDrawHook {
++        if (seekbarWrapper != null && qsSeekbars.bind(seekbarWrapper, target)) {
++            RuntimeDiagnostics.mark("qs_seekbar_active", "已映射实际进度绘制对象：${target.javaClass.simpleName}")
++        }
+@@ -4952,0 +4956,3 @@ object BlurDrawHook {
++        if (VolumeMaskGuard.preserveMask(pbd)) {
++            chain.proceed(); return
++        }
+@@ -9964,10 +9970,3 @@ object BlurDrawHook {
+-    /**
+-     * [spec/86] hook `QsSeekBarBlurManager.getSeekBarActiveDrawable(View)`（唯一调用点
+-     * `OplusQsVerticalSeekBar:82` → `activeMixColorDrawable`），登记返回的 AutoBlurDrawable 到
+-     * [seekbarActiveDrawables] → [replaceShaderIfPossible] 命中即改画半透明白 tint（不套玻璃），
+-     * 让轨道层（`getSeekBarBackground`，带真实主题圆角）玻璃的折射/高光透出来。
+-     *
+-     * 挂这里而不是挂 onDraw：本方法**只在 seekbar 构造/刷新 drawable 时调一次**，登记零热路径开销；
+-     * 返回值引用就是后续 drawBlurShader 的 `this` 同实例（同 [registerScreenRegionCore] 的 target
+-     * 解析约定），判定可靠。
+-     * 挂载失败独立 try-catch（不影响其他 hook，退化为现状 = 填充层照旧盖住高光）。
++    /** Resolve COS17's seven-argument factory (legacy one-argument fallback), then track its wrapper.
++     * The actual posteffect target is bound later in registerScreenRegionCore, when it exists.
++     * This is the control-center slider; the independent hardware-key volume window is separate.
+@@ -9978 +9977 @@ object BlurDrawHook {
+-            val method = clazz.getDeclaredMethod(METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE, View::class.java)
++            val method = qsSeekbars.resolveActiveFactory(clazz)
+@@ -9985 +9984 @@ object BlurDrawHook {
+-                            seekbarActiveDrawables[ret] = true
++                            qsSeekbars.registerFactoryResult(ret)
+@@ -9995 +9994,2 @@ object BlurDrawHook {
+-            Lg.i(TAG, "Hook mounted: $CLASS_QS_SEEKBAR_BLUR_MANAGER#$METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE(View) (spec/86 seekbar active tint)")
++            RuntimeDiagnostics.mark("qs_seekbar_hook", "已挂载 ${method.parameterCount} 参数进度层接口；待实际调用")
++            Lg.i(TAG, "Hook mounted: $method (seekbar active wrapper tracking)")
+@@ -9997 +9997,2 @@ object BlurDrawHook {
+-            Lg.w(TAG, "Hook mount skipped: $CLASS_QS_SEEKBAR_BLUR_MANAGER#$METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE", t)
++            RuntimeDiagnostics.mark("qs_seekbar_hook", "进度层接口挂载失败：${t.javaClass.simpleName}")
++            Lg.e(TAG, "Hook mount skipped: $CLASS_QS_SEEKBAR_BLUR_MANAGER#$METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE", t)
+@@ -10080 +10081 @@ object BlurDrawHook {
+-                    val result = chain.proceed()
++                    val result = proceedWithSeekbarTint(chain, drawable, glassApplied)
+@@ -10090,0 +10092,20 @@ object BlurDrawHook {
++    /** Keep the progress tint local to one draw: no white Paint state survives an off switch. */
++    private fun proceedWithSeekbarTint(chain: XposedInterface.Chain, drawable: Any?, applied: Boolean): Any? {
++        if (!applied || drawable == null || !qsSeekbars.isActiveTarget(drawable)) return chain.proceed()
++        val paint = mGetDrawableShaderPaint?.invoke(drawable) as? Paint ?: return chain.proceed()
++        val shader = paint.shader
++        val colorFilter = paint.colorFilter
++        try {
++            paint.shader = null
++            paint.colorFilter = PorterDuffColorFilter(
++                Color.argb(SEEKBAR_ACTIVE_TINT_ALPHA, 255, 255, 255), PorterDuff.Mode.SRC,
++            )
++            val result = chain.proceed()
++            RuntimeDiagnostics.mark("qs_seekbar_tint", "半透明进度填充绘制路径已执行；外观待核验")
++            return result
++        } finally {
++            paint.shader = shader
++            paint.colorFilter = colorFilter
++        }
++    }
++
+@@ -10299 +10320 @@ object BlurDrawHook {
+-        if (seekbarActiveDrawables.containsKey(drawable)) {
++        if (qsSeekbars.isActiveTarget(drawable)) {
+@@ -10309,10 +10330,2 @@ object BlurDrawHook {
+-            try {
+-                tintPaint.shader = null
+-                tintPaint.colorFilter = PorterDuffColorFilter(
+-                    Color.argb(SEEKBAR_ACTIVE_TINT_ALPHA, 255, 255, 255),
+-                    PorterDuff.Mode.SRC,
+-                )
+-            } catch (t: Throwable) {
+-                Lg.e(TAG, "seekbar: active tint paint failed (id=$id)", t)
+-                return false
+-            }
++            // The tint is applied only around the actual draw call and restored in finally.
++            // Leaving a color filter on this Paint would keep white fill after disabling glass.
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSeekbarCompat.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSeekbarCompat.kt
+new file mode 100644
+index 0000000..25eb3b8
+--- /dev/null
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSeekbarCompat.kt
+@@ -0,0 +1,41 @@
++package com.coloros16.liquidglass.hook
++
++import android.graphics.Rect
++import android.view.View
++import java.lang.reflect.Method
++import java.util.Collections
++import java.util.WeakHashMap
++
++/** Factory signatures and the wrapper -> actual rendering-object relationship are separate contracts. */
++class QsSeekbarCompat {
++    private val activeWrappers = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
++    private val activeTargets = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
++
++    fun resolveActiveFactory(type: Class<*>): Method {
++        val name = "getSeekBarActiveDrawable"
++        return try {
++            // SystemUI 17.99.02. Do not select unrelated overloads by name/argument count.
++            type.getDeclaredMethod(name, View::class.java, Rect::class.java,
++                Float::class.javaPrimitiveType!!, Float::class.javaPrimitiveType!!,
++                Boolean::class.javaPrimitiveType!!, Boolean::class.javaPrimitiveType!!,
++                Float::class.javaPrimitiveType!!)
++        } catch (_: NoSuchMethodException) {
++            type.getDeclaredMethod(name, View::class.java)
++        }
++    }
++
++    fun registerFactoryResult(wrapper: Any?) {
++        if (wrapper != null) activeWrappers[wrapper] = true
++    }
++
++    fun isActiveWrapper(wrapper: Any): Boolean = activeWrappers.containsKey(wrapper)
++
++    /** Called during AutoBlurDrawable mapping, after PlatformBlurDrawable has a real inner target. */
++    fun bind(wrapper: Any, target: Any): Boolean {
++        if (!activeWrappers.containsKey(wrapper)) return false
++        activeTargets[target] = true
++        return true
++    }
++
++    fun isActiveTarget(target: Any): Boolean = activeTargets.containsKey(target)
++}
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/VolumeMaskGuard.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/VolumeMaskGuard.kt
+new file mode 100644
+index 0000000..b8c57ee
+--- /dev/null
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/VolumeMaskGuard.kt
+@@ -0,0 +1,43 @@
++package com.coloros16.liquidglass.hook
++
++import android.view.View
++import java.lang.reflect.Modifier
++import java.util.Collections
++import java.util.WeakHashMap
++
++/** Preserve the volume window's mask without changing Preview2's glass rendering path. */
++object VolumeMaskGuard {
++    private val decisions = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
++
++    fun isVolumeClass(name: String): Boolean = name.startsWith("com.oplus.systemui.volume.") ||
++        name.startsWith("com.android.systemui.volume.")
++
++    fun preserveMask(wrapper: Any): Boolean {
++        decisions[wrapper]?.let { return it }
++        val result = try {
++            val supplier = wrapper.javaClass.getDeclaredField("getHostViewName")
++                .apply { isAccessible = true }.get(wrapper)
++            // COS17's callback captures PlatformBlurHelper, which owns the actual host View.
++            // Resource IDs and shared SurfaceControl layer descriptions are not scene evidence.
++            val host = supplier?.javaClass?.declaredFields?.asSequence()
++                ?.filter { !Modifier.isStatic(it.modifiers) }
++                ?.mapNotNull { field ->
++                    try {
++                        val owner = field.apply { isAccessible = true }.get(supplier)
++                        if (owner is View) owner else owner?.javaClass?.getDeclaredField("hostView")
++                            ?.apply { isAccessible = true }?.get(owner) as? View
++                    } catch (_: Throwable) { null }
++                }?.firstOrNull()
++            var cursor = host
++            var volume = false
++            for (i in 0 until 10) {
++                val view = cursor ?: break
++                if (isVolumeClass(view.javaClass.name)) { volume = true; break }
++                cursor = view.parent as? View
++            }
++            volume
++        } catch (_: Throwable) { false }
++        decisions[wrapper] = result
++        return result
++    }
++}
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt b/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
+index ee2463b..fbbc722 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
+@@ -786 +786,4 @@ object LiquidGlassShader {
+-            float band = 1.0 - smoothstep(0.0, hw, abs(dIn - bandCenter));
++            // Refine only the perimeter width; keep Preview2's refraction, sampling and light strength.
++            float edgeWidth = max(hw * 0.75, 1.0);
++            float edgeCenter = max(edgeWidth * 0.5, 2.0);
++            float band = 1.0 - smoothstep(0.0, edgeWidth, abs(dIn - edgeCenter));

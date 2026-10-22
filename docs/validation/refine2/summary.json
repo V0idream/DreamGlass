@@ -1,0 +1,15 @@
+{
+  "versionName": "0.1.1-COS17-Refine2",
+  "versionCode": 10007,
+  "baseline": "4819d6216c54326d6a9984aaac867bdfa98b8f12",
+  "apkSha256": "cff99d7f1462ca3b788e897a9ca87a3085b2789a354700b94e207a809942e5b9",
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "unitTestsPassed": 10,
+  "romContractsPassed": 7,
+  "lintErrors": 0,
+  "lintWarnings": 182,
+  "deviceConnectedForThisRevision": false,
+  "visualVerificationPassed": false,
+  "shaderUnchangedFromRefine1": true,
+  "volumeMaskGuardUnchangedFromRefine1": true
+}

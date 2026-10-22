@@ -1,14 +1,16 @@
 # DreamGlassforCOS17
 
-面向 ColorOS 17 的 LSPosed 玻璃材质软件，当前版本 **0.1.1-COS17-Refine1**。
+面向 ColorOS 17 的 LSPosed 玻璃材质软件，当前版本 **0.1.1-COS17-Refine2**。
 
 提供原创概览、材质实验室、运行诊断、设置四个页面，以及完整高级参数控制。清透、柔雾、棱光三个预设使用现有 AGSL 能力，方便先预览再应用。参考渲染实现来自 ColorOS16-LiquidGlass，完整授权见 LICENSE 和 THIRD-PARTY-NOTICES.md。
 
-此版已在目标手机普通 ADB 覆盖安装并验证返回路径、图标开关，用户反馈测试通过。长期性能与所有子功能仍需分项验证。具体结果见 TEST_REPORT.md，支持范围见 COMPATIBILITY.md。
+首次发布的 Preview2 曾在目标手机验证返回路径和图标开关。当前 Refine2 是在该基线上继续修复的离线候测包，本次没有连接设备，不能沿用此前的真机结论。验证结果见 TEST_REPORT.md，支持范围见 COMPATIBILITY.md。
 
 ## 本修订范围
 
-基于首次上传 GitHub 的 Preview2，只收窄原高光边缘并修正独立音量面板遮罩被清除的问题。保留原玻璃、折射、采样、参数和页面。未合入后续实验版。具体差异见 docs/PREVIEW2_REFINE1.md；本修订仍待用户安装验证。
+基于首次上传 GitHub 的 Preview2，保留 Refine1 的窄边缘和独立音量窗口遮罩处理。此次修正控制中心进度条七参数接口、外层包装与实际绘制对象的匹配，并限定半透明填充只在单次绘制中生效。保留原玻璃算法、折射、采样、参数和预设；未合入 Preview3–5 的材质实验。
+
+诊断增加宿主实际加载版本、进度接口/对象/填充和按钮遮罩路径记录。它们不代表像素效果已通过验收；普通选中按钮白底的剩余原因、独立音量面板和最终边缘观感均仍待真机核验。具体见 docs/PREVIEW2_REFINE2.md。
 
 ## 条件
 
@@ -19,7 +21,7 @@
 
 ## 安装和逐步启用
 
-1. 安装 `DreamGlassforCOS17-Preview2-Refine1.apk`，先不要启用 SystemUI 作用域。
+1. 安装 `DreamGlassforCOS17-Preview2-Refine2.apk`，先不要启用 SystemUI 作用域。
 2. 打开 DreamGlass，确认首页显示“框架配置通道已连接”。这只证明设置能写入框架，不证明 Hook 或效果已生效。
 3. 在 LSPosed 中先选择 `com.android.launcher`。开启软件总开关，手动重启目标桌面进程/手机，让入口重新读取配置。
 4. 从“材质”选一个预设应用，打开文件夹并检查玻璃、图标、关闭动画、壁纸切换等。Dock 是单独功能，需在桌面高级设置中启用。

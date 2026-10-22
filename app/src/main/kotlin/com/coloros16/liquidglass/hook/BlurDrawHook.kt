@@ -1775,18 +1775,8 @@ object BlurDrawHook {
      *  isBackgroundScrimById（drawBlurShader 直绘路径 paint 置透明）仍需识别 scrim → 独立登记。 */
     private val scrimDrawableIds = ConcurrentHashMap.newKeySet<Int>()
 
-    /**
-     * [spec/86 音量条] QS 音量/亮度条**进度填充层** drawable → 登记表。
-     * 由 [mountQsSeekBarActiveDrawable] 在 `QsSeekBarBlurManager.getSeekBarActiveDrawable(View)`
-     * 返回时登记（该方法唯一调用点 = `OplusQsVerticalSeekBar:82` 赋给 `activeMixColorDrawable`）。
-     * [replaceShaderIfPossible] 命中 → 不套玻璃，改画半透明白 tint（见那里）。
-     *
-     * 用 **WeakHashMap**（drawable 无重写 equals/hashCode → 天然身份语义）：seekbar 重建后旧实例被 GC
-     * 即自动淘汰，既不泄漏也不需要「超限 clear」（clear 会把还在用的条目一起删掉 → tint 静默失效）。
-     * 同步包装：登记在 hook 线程、查询在 UI 绘制线程。
-     */
-    private val seekbarActiveDrawables: MutableMap<Any, Boolean> =
-        java.util.Collections.synchronizedMap(java.util.WeakHashMap<Any, Boolean>())
+    /** COS17 factories return AutoBlurDrawable wrappers, not drawBlurShader's inner target. */
+    private val qsSeekbars = QsSeekbarCompat()
 
     /** [spec/86] 进度填充层 tint alpha（0..255）。半透明让轨道层玻璃的折射/高光透出；调大更亮。 */
     private const val SEEKBAR_ACTIVE_TINT_ALPHA = 0x66
@@ -2494,7 +2484,9 @@ object BlurDrawHook {
         if (!hasPubMethod(CLASS_META_BALL_DRAWABLE, "setMetaColor", Int::class.javaPrimitiveType!!)) {
             miss("#9 MetaBall 粘连（MetaBallBlurDrawable#setMetaColor）")
         }
-        if (!hasMethod(CLASS_QS_SEEKBAR_BLUR_MANAGER, METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE, View::class.java)) {
+        try {
+            qsSeekbars.resolveActiveFactory(Class.forName(CLASS_QS_SEEKBAR_BLUR_MANAGER, false, classLoader))
+        } catch (_: ReflectiveOperationException) {
             miss("#41 QS 音量/亮度条进度层（QsSeekBarBlurManager#getSeekBarActiveDrawable）")
         }
         if (!hasMethod(CLASS_BLEND_DRAWABLE, METHOD_ON_DRAW_CONTENT, Canvas::class.java)) {
@@ -4145,7 +4137,9 @@ object BlurDrawHook {
         } catch (t: Throwable) {
             Lg.e(TAG, "map: getBounds(AutoBlurDrawable) failed", t); null
         }
-        return registerScreenRegionCore(proxy, hostView, defaultDrawable, autoBounds, "map", hostClip, cardClass)
+        val seekbarWrapper = auto.takeIf { qsSeekbars.isActiveWrapper(it) }
+        return registerScreenRegionCore(proxy, hostView, defaultDrawable, autoBounds, "map", hostClip, cardClass,
+            seekbarWrapper)
     }
 
     /**
@@ -4272,6 +4266,7 @@ object BlurDrawHook {
             // 等效 super.draw(canvas)（DrawableWrapper.draw = mDrawable.draw）：只画内层玻璃底座
             inner.draw(canvas)
             logThrottled("tile-mask-skip", Log.DEBUG) { "tile: maskColor layer skipped, glass only (id=${System.identityHashCode(inner)})" }
+            RuntimeDiagnostics.mark("qs_tile_mask", "原生选中遮罩跳过路径已执行；按钮外观待核验")
             true
         } catch (t: Throwable) {
             Lg.e(TAG, "tile: direct glass draw failed, fallback original (with mask layer)", t)
@@ -4390,6 +4385,7 @@ object BlurDrawHook {
         hostClip: Rect? = null,
         // 卡片语义类（通知卡/磁贴等），随 bind 登记供预设按卡片命中；null=按绘制对象类
         cardClass: String? = null,
+        seekbarWrapper: Any? = null,
     ): Boolean {
         // [任务 G] 顺手登记宿主 View：运动事件源（QS 翻页/面板展开）触发时 invalidate 它，
         // 强制重录 draw → 映射随新位置更新（WeakReference 防泄漏，去重见 registerHostView）
@@ -4404,7 +4400,9 @@ object BlurDrawHook {
         // draw 相同），缓存命中后跳过 getBlurDrawable + platformGetBlurDrawable 反射链，主线程只做
         // getLocationOnScreen + getBounds + region 算术（省控制中心每帧 40-60 次反射）。
         val proxyKey = System.identityHashCode(proxy)
-        val cachedTarget = registerTargetCache[proxyKey]?.target
+        // An active seekbar's native material can be recreated on theme/layout changes.
+        // Re-resolve these two small layers instead of retaining an obsolete rendering target.
+        val cachedTarget = if (seekbarWrapper == null) registerTargetCache[proxyKey]?.target else null
         val target: Any
         if (cachedTarget != null) {
             target = cachedTarget
@@ -4426,9 +4424,14 @@ object BlurDrawHook {
             } else {
                 blurDrawable
             }
-            if (registerTargetCache.size >= REGISTER_TARGET_CACHE_MAX) registerTargetCache.clear()
-            registerTargetCache[proxyKey] = RegisterTargetCache(resolved)
+            if (seekbarWrapper == null) {
+                if (registerTargetCache.size >= REGISTER_TARGET_CACHE_MAX) registerTargetCache.clear()
+                registerTargetCache[proxyKey] = RegisterTargetCache(resolved)
+            }
             target = resolved
+        }
+        if (seekbarWrapper != null && qsSeekbars.bind(seekbarWrapper, target)) {
+            RuntimeDiagnostics.mark("qs_seekbar_active", "已映射实际进度绘制对象：${target.javaClass.simpleName}")
         }
         GlassRegistry.bind(System.identityHashCode(target), target, cardClass)
         // [spec/38 修复 2026-08-13] ScrimView（面板背景 scrim，ScrimControllerExImp.refreshBehindDrawable 的
@@ -9964,28 +9967,21 @@ object BlurDrawHook {
 
     // ------------------------------------------------------------ [spec/86] 音量条进度填充层登记
 
-    /**
-     * [spec/86] hook `QsSeekBarBlurManager.getSeekBarActiveDrawable(View)`（唯一调用点
-     * `OplusQsVerticalSeekBar:82` → `activeMixColorDrawable`），登记返回的 AutoBlurDrawable 到
-     * [seekbarActiveDrawables] → [replaceShaderIfPossible] 命中即改画半透明白 tint（不套玻璃），
-     * 让轨道层（`getSeekBarBackground`，带真实主题圆角）玻璃的折射/高光透出来。
-     *
-     * 挂这里而不是挂 onDraw：本方法**只在 seekbar 构造/刷新 drawable 时调一次**，登记零热路径开销；
-     * 返回值引用就是后续 drawBlurShader 的 `this` 同实例（同 [registerScreenRegionCore] 的 target
-     * 解析约定），判定可靠。
-     * 挂载失败独立 try-catch（不影响其他 hook，退化为现状 = 填充层照旧盖住高光）。
+    /** Resolve COS17's seven-argument factory (legacy one-argument fallback), then track its wrapper.
+     * The actual posteffect target is bound later in registerScreenRegionCore, when it exists.
+     * This is the control-center slider; the independent hardware-key volume window is separate.
      */
     private fun mountQsSeekBarActiveDrawable(api: XposedInterface, classLoader: ClassLoader) {
         try {
             val clazz = Class.forName(CLASS_QS_SEEKBAR_BLUR_MANAGER, false, classLoader)
-            val method = clazz.getDeclaredMethod(METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE, View::class.java)
+            val method = qsSeekbars.resolveActiveFactory(clazz)
             api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
                     val ret = chain.proceed()
                     try {
                         if (ret != null) {
-                            seekbarActiveDrawables[ret] = true
+                            qsSeekbars.registerFactoryResult(ret)
                             if (moduleLogEnabled) {
                                 Lg.i(TAG, "seekbar: active drawable registered id=${System.identityHashCode(ret)}")
                             }
@@ -9995,9 +9991,11 @@ object BlurDrawHook {
                     }
                     ret
                 }
-            Lg.i(TAG, "Hook mounted: $CLASS_QS_SEEKBAR_BLUR_MANAGER#$METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE(View) (spec/86 seekbar active tint)")
+            RuntimeDiagnostics.mark("qs_seekbar_hook", "已挂载 ${method.parameterCount} 参数进度层接口；待实际调用")
+            Lg.i(TAG, "Hook mounted: $method (seekbar active wrapper tracking)")
         } catch (t: Throwable) {
-            Lg.w(TAG, "Hook mount skipped: $CLASS_QS_SEEKBAR_BLUR_MANAGER#$METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE", t)
+            RuntimeDiagnostics.mark("qs_seekbar_hook", "进度层接口挂载失败：${t.javaClass.simpleName}")
+            Lg.e(TAG, "Hook mount skipped: $CLASS_QS_SEEKBAR_BLUR_MANAGER#$METHOD_GET_SEEKBAR_ACTIVE_DRAWABLE", t)
         }
     }
 
@@ -10080,7 +10078,7 @@ object BlurDrawHook {
                             }
                         }
                     }
-                    val result = chain.proceed()
+                    val result = proceedWithSeekbarTint(chain, drawable, glassApplied)
                     if (glassApplied) RuntimeDiagnostics.mark("render", "玻璃 drawBlurShader 调用完成；视觉待核验")
                     result
                 }
@@ -10088,6 +10086,26 @@ object BlurDrawHook {
             Lg.i(TAG, "Hook B mounted: $CLASS_BASE_DRAWABLE#$METHOD_DRAW_BLUR_SHADER(Canvas)")
         } catch (t: Throwable) {
             Lg.e(TAG, "Hook B mount FAILED: $CLASS_BASE_DRAWABLE#$METHOD_DRAW_BLUR_SHADER", t)
+        }
+    }
+
+    /** Keep the progress tint local to one draw: no white Paint state survives an off switch. */
+    private fun proceedWithSeekbarTint(chain: XposedInterface.Chain, drawable: Any?, applied: Boolean): Any? {
+        if (!applied || drawable == null || !qsSeekbars.isActiveTarget(drawable)) return chain.proceed()
+        val paint = mGetDrawableShaderPaint?.invoke(drawable) as? Paint ?: return chain.proceed()
+        val shader = paint.shader
+        val colorFilter = paint.colorFilter
+        try {
+            paint.shader = null
+            paint.colorFilter = PorterDuffColorFilter(
+                Color.argb(SEEKBAR_ACTIVE_TINT_ALPHA, 255, 255, 255), PorterDuff.Mode.SRC,
+            )
+            val result = chain.proceed()
+            RuntimeDiagnostics.mark("qs_seekbar_tint", "半透明进度填充绘制路径已执行；外观待核验")
+            return result
+        } finally {
+            paint.shader = shader
+            paint.colorFilter = colorFilter
         }
     }
 
@@ -10299,7 +10317,7 @@ object BlurDrawHook {
         // 位置必须在 **BlurSceneRegistry 场景判定之前**：该层由本模块显式登记，不受黑白名单影响
         //（否则音量场景被 registry 黑名单拦在前面，TINT 永远走不到）。
         // 也必须在「已是本模块 RuntimeShader」幂等分支之前命中（否则首帧套上玻璃后再也回不到 TINT）。
-        if (seekbarActiveDrawables.containsKey(drawable)) {
+        if (qsSeekbars.isActiveTarget(drawable)) {
             val tintPaint = try {
                 mGetDrawableShaderPaint?.invoke(drawable) as? Paint
             } catch (t: Throwable) {
@@ -10309,16 +10327,8 @@ object BlurDrawHook {
                 logRenderMode(id, "BLUR", "seekbar tint: paint null", drawable)
                 return false
             }
-            try {
-                tintPaint.shader = null
-                tintPaint.colorFilter = PorterDuffColorFilter(
-                    Color.argb(SEEKBAR_ACTIVE_TINT_ALPHA, 255, 255, 255),
-                    PorterDuff.Mode.SRC,
-                )
-            } catch (t: Throwable) {
-                Lg.e(TAG, "seekbar: active tint paint failed (id=$id)", t)
-                return false
-            }
+            // The tint is applied only around the actual draw call and restored in finally.
+            // Leaving a color filter on this Paint would keep white fill after disabling glass.
             logRenderMode(id, "GLASS", "seekbar active tint")
             return true
         }
