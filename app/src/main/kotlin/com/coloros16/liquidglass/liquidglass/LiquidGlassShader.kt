@@ -87,6 +87,7 @@ object LiquidGlassShader {
                                          // 0=无内侧衰减（现状）、1=内半几乎归零（只剩贴边一条线）
         uniform float uInnerGlow;        // 内侧光 0~1：边缘向中心的全向发光强度（区别于定向边缘高光）；0=关
         uniform float uVibrancy;         // 鲜艳度/饱和度倍数（Kyant vibrancy=1.5；1=不变）
+        uniform float uMaterialOpacity; // Premultiplied material coverage; content is drawn separately.
         uniform float uSurfacePolish;    // COS17 controls/cards only: finer rim and clearer background. Other scenes stay unchanged.
         uniform float uLightAngle;       // 光角度（弧度；Kotlin 侧由角度转弧度）
         uniform vec2  uParallax;         // 视差（面板几何中心偏移，可接传感器）
@@ -841,7 +842,7 @@ object LiquidGlassShader {
             }
 
             // 7. 输出
-            return half4(clamp(glass, 0.0, 1.0));
+            return half4(clamp(glass, 0.0, 1.0) * clamp(uMaterialOpacity, 0.0, 1.0));
         }
     """.trimIndent()
 
@@ -898,6 +899,7 @@ object LiquidGlassShader {
         val innerGlow: Float = 0f,
         /** Use the COS17 control/card finish; launcher and clock callers keep the original material. */
         val surfacePolish: Boolean = false,
+        val materialOpacity: Float = 1f,
     )
 
     /**
@@ -1073,6 +1075,7 @@ object LiquidGlassShader {
         shader.setFloatUniform("uHighlightFalloff", params.highlightFalloff)
         shader.setFloatUniform("uVibrancy", params.vibrancy)
         shader.setFloatUniform("uSurfacePolish", if (params.surfacePolish) 1f else 0f)
+        shader.setFloatUniform("uMaterialOpacity", params.materialOpacity.coerceIn(0f, 1f))
         shader.setFloatUniform("uLightAngle", (params.lightAngleDegrees * PI / 180.0).toFloat())
         shader.setFloatUniform("uParallax", params.parallaxX, params.parallaxY)
         shader.setFloatUniform("uDebugCoord", debugCoord)

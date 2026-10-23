@@ -69,7 +69,7 @@ def backdrop(w, h, flat=False):
     return skia.Image.fromarray(array, colorType=skia.ColorType.kRGBA_8888_ColorType)
 
 
-def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6):
+def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6, opacity=1):
     builder = skia.RuntimeEffectBuilder(effect)
     image = backdrop(w, h, flat)
     image_shader = image.makeShader(skia.TileMode.kClamp, skia.TileMode.kClamp,
@@ -91,6 +91,8 @@ def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6):
     }
     if 'uSurfacePolish' in [u.name for u in effect.uniforms()]:
         uniforms['uSurfacePolish'] = float(polish)
+    if 'uMaterialOpacity' in [u.name for u in effect.uniforms()]:
+        uniforms['uMaterialOpacity'] = float(opacity)
     for name, value in uniforms.items():
         builder.setUniform(name, value if isinstance(value, list) else float(value))
     surface = skia.Surface.MakeRaster(skia.ImageInfo.Make(w, h,
@@ -175,10 +177,20 @@ for i, (image, value) in enumerate(zip(progress_rows, [0, 1, 25, 50, 99, 100])):
     labels.text((i * 180 + 10, 10), str(value) + '%', fill='white')
     progress_sheet.alpha_composite(image, (i * 180 + 10, 35))
 progress_sheet.save(out / 'slider-clip-fixture.png')
+opacity_checks = []
+for name in ('full', 'base'):
+    full, _ = render(effects[name], 360, 160, 80, polish=1, opacity=1)
+    for opacity in (0, .25, .5, .75, 1):
+        pixels, _ = render(effects[name], 360, 160, 80, polish=1, opacity=opacity)
+        error = float(np.max(np.abs(pixels - full * opacity)))
+        assert error < .00001, (name, opacity, error)
+        assert np.all(pixels[..., :3] <= pixels[..., 3:4] + .00001)
+        opacity_checks.append({'variant': name, 'opacity': opacity, 'maxPremultipliedScaleError': error})
+
 report = {'engine': 'desktop Skia ' + skia.__version__, 'androidGpuTested': False,
           'shaderSourceSha256': hashlib.sha256(source.encode()).hexdigest(),
           'compiledVariants': list(effects), 'cases': results,
           'rimWidthAt30Percent': {'beforePx': old_width, 'afterPx': new_width},
-          'progressClippingPercentages': [0, 1, 25, 50, 99, 100]}
+          'progressClippingPercentages': [0, 1, 25, 50, 99, 100], 'opacityChecks': opacity_checks}
 (out / 'shader-validation.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
 print(json.dumps(report, indent=2))

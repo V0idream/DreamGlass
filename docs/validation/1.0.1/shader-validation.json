@@ -1,0 +1,107 @@
+{
+  "engine": "desktop Skia 144.1",
+  "androidGpuTested": false,
+  "shaderSourceSha256": "217e558c4ebbf0f05984c02156e7c5b973f4cdd3d1ee45ec6e4f39a2d788a500",
+  "compiledVariants": [
+    "full",
+    "base",
+    "prior-full",
+    "prior-base"
+  ],
+  "cases": [
+    {
+      "shape": "round tile",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "wide tile",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "slider",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "media",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "notification",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    }
+  ],
+  "rimWidthAt30Percent": {
+    "beforePx": 6,
+    "afterPx": 2
+  },
+  "progressClippingPercentages": [
+    0,
+    1,
+    25,
+    50,
+    99,
+    100
+  ],
+  "opacityChecks": [
+    {
+      "variant": "full",
+      "opacity": 0,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "full",
+      "opacity": 0.25,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "full",
+      "opacity": 0.5,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "full",
+      "opacity": 0.75,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "full",
+      "opacity": 1,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "base",
+      "opacity": 0,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "base",
+      "opacity": 0.25,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "base",
+      "opacity": 0.5,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "base",
+      "opacity": 0.75,
+      "maxPremultipliedScaleError": 0.0
+    },
+    {
+      "variant": "base",
+      "opacity": 1,
+      "maxPremultipliedScaleError": 0.0
+    }
+  ]
+}

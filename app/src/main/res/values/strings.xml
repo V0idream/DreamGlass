@@ -97,7 +97,7 @@
     <string name="settings_remove_panel_mix_color">移除面板灰底</string>
     <string name="settings_remove_panel_mix_color_desc">去掉系统面板背景的灰色底，模糊效果仍然保留。</string>
     <string name="settings_text_contrast">文字自动反色</string>
-    <string name="settings_text_contrast_desc">根据背景明暗自动切换文字黑白；关闭后使用系统默认逻辑。</string>
+    <string name="settings_text_contrast_desc">按各按钮或卡片自己的背景区域选择黑字或白字；优先于强制白字。保留彩色文字和状态栏原色。</string>
     <string name="settings_heads_up_text_follow">横幅文字跟随背景</string>
     <string name="settings_heads_up_text_follow_desc">弹出通知的文字颜色：开启遮罩时强制白色，关闭时按背景明暗自动调整。</string>
     <string name="settings_text_force_refresh_interval">文字颜色刷新间隔</string>
@@ -117,7 +117,7 @@
     <string name="settings_mask_text_color_gray">灰</string>
     <string name="settings_mask_text_color_desc">开启文字强制白后，中性色文字统一成该颜色；彩色文字保持原样。</string>
     <string name="settings_text_force_white">文字强制白（默认开）</string>
-    <string name="settings_text_force_white_desc">玻璃区域和横幅中的中性色文字始终为白色。可单独开启，不必同时压暗背景。</string>
+    <string name="settings_text_force_white_desc">关闭文字自动反色后，此选项将玻璃区域和横幅中的中性色文字设为白色；不必同时压暗背景。</string>
     <string name="settings_seedling_card_glass">流体云液态玻璃（默认关）</string>
     <string name="settings_seedling_card_glass_desc">灵动岛/流体云的液态玻璃总开关，横幅玻璃也受此控制。</string>
     <string name="settings_seedling_capsule_glass">小胶囊（小岛）也玻璃化（默认开）</string>
@@ -257,4 +257,7 @@
     <string name="update_dialog_later">以后再说</string>
     <string name="update_dialog_open_failed">无法打开链接，请手动访问 GitHub Releases 页下载</string>
     <string name="update_dialog_notes">更新简介：\n%1$s</string>
+    <string name="settings_button_transparency">按钮整体透明度</string>
+    <string name="settings_button_transparency_value">%1$d%%</string>
+    <string name="settings_button_transparency_desc">全局调整控制中心按钮的玻璃层。0% 保留完整材质，100% 隐去材质；文字和图标保持清晰。不影响通知卡片、滑杆或独立音量面板。</string>
 </resources>

@@ -10,6 +10,7 @@ p.add_argument('--inventory', type=Path, required=True)
 p.add_argument('--gradle-cache', type=Path, required=True)
 args=p.parse_args()
 root=Path(__file__).resolve().parents[1]
+release_version=re.search(r'versionName\s*=\s*"([^"]+)"',(root/'app/build.gradle.kts').read_text(encoding='utf-8'))[1]
 assets=root/'app/src/main/assets/legal';assets.mkdir(parents=True,exist_ok=True)
 copies=root/'licenses/third-party';copies.mkdir(parents=True,exist_ok=True)
 NS='{http://maven.apache.org/POM/4.0.0}'
@@ -51,12 +52,12 @@ for name in ['interface','service']:
     retain(file,coordinate)
 retain(root/'gradle/wrapper/gradle-wrapper.jar','Gradle-wrapper--build-tool')
 
-inventory={'release':'DreamGlass 1.0.0','components':list(components.values()),
+inventory={'release':'DreamGlass '+release_version,'components':list(components.values()),
     'compileOnly':[{'coordinate':'io.github.libxposed:api:102.0.0','license':'Apache-2.0','redistributedInApk':False,'source':'https://github.com/libxposed/api'}],
     'buildOnly':'Gradle wrapper is included in the source archive, not the APK. JUnit, the Kotlin compiler, Android SDK, desktop Skia and the emulator are not bundled in the APK.',
     'retainedOriginalNotices':retained}
 (root/'licenses/dependency-inventory.json').write_text(json.dumps(inventory,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-lines=['DreamGlass 1.0.0 — 实际发布依赖清单','',
+lines=['DreamGlass '+release_version+' — 实际发布依赖清单','',
        '下列运行时组件按 Apache License 2.0 分发；许可全文另附。版本来自 Gradle 的 releaseRuntimeClasspath。',
        '重复的 JAR/AAR 变体按同一坐标合并，不把仅编译/测试工具误称为 APK 运行库。','']
 for component in components.values():

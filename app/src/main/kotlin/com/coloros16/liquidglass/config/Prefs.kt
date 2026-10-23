@@ -93,6 +93,9 @@ object Prefs {
      *  调整后 ≤1s 生效（readMaterialParams TTL 缓存）。 */
     const val KEY_INNER_GLOW = "inner_glow"
     const val DEFAULT_INNER_GLOW = 0f
+    /** Global QS button glass transparency; does not fade content, sliders or other scenes. */
+    const val KEY_BUTTON_TRANSPARENCY = "button_transparency"
+    const val DEFAULT_BUTTON_TRANSPARENCY = 0f
     const val KEY_VIBRANCY = "vibrancy"
     const val KEY_LIGHT_ANGLE = "light_angle"
     const val KEY_PARALLAX_X = "parallax_x"

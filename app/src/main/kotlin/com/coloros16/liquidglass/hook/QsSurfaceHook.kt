@@ -151,6 +151,19 @@ object QsSurfacePolicy {
             simple.startsWith("OplusQS") || simple.startsWith("OplusQs")
     }
 
+    fun buttonMaterial(host: String?): Boolean {
+        if (host == null) return false
+        val simple = host.substringAfterLast(':').substringAfterLast('.')
+        val qs = simple.startsWith("OplusQS") || simple.startsWith("OplusQs") || host.contains(".plugins.qs.")
+        return qs && (simple.contains("Tile") || simple.contains("IconView") || simple.contains("Button"))
+    }
+
+    fun excludesButtonOpacity(host: String?): Boolean {
+        val name = host?.lowercase() ?: return false
+        return name.contains("seekbar") || name.contains("slider") || name.contains("media") ||
+            name.contains(".volume.") || name.contains("volumedialog")
+    }
+
     fun field(type: Class<*>, name: String): Field {
         var cursor: Class<*>? = type
         while (cursor != null) {

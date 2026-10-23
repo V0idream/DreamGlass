@@ -305,15 +305,13 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun presentParameters(view: View, title: String, detail: String) {
-        supportActionBar?.title = "DreamGlass"
+        supportActionBar?.title = title
         val wrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(DreamUi.canvas) }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(DreamUi.dp(context, 22), DreamUi.dp(context, 7), DreamUi.dp(context, 22), DreamUi.dp(context, 12))
-        }
-        header.addView(DreamUi.label(this, "参数详情", 10f, DreamUi.accent, true))
-        header.addView(DreamUi.label(this, title, 24f, DreamUi.ink, true))
-        header.addView(DreamUi.label(this, detail, 12f, DreamUi.muted))
-        wrap.addView(header)
+        // The toolbar already names this page. Keep only a compact hint above the controls.
+        wrap.addView(DreamUi.label(this, detail, 11f, DreamUi.muted).apply {
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(DreamUi.dp(context, 16), DreamUi.dp(context, 2), DreamUi.dp(context, 16), DreamUi.dp(context, 3))
+        })
         wrap.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
         contentFrame.removeAllViews(); contentFrame.addView(wrap)
     }
@@ -406,6 +404,16 @@ class SettingsActivity : AppCompatActivity() {
         // [spec/89] 顶部实时效果预览：滑杆拖动中即时刷新（落盘仍走 onStopTrackingTouch，配置写入时机不变）。
         // 视差 X/Y 不喂预览 —— 它会把采样区整体移出预览框，画面会变成空白玻璃（见 doc/spec/89）。
         val preview: LiquidGlassPreviewView? = view.findViewById(R.id.materialPreview)
+        // A global button setting, independent of the selected per-class material preset.
+        bindFloatSeekBar(
+            seek = view.findViewById(R.id.seekButtonTransparency),
+            valueText = view.findViewById(R.id.buttonTransparencyValue),
+            key = Prefs.KEY_BUTTON_TRANSPARENCY, default = Prefs.DEFAULT_BUTTON_TRANSPARENCY,
+            fromProgress = { it / 100f },
+            toProgress = { (it * 100f).roundToInt().coerceIn(0, 100) },
+            format = { getString(R.string.settings_button_transparency_value, (it * 100).roundToInt()) },
+            onChanged = { v -> preview?.let { it.buttonTransparency = v; it.refresh() } },
+        )
 
         // 顶栏预设：选中预设后下方滑杆改读/改写该预设的参数键，未设的键回落全局值
         val glassPresets = readGlassPresets()
@@ -2042,6 +2050,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
     var highlightInnerAtt = Prefs.DEFAULT_HIGHLIGHT_INNER_ATT
     var innerGlow = Prefs.DEFAULT_INNER_GLOW
     var maskGlassDim = Prefs.DEFAULT_MASK_GLASS_DIM
+    var buttonTransparency = Prefs.DEFAULT_BUTTON_TRANSPARENCY
     var lightAngle = Prefs.DEFAULT_LIGHT_ANGLE
 
     /** 参数变了由外部调 [refresh] 重绘；背景滚动则由 [onDraw] 自续帧驱动。 */
@@ -2161,6 +2170,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             parallaxX = 0f,
             parallaxY = 0f,
             surfacePolish = true,
+            materialOpacity = 1f - buttonTransparency.coerceIn(0f, 1f),
         )
         // 卡片窗口在样图中的区域（bitmap 坐标）；AGSL 侧 srcCoord = srcRect.xy + coord/uViewport * srcRect.zw
         val srcRect = RectF(cardLeft + scrollX, cardTop, cardLeft + scrollX + cw, cardTop + ch)

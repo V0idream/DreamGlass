@@ -1,10 +1,12 @@
-# DreamGlass 1.0.0 — 修改声明
+# DreamGlass 1.0.1 — 修改声明
 
 修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-23。
 
 本作品基于 AYwlilwYA / ColorOS16-LiquidGlass `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，整体继续按 GNU GPLv3 分发。原作者及第三方组件的版权与许可均保留，详见 LICENSE、NOTICE 和 THIRD-PARTY-NOTICES.md。
 
 ## 修改范围
+
+- 1.0.1：压缩参数页布局，增加全局按钮材质透明度，按局部背景选择文字黑白并补充测试。
 
 - 独立品牌 DreamGlass、三层图形标记、工作台、材质工作室、运行状态及分组参数页。
 - 替换旧作者社交/收款入口；增加离线来源说明、GPL/Apache 全文及精确依赖清单。
@@ -16,7 +18,7 @@
 
 ## 对比上游基线的修改文件
 
-以下为此发行相对上游基线的修改、新增和移除文件；日期见上文。新增依赖源码档案均保持各自原始内容，索引见 third_party_sources/manifest.json。
+相关修改日期为 2026-10-22 至 2026-10-23；新增第三方源码归档保持原始内容。
 
 - `.gitattributes`
 - `.gitignore`
@@ -60,6 +62,7 @@
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/Cos17Contract.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/DisplayRootChannel.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/LauncherHook.kt`
+- `app/src/main/kotlin/com/coloros16/liquidglass/hook/LocalTextContrast.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/LockScreenClockHook.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSeekbarCompat.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSurfaceHook.kt`
@@ -92,7 +95,9 @@
 - `app/src/main/res/layout/view_cat_text.xml`
 - `app/src/main/res/layout/view_cat_tilt.xml`
 - `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`
+- `app/src/main/res/values-land/dimens.xml`
 - `app/src/main/res/values/colors.xml`
+- `app/src/main/res/values/dimens.xml`
 - `app/src/main/res/values/strings.xml`
 - `app/src/main/res/values/themes.xml`
 - `app/src/test/java/android/window/ScreenCapture.java`
@@ -101,6 +106,7 @@
 - `app/src/test/java/com/android/systemui/application/impl/SystemUIApplicationImpl.java`
 - `app/src/test/java/com/dreamglass/cos17/CaptureApiTest.java`
 - `app/src/test/java/com/dreamglass/cos17/ContentDrawBridgeTest.java`
+- `app/src/test/java/com/dreamglass/cos17/LocalTextContrastTest.java`
 - `app/src/test/java/com/dreamglass/cos17/QsSeekbarCompatTest.java`
 - `app/src/test/java/com/dreamglass/cos17/QsSurfacePolicyTest.java`
 - `app/src/test/java/com/dreamglass/cos17/SystemUiLifecycleTest.java`
@@ -136,6 +142,22 @@
 - `docs/validation/1.0.0/rom-contracts.txt`
 - `docs/validation/1.0.0/summary.json`
 - `docs/validation/1.0.0/ui-qa-summary.json`
+- `docs/validation/1.0.1/01-compact-portrait.png`
+- `docs/validation/1.0.1/02-transparency-100.png`
+- `docs/validation/1.0.1/05-large-font.png`
+- `docs/validation/1.0.1/06-landscape.png`
+- `docs/validation/1.0.1/TEST-com.dreamglass.cos17.CaptureApiTest.xml`
+- `docs/validation/1.0.1/TEST-com.dreamglass.cos17.ContentDrawBridgeTest.xml`
+- `docs/validation/1.0.1/TEST-com.dreamglass.cos17.LocalTextContrastTest.xml`
+- `docs/validation/1.0.1/TEST-com.dreamglass.cos17.QsSeekbarCompatTest.xml`
+- `docs/validation/1.0.1/TEST-com.dreamglass.cos17.QsSurfacePolicyTest.xml`
+- `docs/validation/1.0.1/TEST-com.dreamglass.cos17.SystemUiLifecycleTest.xml`
+- `docs/validation/1.0.1/TEST-com.dreamglass.cos17.VolumeMaskGuardTest.xml`
+- `docs/validation/1.0.1/apk-signature.txt`
+- `docs/validation/1.0.1/release-build.txt`
+- `docs/validation/1.0.1/rom-contracts.txt`
+- `docs/validation/1.0.1/shader-validation.json`
+- `docs/validation/1.0.1/summary.json`
 - `docs/validation/apk-badging.txt`
 - `docs/validation/apk-manifest.txt`
 - `docs/validation/apk-signature.txt`
@@ -216,6 +238,7 @@
 - `scripts/dex_inspector.py`
 - `scripts/fetch_dependency_sources.py`
 - `scripts/generate_legal_bundle.py`
+- `scripts/qa_compact_material_emulator.py`
 - `scripts/qa_release_emulator.py`
 - `scripts/validate_surface_shader.py`
 - `settings.gradle.kts`

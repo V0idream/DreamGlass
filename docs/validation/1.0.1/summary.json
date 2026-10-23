@@ -1,0 +1,41 @@
+{
+  "product": "DreamGlass",
+  "supportedRelease": "For ColorOS 17",
+  "version": "1.0.1",
+  "versionCode": 1000001,
+  "package": "com.dreamglass.cos17",
+  "debuggable": false,
+  "apkSha256": "9765fb0c10ddc0747bab6f522b6c32805328a149ec272e2fc03ca4a523187ef6",
+  "runtimeComponents": 57,
+  "retainedNoticeEntries": 12,
+  "unitTestsPassed": 32,
+  "lintErrors": 0,
+  "lintWarnings": 192,
+  "parameterBindingLayoutsPreserved": 15,
+  "opticalBaseline": "25c47e7",
+  "opticsUnchangedExceptOpacity": true,
+  "physicalDeviceAccessed": false,
+  "colorOsRuntimeTested": false,
+  "romContractsPassed": 9,
+  "ui": {
+    "serial": "emulator-5580",
+    "physicalDeviceAccessed": false,
+    "colorOsHookTested": false,
+    "screenshots": 6,
+    "previewTopFraction": 0.1403985507246377,
+    "parameterScrollHeightFraction": 0.6702898550724637,
+    "transparencyPreviewEndpointsPassed": true,
+    "navigationBackPassed": true,
+    "fontScale13Passed": true,
+    "landscapePassed": true,
+    "frameworkPreferencePersistenceTested": false,
+    "appCrashDetected": false,
+    "landscapeTestMethod": "isolated display size override 2340x1080"
+  },
+  "shaderOpacityCasesPassed": 10,
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "comparisonTo100": {
+    "oldParameterAreaPercent": 47.136752136752136,
+    "newParameterAreaPercent": 67.02898550724638
+  }
+}

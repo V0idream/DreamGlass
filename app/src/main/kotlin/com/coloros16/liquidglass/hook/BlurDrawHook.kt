@@ -1472,6 +1472,7 @@ object BlurDrawHook {
             lowResBitmapCache = null
             lowResBitmapSourceId = 0
             screenSnapshot = null
+            localContrastFrame = null
             lastSnapshotFingerprint = 0
             postInvalidateHosts()
             triggerBackgroundCapture()
@@ -8500,11 +8501,15 @@ object BlurDrawHook {
     /** [spec/63 文字可读性统一注入通道 2026-08-26] 统一文字可读性颜色注入：所有可读性场景（文字强制白 /
      *  heads-up 跟随系统取色 / 文字反转取色）单一入口，杜绝各路径独立判定造成「一个白一个黑」。
      *  给定 TextView + 原色 + 屏幕坐标，按优先级返回注入色；返回 null = 不注入（保持系统色）。
-     *  优先级：**文字强制白（[textForceWhiteEnabled] 独立开关，spec/63 解耦 KEY_MASK_ENABLE）>
-     *  heads-up 跟随（[isHeadsUpTextFollowArea]）> 文字反转取色（[textContrastEnabled]）**。
-     *  强制白开启时玻璃区域内 / heads-up 窗口内中性色文字恒白/灰（spec/60 语义保留），后两者不生效。
+     *  DreamGlass 1.0.1：局部自动反色优先；关闭自动反色后再使用强制白或 heads-up 系统跟随。
      *  调用方负责前置排除（状态栏 / 展开按钮 / app 彩色 / 未 attach）与缓存 / 防自循环注入尾。 */
     private fun resolveReadableTextColor(textView: TextView, originalColor: Int, screenX: Int, screenY: Int): Int? {
+        // Automatic local contrast takes priority over the legacy default force-white option.
+        // Missing data keeps the original color; never substitute one global QS decision.
+        if (textContrastEnabled) {
+            localRegionTextColor(originalColor, screenX, screenY)?.let { return it }
+            if (isOverGlassRegion(screenX, screenY)) return originalColor
+        }
         // 1. 文字强制白（独立开关，spec/63 解耦 KEY_MASK_ENABLE）：玻璃区域内 / heads-up 窗口内中性色文字恒白/灰
         if (textForceWhiteEnabled) {
             if (isOverGlassRegion(screenX, screenY) || isInHeadsUpWindow(textView)) {
@@ -8514,10 +8519,6 @@ object BlurDrawHook {
         }
         // 2. heads-up 跟随系统取色（spec/47）：heads-up 窗口内中性色文字按系统黑白通道（深底白字 / 浅底黑字）
         if (isHeadsUpTextFollowArea(textView)) {
-            return systemQsColorInjected(originalColor)
-        }
-        // 3. 文字反转取色（spec/21/39 系统黑白通道）：玻璃区域内中性色文字按系统黑白通道
-        if (textContrastEnabled && isOverGlassRegion(screenX, screenY)) {
             return systemQsColorInjected(originalColor)
         }
         return null
@@ -8577,6 +8578,63 @@ object BlurDrawHook {
      *  被误判"玻璃区域内" → 文字变色逻辑（mask 开强制白 / mask 关 systemQsColorInjected 注入黑）误伤。
      *  scoped：仅顶部状态栏条带；通知卡/媒体卡/QS tile 等玻璃文字（y ≥ statusBarBottom）不受影响，
      *  spec/38（ScrimView 不写 map）与 spec/47（heads-up 跟随）语义均保留。 */
+    private class LocalContrastFrame(val map: BackgroundContrastMap, val region: RectF, val capturedAtMs: Long)
+    private class LocalRegionColor(val frame: LocalContrastFrame, val bounds: RectF, val dim: Float, val rgb: Int)
+    @Volatile private var localContrastFrame: LocalContrastFrame? = null
+    // Main-thread only; the worker publishes a complete immutable frame rather than touching this cache.
+    private val localRegionColors = HashMap<Int, LocalRegionColor>()
+    private var localRegionColorsFrame: LocalContrastFrame? = null
+
+    private fun localRegionTextColor(original: Int, x: Int, y: Int): Int? {
+        val frame = localContrastFrame ?: return null
+        if (!frame.region.contains(x.toFloat(), y.toFloat())) return null
+        if (localRegionColorsFrame !== frame) {
+            localRegionColors.clear()
+            localRegionColorsFrame = frame
+        }
+        if (frame.region.width() <= 0f || frame.region.height() <= 0f) return null
+        var ownerId = 0
+        var owner: RegionEntry? = null
+        var bounds: RectF? = null
+        var smallestArea = Float.POSITIVE_INFINITY
+        for ((id, entry) in screenRegionMap) {
+            val host = entry.hostViewRef?.get() ?: continue
+            if (!host.isAttachedToWindow) continue
+            val rect = applyContainerTransform(entry.region, host)
+            if (!rect.contains(x.toFloat(), y.toFloat())) continue
+            val area = rect.width() * rect.height()
+            if (area > 0f && area < smallestArea) {
+                ownerId = id; owner = entry; bounds = rect; smallestArea = area
+            }
+        }
+        val entry = owner ?: return null
+        val rect = bounds ?: return null
+        val opacity = buttonOpacityFor(ownerId, readMaterialParams().buttonTransparency)
+        val dim = (maskAlphaFor(entry.hostViewName, ownerId) *
+            (if (usePolishedMaterial(ownerId)) 0.65f else 1f) * opacity).coerceIn(0f, 1f)
+        val cached = localRegionColors[ownerId]
+        val rgb = if (cached != null && cached.frame === frame && cached.bounds == rect && cached.dim == dim) {
+            cached.rgb
+        } else {
+            val screen = frame.region
+            // Use the center 80% to avoid the optical rim and adjacent controls.
+            val insetX = rect.width() * 0.1f; val insetY = rect.height() * 0.1f
+            val l = frame.map.mean(
+                (rect.left + insetX - screen.left) / screen.width(),
+                (rect.top + insetY - screen.top) / screen.height(),
+                (rect.right - insetX - screen.left) / screen.width(),
+                (rect.bottom - insetY - screen.top) / screen.height(),
+            ) ?: return null
+            // Approximate the material's dark tint in linear light; transparency reduces that tint.
+            val brightness = (1.0 - dim).let { it * it }
+            val color = LocalTextContrast.readableColor(-1, l * brightness) and 0x00ffffff
+            if (localRegionColors.size >= 1024) localRegionColors.clear()
+            localRegionColors[ownerId] = LocalRegionColor(frame, RectF(rect), dim, color)
+            color
+        }
+        return (original and -0x1000000) or rgb
+    }
+
     private fun isOverGlassRegion(screenX: Int, screenY: Int): Boolean {
         val sb = statusBarBottom()
         if (sb > 0 && screenY < sb) return false
@@ -8765,7 +8823,7 @@ object BlurDrawHook {
 
     /** [updateQsBrightness] 的临界区实现；**只允许在持 [qsPixelBufLock] 时调用**。 */
     private fun updateQsBrightnessLocked(bg: ElementBackground?) {
-        val bmp = bg?.bitmap ?: run { qsPanelBrightness = -1; return }
+        val bmp = bg?.bitmap ?: run { qsPanelBrightness = -1; localContrastFrame = null; return }
         try {
             val w = bmp.width
             val h = bmp.height
@@ -8777,6 +8835,10 @@ object BlurDrawHook {
             val pixels = qsPixelBuf?.takeIf { it.size >= need }
                 ?: IntArray(need).also { qsPixelBuf = it }
             bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+            // Build once per captured frame on this worker. UI queries only the immutable map.
+            localContrastFrame = LocalContrastFrame(
+                BackgroundContrastMap.fromPixels(pixels, w, h), RectF(bg.region), SystemClock.uptimeMillis(),
+            )
             var sum = 0L
             var n = 0
             var y = 0
@@ -8793,6 +8855,7 @@ object BlurDrawHook {
             logThrottled("text-contrast-brightness", Log.DEBUG) { "text-contrast: QS panel avg brightness=$qsPanelBrightness (${w}x${h} @step4)" }
         } catch (t: Throwable) {
             qsPanelBrightness = -1
+            localContrastFrame = null
         }
     }
 
@@ -11839,6 +11902,7 @@ object BlurDrawHook {
         val highlightInnerAtt: Float = Prefs.DEFAULT_HIGHLIGHT_INNER_ATT,
         /** 内侧光 0~1（默认 0=关）。末尾带默认值，兜底分支位置构造不传即用配置默认。 */
         val innerGlow: Float = Prefs.DEFAULT_INNER_GLOW,
+        val buttonTransparency: Float = Prefs.DEFAULT_BUTTON_TRANSPARENCY,
     )
 
     @Volatile
@@ -11890,6 +11954,7 @@ object BlurDrawHook {
                     prefs.getFloat(Prefs.KEY_HIGHLIGHT_FLOOR, Prefs.DEFAULT_HIGHLIGHT_FLOOR),
                     prefs.getFloat(Prefs.KEY_HIGHLIGHT_INNER_ATT, Prefs.DEFAULT_HIGHLIGHT_INNER_ATT),
                     prefs.getFloat(Prefs.KEY_INNER_GLOW, Prefs.DEFAULT_INNER_GLOW).coerceIn(0f, 1f),
+                    prefs.getFloat(Prefs.KEY_BUTTON_TRANSPARENCY, Prefs.DEFAULT_BUTTON_TRANSPARENCY).coerceIn(0f, 1f),
                 )
             } catch (t: Throwable) {
                 Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)
@@ -11904,6 +11969,21 @@ object BlurDrawHook {
         cachedMaterialParamsCache = result
         cachedMaterialParamsCacheTimeMs = now
         return result
+    }
+
+    private fun buttonOpacityFor(elementId: Int, transparency: Float): Float {
+        val entry = screenRegionMap[elementId] ?: return 1f
+        if (QsSurfacePolicy.excludesButtonOpacity(entry.hostViewName)) return 1f
+        var button = QsSurfacePolicy.buttonMaterial(entry.hostViewName)
+        var cursor = entry.hostViewRef?.get()
+        repeat(8) {
+            cursor?.let { view ->
+                if (QsSurfacePolicy.excludesButtonOpacity(view.javaClass.name)) return 1f
+                if (QsSurfacePolicy.buttonMaterial(view.javaClass.name)) button = true
+                cursor = view.parent as? View
+            }
+        }
+        return if (button && transparency.isFinite()) 1f - transparency.coerceIn(0f, 1f) else 1f
     }
 
     private fun usePolishedMaterial(elementId: Int): Boolean {
@@ -11975,6 +12055,7 @@ object BlurDrawHook {
                 parallaxX = pick(Prefs.KEY_PARALLAX_X, m.parallaxX),
                 parallaxY = pick(Prefs.KEY_PARALLAX_Y, m.parallaxY),
                 surfacePolish = usePolishedMaterial(elementId),
+                materialOpacity = buttonOpacityFor(elementId, m.buttonTransparency),
             )
         } catch (t: Throwable) {
             Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)

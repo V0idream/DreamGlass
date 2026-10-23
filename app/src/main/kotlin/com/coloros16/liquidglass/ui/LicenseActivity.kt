@@ -72,7 +72,7 @@ class LicenseActivity : AppCompatActivity() {
         rights.addView(DreamUi.label(this,
             "DreamGlass 基于 ColorOS16-LiquidGlass 持续开发，整体按 GNU GPL v3 发布。你可以在相同许可下使用、修改和再分发；本软件不附带任何担保。原作者与贡献者的版权继续保留。完整源码和构建说明随同版本发布包提供。", 13f, DreamUi.muted))
         DreamUi.action(rights, "项目主页与对应源码") {
-            DreamUi.openLink(this, "https://github.com/V0idream/DreamGlass/releases/tag/v1.0.0")
+            DreamUi.openLink(this, "https://github.com/V0idream/DreamGlass")
         }
         val sources = DreamUi.card(body)
         DreamUi.row(sources, "ColorOS16-LiquidGlass", "AYwlilwYA · GPL-3.0 · 渲染与配置代码基础") { open("项目来源与修改声明") }

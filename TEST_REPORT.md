@@ -1,32 +1,28 @@
-# DreamGlass 1.0.0 验证记录
+# DreamGlass 1.0.1 验证记录
 
-日期：2026-10-23。产品名称 DreamGlass；支持声明 For ColorOS 17。versionCode 1000000，包名 com.dreamglass.cos17。
+日期：2026-10-23。包名 com.dreamglass.cos17；versionCode 1000001；保持原签名。
 
-## 本次范围
+## 本次修改
 
-重做应用界面、参数页组织、品牌和离线许可页，移除旧联系人/收款/升级入口。本版未重新修改 Refine4 提交 3bde6df 的 Hook 与 AGSL 算法，逐文件及真实着色源码比较通过。参数页保留 15 份已有布局的全部绑定 ID；关于页有意替换为新来源入口。
+1. 参数页将重复的大标题合并进工具栏，只保留一行提示。预览移到预设条上方，高度由 156dp 降为 104dp，横屏使用 64dp；参数区继续独立滚动。
+2. 「材质参数」首项增加全局「按钮整体透明度」0–100%。默认 0% 不改变既有材质；100% 仅隐去按钮玻璃层。RGB 与 alpha 同步缩放，文字和图标不设 View alpha。按按钮宿主/祖先判定，排除滑杆、媒体和独立音量窗口；通知和 Launcher 沿用默认不透明度。
+3. 自动文字反色先找到文字所在的最小有效玻璃区域，采样其中部背景。捕获 worker 用已有像素缓冲构建最大 64×192 格的不可变线性 sRGB 亮度积分图，主线程只查询区域均值并按帧/区域缓存；不在 TextView 绘制时调用 Bitmap.getPixels。缓存换帧清除，避免持有多份旧图。
+4. 按黑/白与该区域背景的对比度选择颜色，保留原 alpha、彩色文字和状态栏原色。自动模式优先于旧版默认强制白字；自动模式关闭后仍可使用强制白字/横幅跟随。缺少有效背景时保持原色，不改用全屏统一色。内部压暗只作近似补偿，未声称对任意动态/复杂背景保证 WCAG 达标。
 
-## 已完成的验证
+## 验证
 
-- Release assembleRelease、testReleaseUnitTest、lintRelease 全部通过；26 项 JVM 测试，lint 0 错误、191 项警告。警告清单未声称全部解决。
-- 给定 SystemUI 17.99.02、Launcher 17.3.12 与 API37 framework 的 9 项 DEX 合约通过，未将静态匹配称为运行验证。
-- 独立 API33 x86_64 模拟器 emulator-5580，1080×2340：12 个页面场景通过，覆盖四页导航、参数子菜单返回、图标隐藏/恢复、关于页、离线 GPL/来源文本及 1.3 倍字体。实际 GPU 预览可见，未发现应用进程崩溃。
-- 最终 APK 的产品名、1.0.0 / 1000000、非 debuggable、完整性及签名通过。沿用既有签名以支持覆盖升级；证书名称与构建类型的区别见 docs/BUILDING.md。
-- APK 内 GPL/Apache/NOTICE/来源说明与源文件逐字节一致；57 个运行时依赖坐标及 12 项原始许可条目保留。对应源码包另含 58 份依赖/API 源码归档、Gradle wrapper、本地 AAR 和构建说明。
-- 无旧收款资源、旧升级类或旧版重复许可资产；没有打入本机配置、签名私钥、系统 APK 或设备日志。
+- Release 构建成功；32 项 JVM 测试通过，包含相邻深浅按钮不同文字颜色、纵向区域、部分格查询、透明/无效背景、sRGB/alpha 和透明度场景排除；lint 0 错误、192 警告。
+- 给定 ROM 的 9 项 DEX 合约通过，原独立音量保护、截图入口和滑杆轮廓测试继续通过。
+- 真实 AGSL 的 FULL/BASE 版本在桌面 Skia 上编译/渲染。0/25/50/75/100% 材质不透明度共 10 项检查通过，颜色和 alpha 按相同比例缩放，未产生透明边缘 RGB 残留；默认不透明度下与 1.0.0 的折射等光学代码比较一致。
+- 独立 API33 模拟器六张实际应用截图，验证竖屏、透明度 0/100/中间档预览、返回、1.3 倍字体和横屏。竖屏参数滚动区域占屏高 67.0%。界面树每次重新导出，旋转时不复用旧树。
+- APK 产品名、1.0.1 / 1000001、非 debuggable、完整性、签名、57 项依赖及离线许可内容校验通过。
 
-## 实机边界
+## 边界
 
-本次只操作新建的独立模拟器，没有连接、安装或控制实体手机，没有申请 Shell Root、改作用域或重启 SystemUI。Refine3 的玻璃效果已有用户确认；Refine4 的滑杆/内圈/边缘/独立音量窗口修补及本次 1.0.0 尚未获得新的 ColorOS 真机验收。独立音量窗口需检查首次弹出、连按、拖动、展开多流、静音/蓝牙及收起动画。模拟器应用截图不代表系统控制中心效果。
+本次未连接或安装实体手机，未申请 Root 或重启作用域。模拟器无 LibXposed 框架，因此只证明应用交互/Android GPU 预览，不证明框架配置持久化和 ColorOS SystemUI Hook 运行效果。局部取色和按钮透明度仍需更新后由用户手动重新加载 SystemUI 检查；独立音量面板不属于此透明度调节范围。
 
-Refine4 的桌面 Skia 与进度轮廓夹具仍见 docs/validation/refine4/；本版真实 AGSL 字符串与该基线完全一致。旧版本的设备/构建验证保留在 docs/PREVIEW2_*.md 中。
+对比度计算依据：https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum 。原开源来源及许可见 THIRD-PARTY-NOTICES.md。
 
-## 复现与证据
+证据：docs/validation/1.0.1/。复现脚本：scripts/check_release_package.py、scripts/check_rom_contracts.py、scripts/validate_surface_shader.py、scripts/qa_compact_material_emulator.py。
 
-构建见 docs/BUILDING.md。静态发行核验：`python scripts/check_release_package.py --apk <APK> --aapt2 <aapt2> --output <JSON>`（该脚本需 Git 历史中的 3bde6df 作基线；纯源码 ZIP 的构建不依赖 Git）。模拟器界面脚本见 scripts/qa_release_emulator.py，固定 emulator-5580，禁止默认选择手机。ROM 合约见 scripts/check_rom_contracts.py，ROM 样本由使用者另行提供，未随发行分发。
-
-验证记录和应用 UI 截图：docs/validation/1.0.0/。
-
-APK SHA-256：0ace1ecb79fbbda61ae1cc7b1c835dcdbbf1d7a7af21975ce4e11bf426edcf6e
-
-证书 SHA-256：12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96
+APK SHA-256：9765fb0c10ddc0747bab6f522b6c32805328a149ec272e2fc03ca4a523187ef6

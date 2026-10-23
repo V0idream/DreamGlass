@@ -50,7 +50,7 @@ def collect(component):
 
 with ThreadPoolExecutor(max_workers=6) as executor:
     records = list(executor.map(collect, components))
-(args.output / 'manifest.json').write_text(json.dumps({'release': 'DreamGlass 1.0.0', 'sources': records},
+(args.output / 'manifest.json').write_text(json.dumps({'release': inventory['release'], 'sources': records},
                                                      ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 failed = [r for r in records if 'error' in r]
 print(json.dumps({'downloaded': len(records) - len(failed), 'failed': failed}, ensure_ascii=False))

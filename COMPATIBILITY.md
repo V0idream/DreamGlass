@@ -1,8 +1,8 @@
-# DreamGlass 1.0.0 · ColorOS 17 兼容性报告
+# DreamGlass 1.0.1 · ColorOS 17 兼容性报告
 
-本版以 Refine4 绘制代码为基线，重做应用界面和开源交付，未更改 Hook 或 AGSL 算法。产品名 DreamGlass，For ColorOS 17 为支持说明。26 项 JVM、9 项真实 ROM DEX 合约、release lint、签名与独立 API33 模拟器界面检查通过，详见 TEST_REPORT.md。
+本版压缩参数页固定区域，新增 QS 按钮材质透明度，并将自动文字黑白选择改为局部背景区域判定。保留 1.0.0 的其他光学算法及独立音量保护。32 项 JVM、9 项 ROM DEX 合约、release lint 和独立 API33 模拟器应用检查通过，详见 TEST_REPORT.md。
 
-Refine3 的按钮玻璃效果已由用户反馈确认。Refine4 的滑杆轮廓、横向图标内圈、材质边缘和独立音量窗口保护未获本次真机复核；1.0.0 未连接实体设备。下方历史审计说明各入口覆盖，不应将静态存在解释为全功能或全机型支持。
+1.0.1 尚未进行 ColorOS 真机验证；模拟器应用预览和静态 ROM 合约不等于 SystemUI 作用域效果验收。下方历史入口审计继续保留，不代表所有机型或每项功能均通过实机验证。
 
 ## 样本信息
 
