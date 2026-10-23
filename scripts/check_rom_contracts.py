@@ -59,7 +59,13 @@ class RomContracts(unittest.TestCase):
         self.assertIn('draw(Landroid/graphics/Canvas;)V',wrapper['methods'])
         helper=system['com.oplusos.systemui.common.blurability.platformblur.PlatformBlurHelper']
         self.assertIn('hostView:Landroid/view/View;',helper['fields'])
+        proxy=system['com.oplusos.systemui.common.blurability.ViewBlurProxy']
+        self.assertIn('getView()Landroid/view/View;',proxy['methods'])
+        self.assertIn('getBlurDrawable(Landroid/graphics/drawable/Drawable;)Landroid/graphics/drawable/Drawable;',proxy['methods'])
         self.assertIn('com.coloros16.liquidglass.hook.VolumeMaskGuard',module)
+        guard=module['com.coloros16.liquidglass.hook.VolumeMaskGuard']
+        self.assertIn('protectNativeContent(Ljava/lang/Object;Ljava/lang/Object;)V',guard['methods'])
+        self.assertIn('preservesContent(Ljava/lang/Object;)Z',guard['methods'])
 
     def test_cos17_seekbar_factory_and_actual_render_target(self):
         manager=system['com.oplus.systemui.qs.base.util.QsSeekBarBlurManager']
@@ -78,6 +84,25 @@ class RomContracts(unittest.TestCase):
         while name != 'com.oplus.posteffect.drawable.BaseDrawable':
             name=system[name]['super'][1:-1].replace('/','.')
         self.assertIn('com.coloros16.liquidglass.hook.QsSeekbarCompat',module)
+
+    def test_qs_surface_shapes_and_icon_background_contract(self):
+        slider=system['com.oplus.systemui.qs.base.seek.OplusQsVerticalSeekBar']
+        self.assertIn('drawActiveMixColorTrack(Landroid/graphics/Canvas;)V',slider['methods'])
+        parent=system['com.coui.appcompat.seekbar.COUIVerticalSeekBar']
+        for field in ['mClipProgressRect:Landroid/graphics/Rect;','mCurProgressRadius:F','mBackgroundRoundCornerWeight:F']:
+            self.assertIn(field,parent['fields'])
+        smooth=system['com.oplus.posteffect.util.OplusPathAdapterCompatUtils']
+        self.assertIn('create(Landroid/graphics/Path;)Ljava/lang/Object;',smooth['methods'])
+        self.assertIn('addSmoothRoundRect(Ljava/lang/Object;Landroid/graphics/RectF;[FLandroid/graphics/Path$Direction;F)Z',smooth['methods'])
+        icon=system['com.oplus.systemui.plugins.qs.customize.view.tile.OplusQSIconView']
+        self.assertIn('iconBgView:Landroid/widget/ImageView;',icon['fields'])
+        for method in ['onAttachedToWindow()V','onLayout(ZIIII)V','updateIconBgDrawable()V']:
+            self.assertIn(method,icon['methods'])
+        tile=system['com.oplus.systemui.plugins.qs.customize.view.tile.OplusQSResizeableTileViewTwoXOne']
+        self.assertIn('com.oplus.systemui.qs.base.res.drawable.TileTransitionDrawable',system)
+        self.assertIn('draw(Landroid/graphics/Canvas;)V',system['com.oplus.systemui.qs.base.res.drawable.TileTransitionDrawable']['methods'])
+        for name in ['hook.QsSurfaceHook','hook.QsSurfacePolicy']:
+            self.assertIn('com.coloros16.liquidglass.'+name,module)
 
     def test_module_entry_and_new_product_classes(self):
         for name in ['entry.XposedEntry','ui.DreamActivity','ui.SettingsActivity','diagnostics.RuntimeDiagnostics','diagnostics.RuntimeStore','root.ScopeRestarter','hook.CaptureApi','hook.BlurDrawHook','hook.LauncherHook','liquidglass.LiquidGlassShader']:

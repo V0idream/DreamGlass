@@ -1,0 +1,70 @@
+{
+  "versionName": "0.1.1-COS17-Refine4",
+  "versionCode": 10009,
+  "parent": "7d2208598be20ab8690894b9facdf83b9a74dec1",
+  "apkSha256": "dcc122d4aec43aab9e418d1b1c50c8a08c4ee05b99f2168896de7405822f9530",
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "unitTestsPassed": 26,
+  "romContractsPassed": 9,
+  "lintErrors": 0,
+  "lintWarnings": 180,
+  "desktopSkiaShaderValidation": {
+    "engine": "desktop Skia 144.1",
+    "androidGpuTested": false,
+    "shaderSourceSha256": "0a119dc4ae47dfba010997f446f9f74572aac38ec406bc12cef654faa6462ccc",
+    "compiledVariants": [
+      "full",
+      "base",
+      "prior-full",
+      "prior-base"
+    ],
+    "cases": [
+      {
+        "shape": "round tile",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      },
+      {
+        "shape": "wide tile",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      },
+      {
+        "shape": "slider",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      },
+      {
+        "shape": "media",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      },
+      {
+        "shape": "notification",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      }
+    ],
+    "rimWidthAt30Percent": {
+      "beforePx": 6,
+      "afterPx": 2
+    },
+    "progressClippingPercentages": [
+      0,
+      1,
+      25,
+      50,
+      99,
+      100
+    ]
+  },
+  "deviceInstallationPerformed": false,
+  "thisRevisionVisualTestedOnAndroid": false,
+  "refine3EffectAcceptedByUser": true,
+  "nativeLibraryOrElbowImplementationCopied": false
+}

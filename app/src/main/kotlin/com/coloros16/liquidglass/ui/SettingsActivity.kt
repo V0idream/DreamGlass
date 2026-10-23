@@ -2255,6 +2255,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             lightAngleDegrees = lightAngle,
             parallaxX = 0f,
             parallaxY = 0f,
+            surfacePolish = true,
         )
         // 卡片窗口在样图中的区域（bitmap 坐标）；AGSL 侧 srcCoord = srcRect.xy + coord/uViewport * srcRect.zw
         val srcRect = RectF(cardLeft + scrollX, cardTop, cardLeft + scrollX + cw, cardTop + ch)

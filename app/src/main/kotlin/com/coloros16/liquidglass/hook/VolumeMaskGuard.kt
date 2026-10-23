@@ -5,12 +5,31 @@ import java.lang.reflect.Modifier
 import java.util.Collections
 import java.util.WeakHashMap
 
-/** Preserve the volume window's mask without changing Preview2's glass rendering path. */
+/** Keep the independent volume window's mask and content on their native rendering path. */
 object VolumeMaskGuard {
     private val decisions = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
+    private val nativeContents = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
+
+    /** Keep both wrapper mask and inner content native, including asynchronous content recording. */
+    fun protectNativeContent(wrapper: Any?, target: Any) {
+        if (wrapper != null) decisions[wrapper] = true
+        nativeContents[target] = true
+    }
+
+    fun preservesContent(target: Any): Boolean = nativeContents.containsKey(target)
 
     fun isVolumeClass(name: String): Boolean = name.startsWith("com.oplus.systemui.volume.") ||
         name.startsWith("com.android.systemui.volume.")
+
+    fun isVolumeHost(host: View?): Boolean {
+        var cursor = host
+        repeat(10) {
+            val view = cursor ?: return false
+            if (isVolumeClass(view.javaClass.name)) return true
+            cursor = view.parent as? View
+        }
+        return false
+    }
 
     fun preserveMask(wrapper: Any): Boolean {
         decisions[wrapper]?.let { return it }
@@ -28,16 +47,11 @@ object VolumeMaskGuard {
                             ?.apply { isAccessible = true }?.get(owner) as? View
                     } catch (_: Throwable) { null }
                 }?.firstOrNull()
-            var cursor = host
-            var volume = false
-            for (i in 0 until 10) {
-                val view = cursor ?: break
-                if (isVolumeClass(view.javaClass.name)) { volume = true; break }
-                cursor = view.parent as? View
-            }
-            volume
+            isVolumeHost(host)
         } catch (_: Throwable) { false }
-        decisions[wrapper] = result
+        // A generic host may be queried before it is attached to the volume hierarchy.
+        // Cache only positive ownership; an early negative result must be reconsidered later.
+        if (result) decisions[wrapper] = true
         return result
     }
 }

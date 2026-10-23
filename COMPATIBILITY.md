@@ -1,6 +1,6 @@
-# ColorOS 17 兼容性报告 — Preview2 Refine3
+# ColorOS 17 兼容性报告 — Preview2 Refine4
 
-结论：初版 Preview2 曾验证安装、返回路径和图标开关；后续用户明确反馈按钮与通知卡片的玻璃效果仍无效。当前 Refine3 修订生命周期与内容录制接入，已通过构建、18 项 JVM 测试与 8 项 ROM 接口合约，但主视觉仍待本版真机验收。见 docs/PREVIEW2_REFINE3.md。历史设备诊断保存在 docs/DEVICE_DIAGNOSIS_2026-10-22.md。
+Refine3 的按钮玻璃效果已经由用户反馈和截图确认生效。Refine4 在同一入口上修复控制中心滑杆方底和横向图标重复底圈，并调整按钮/通知卡片的边缘与通透度；本版未安装或进行真机验收。当前验证详情见 docs/PREVIEW2_REFINE4.md；下面的早期审计条目保留为历史资料，不代表 Refine4 的视觉验收。
 
 ## 样本信息
 

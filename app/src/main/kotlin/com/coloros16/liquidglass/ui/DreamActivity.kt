@@ -293,7 +293,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             val o = JSONObject(raw); val s = o.getJSONObject("stages")
             val stamp = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(o.getLong("at")))
             val fields = listOf("loaded" to "入口", "configured" to "配置", "mounted" to "Hook", "invoked" to "调用", "source" to "背景", "render" to "绘制", "extensions" to "扩展") +
-                if (pkg == "com.android.systemui") listOf("startup" to "初始化", "content_render" to "内容绘制", "notification_glass" to "通知玻璃路径", "notification_blur" to "通知回退记录", "qs_glass" to "按钮玻璃路径", "qs_blur" to "按钮回退记录", "qs_seekbar_hook" to "进度接口", "qs_seekbar_active" to "进度对象", "qs_seekbar_tint" to "进度填充", "qs_tile_mask" to "按钮遮罩") else emptyList()
+                if (pkg == "com.android.systemui") listOf("startup" to "初始化", "content_render" to "内容绘制", "notification_glass" to "通知玻璃路径", "notification_blur" to "通知回退记录", "qs_glass" to "按钮玻璃路径", "qs_blur" to "按钮回退记录", "qs_seekbar_hook" to "进度接口", "qs_seekbar_active" to "进度对象", "qs_seekbar_tint" to "进度填充", "qs_tile_mask" to "按钮遮罩", "qs_slider_hook" to "滑杆轮廓接口", "qs_slider_clip" to "滑杆填充裁剪", "qs_icon_hook" to "图标底层接口", "qs_icon_background" to "横向图标底层", "volume_native_hook" to "独立音量归属接口", "volume_native" to "独立音量原生保护") else emptyList()
             "宿主模块版本：${o.optString("version", "未知")}\n上次记录 $stamp  ·  PID ${o.optInt("pid")}\n" + fields.joinToString("\n") { (k, n) -> "$n：${s.optString(k, "尚未收到")}" } + "\n历史记录不代表此刻仍在运行。"
         }
     } catch (_: Throwable) { "诊断通道暂不可读，请刷新框架连接。" }

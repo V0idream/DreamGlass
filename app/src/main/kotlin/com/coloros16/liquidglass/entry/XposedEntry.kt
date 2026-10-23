@@ -308,7 +308,7 @@ class XposedEntry : XposedModule() {
         private var cachedSystemUiLoader: ClassLoader? = null
         private var cachedLauncherLoader: ClassLoader? = null
         /** [doc/spec/110] 模块版本标记（热重载完成日志用，便于 daemon 侧对账 loaded version）。 */
-        private const val MODULE_VERSION = "0.1.1-COS17-Refine3"
+        private const val MODULE_VERSION = "0.1.1-COS17-Refine4"
         /** [spec/116 P0] 桌面 17.3.12 versionCode：达到该版本后禁用 LauncherAnimHook（弹簧字段全灭）。 */
         private const val VERSION_LAUNCHER_17_3_12 = 170030012L
         private const val TAG = "LiquidGlass"

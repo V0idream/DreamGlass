@@ -1,0 +1,331 @@
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
+index 5eb2f07..71e7b34 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt
+@@ -2298,0 +2299 @@ object BlurDrawHook {
++        mountNativeVolumeOwnership(api)
+@@ -2371,0 +2373 @@ object BlurDrawHook {
++        QsSurfaceHook.install(api, classLoader) { Prefs.glassEnabled(api) && !isPowerSaveGlassOff() }
+@@ -4397,0 +4400,8 @@ object BlurDrawHook {
++        // The independent hardware-key volume window owns its capture/freeze pipeline. A shared
++        // layer label is insufficient: identify the real host and protect the actual inner drawable.
++        if (VolumeMaskGuard.isVolumeHost(hostView)) {
++            val wrapper = try { mViewProxyGetBlurDrawable?.invoke(proxy, defaultDrawable) } catch (_: Throwable) { null }
++                ?: return false
++            protectNativeVolumeContent(wrapper)
++            return false
++        }
+@@ -4933,0 +4944,31 @@ object BlurDrawHook {
++    private fun protectNativeVolumeContent(wrapper: Any) {
++        val target = try {
++            if (mPlatformGetBlurDrawable?.declaringClass?.isInstance(wrapper) == true)
++                mPlatformGetBlurDrawable?.invoke(wrapper) ?: wrapper else wrapper
++        } catch (_: Throwable) { wrapper }
++        VolumeMaskGuard.protectNativeContent(wrapper, target)
++        screenRegionMap.remove(System.identityHashCode(target))
++        if (mGetDrawableShaderPaint?.declaringClass?.isInstance(target) == true) restoreSystemShaderIfReplaced(target)
++        RuntimeDiagnostics.mark("volume_native", "已按真实宿主隔离独立音量面板，保留原生内容及遮罩；外观待核验")
++    }
++
++    /** Bind ownership when the proxy supplies the material, before wrapper drawing/content recording. */
++    private fun mountNativeVolumeOwnership(api: XposedInterface) {
++        val method = mViewProxyGetBlurDrawable ?: return
++        try {
++            api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
++                val result = chain.proceed()
++                try {
++                    val host = mViewProxyGetView?.invoke(chain.getThisObject()) as? View
++                    if (result != null && VolumeMaskGuard.isVolumeHost(host)) protectNativeVolumeContent(result)
++                } catch (t: Throwable) {
++                    Lg.w(TAG, "volume: material ownership unavailable; keep native result", t)
++                }
++                result
++            }
++            RuntimeDiagnostics.mark("volume_native_hook", "已挂载原生材质归属识别；待音量窗口调用")
++        } catch (t: Throwable) {
++            Lg.w(TAG, "volume: material ownership hook unavailable", t)
++        }
++    }
++
+@@ -4964,0 +5006 @@ object BlurDrawHook {
++            protectNativeVolumeContent(pbd)
+@@ -10214,0 +10257,4 @@ object BlurDrawHook {
++        if (VolumeMaskGuard.preservesContent(drawable)) {
++            restoreSystemShaderIfReplaced(drawable)
++            return false
++        }
+@@ -10267,0 +10314,4 @@ object BlurDrawHook {
++        if (VolumeMaskGuard.preservesContent(drawable)) {
++            restoreSystemShaderIfReplaced(drawable)
++            return false
++        }
+@@ -11858,0 +11909,13 @@ object BlurDrawHook {
++    private fun usePolishedMaterial(elementId: Int): Boolean {
++        val entry = screenRegionMap[elementId] ?: return false
++        if (QsSurfacePolicy.polishMaterial(entry.hostViewName)) return true
++        // Some native materials belong to plain ImageView/FrameLayout children of QS containers.
++        var cursor = entry.hostViewRef?.get()
++        repeat(8) {
++            val view = cursor ?: return false
++            if (QsSurfacePolicy.polishMaterial(view.javaClass.name)) return true
++            cursor = view.parent as? View
++        }
++        return false
++    }
++
+@@ -11913,0 +11977 @@ object BlurDrawHook {
++                surfacePolish = usePolishedMaterial(elementId),
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSurfaceHook.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSurfaceHook.kt
+new file mode 100644
+index 0000000..71815c8
+--- /dev/null
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSurfaceHook.kt
+@@ -0,0 +1,162 @@
++package com.coloros16.liquidglass.hook
++
++import android.graphics.Canvas
++import android.graphics.Path
++import android.graphics.Rect
++import android.graphics.RectF
++import android.graphics.drawable.Drawable
++import android.view.View
++import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
++import com.coloros16.liquidglass.log.Lg
++import io.github.libxposed.api.XposedInterface
++import io.github.libxposed.api.XposedInterface.ExceptionMode
++import java.lang.ref.WeakReference
++import java.lang.reflect.Field
++import java.util.Collections
++import java.util.WeakHashMap
++
++/** Only COS17's QS slider fill and the separate background inside a 2x1 tile. */
++object QsSurfaceHook {
++    private const val ICON = "com.oplus.systemui.plugins.qs.customize.view.tile.OplusQSIconView"
++    private const val SLIDER = "com.oplus.systemui.qs.base.seek.OplusQsVerticalSeekBar"
++    private val iconBackgrounds = Collections.synchronizedMap(WeakHashMap<Drawable, WeakReference<View>>())
++
++    fun install(api: XposedInterface, loader: ClassLoader, enabled: () -> Boolean) {
++        installSlider(api, loader, enabled)
++        installIconBackground(api, loader, enabled)
++    }
++
++    private fun installIconBackground(api: XposedInterface, loader: ClassLoader, enabled: () -> Boolean) {
++        try {
++            val icon = Class.forName(ICON, false, loader)
++            val background = icon.getDeclaredField("iconBgView").apply { isAccessible = true }
++            for (method in arrayOf(
++                icon.getDeclaredMethod("onAttachedToWindow"),
++                icon.getDeclaredMethod("onLayout", Boolean::class.javaPrimitiveType!!,
++                    Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!,
++                    Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!),
++                icon.getDeclaredMethod("updateIconBgDrawable"),
++            )) {
++                api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
++                    val result = chain.proceed()
++                    try {
++                        val owner = chain.getThisObject() as? View
++                        val drawable = (background.get(owner) as? View)?.background
++                        if (owner != null && drawable != null) iconBackgrounds[drawable] = WeakReference(owner)
++                    } catch (_: Throwable) { }
++                    result
++                }
++            }
++            val transition = Class.forName("com.oplus.systemui.qs.base.res.drawable.TileTransitionDrawable", false, loader)
++            api.hook(transition.getDeclaredMethod("draw", Canvas::class.java))
++                .setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
++                    val owner = iconBackgrounds[chain.getThisObject()]?.get()
++                    if (owner != null && hasWideTileParent(owner) && enabled()) {
++                        RuntimeDiagnostics.mark("qs_icon_background", "横向按钮独立图标底层已跳过；保留图标和状态色")
++                        null
++                    } else chain.proceed()
++                }
++            RuntimeDiagnostics.mark("qs_icon_hook", "已挂载横向按钮图标底层；待实际绘制")
++        } catch (t: Throwable) {
++            Lg.w("DreamGlass-QS", "Icon background compatibility unavailable; keep native drawing", t)
++        }
++    }
++
++    private fun hasWideTileParent(icon: View): Boolean {
++        var cursor = icon.parent as? View
++        repeat(8) {
++            val view = cursor ?: return false
++            if (QsSurfacePolicy.isWideTile(view.javaClass.name)) return true
++            cursor = view.parent as? View
++        }
++        return false
++    }
++
++    private class ClipState(val path: Path = Path(), val rect: RectF = RectF(), val radii: FloatArray = FloatArray(8)) {
++        var adapter: Any? = null
++    }
++
++    private fun installSlider(api: XposedInterface, loader: ClassLoader, enabled: () -> Boolean) {
++        try {
++            val slider = Class.forName(SLIDER, false, loader)
++            val bounds = QsSurfacePolicy.field(slider, "mClipProgressRect")
++            val radius = QsSurfacePolicy.field(slider, "mCurProgressRadius")
++            val weight = QsSurfacePolicy.field(slider, "mBackgroundRoundCornerWeight")
++            val states = Collections.synchronizedMap(WeakHashMap<View, ClipState>())
++            // Use the ROM's own smooth-corner constructor, rather than guessing a fixed radius.
++            val smooth = try {
++                val type = Class.forName("com.oplus.posteffect.util.OplusPathAdapterCompatUtils", false, loader)
++                Triple(type.getField("INSTANCE").get(null), type.getDeclaredMethod("create", Path::class.java),
++                    type.getDeclaredMethod("addSmoothRoundRect", Any::class.java, RectF::class.java,
++                        FloatArray::class.java, Path.Direction::class.java, Float::class.javaPrimitiveType!!))
++            } catch (_: Throwable) { null }
++            api.hook(slider.getDeclaredMethod("drawActiveMixColorTrack", Canvas::class.java))
++                .setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
++                    val view = chain.getThisObject() as? View
++                    val canvas = chain.getArg(0) as? Canvas
++                    val clip = if (view != null && canvas != null && enabled()) try {
++                        val rect = bounds.get(view) as? Rect
++                        val r = radius.getFloat(view)
++                        if (rect == null || rect.isEmpty || !r.isFinite() || r <= 0f) null else {
++                            val state = synchronized(states) { states.getOrPut(view) { ClipState() } }
++                            state.rect.set(rect)
++                            state.path.reset()
++                            val w = weight.getFloat(view)
++                            val rounded = if (smooth != null && w.isFinite() && w != 0f) try {
++                                state.adapter = state.adapter ?: smooth.second.invoke(smooth.first, state.path)
++                                state.radii.fill(r)
++                                smooth.third.invoke(smooth.first, state.adapter, state.rect, state.radii, Path.Direction.CW, w) == true
++                            } catch (_: Throwable) { false } else false
++                            if (!rounded || state.path.isEmpty) {
++                                state.path.reset()
++                                state.path.addRoundRect(state.rect, r, r, Path.Direction.CW)
++                            }
++                            state.path
++                        }
++                    } catch (t: Throwable) {
++                        Lg.w("DreamGlass-QS", "Slider contour unavailable; keep native drawing", t)
++                        null
++                    } else null
++                    if (canvas == null || clip == null) chain.proceed() else {
++                        val saved = canvas.save()
++                        try {
++                            canvas.clipPath(clip)
++                            val result = chain.proceed() // Native progress clipping/animation/icon stays intact.
++                            RuntimeDiagnostics.mark("qs_slider_clip", "进度填充已受滑杆当前外轮廓裁剪；外观待核验")
++                            result
++                        } finally {
++                            canvas.restoreToCount(saved)
++                        }
++                    }
++                }
++            RuntimeDiagnostics.mark("qs_slider_hook", "已挂载控制中心进度外轮廓裁剪；待实际绘制")
++        } catch (t: Throwable) {
++            Lg.w("DreamGlass-QS", "Slider contour compatibility unavailable; keep native drawing", t)
++        }
++    }
++}
++
++/** Exact ownership rules: never remove a round 1x1 tile or a status-bar icon's background. */
++object QsSurfacePolicy {
++    fun isWideTile(name: String): Boolean = name ==
++        "com.oplus.systemui.plugins.qs.customize.view.tile.OplusQSResizeableTileViewTwoXOne"
++
++    fun polishMaterial(host: String?): Boolean {
++        if (host == null) return false
++        // RegionEntry records simple names; ancestor checks use fully qualified class names.
++        val simple = host.substringAfterLast(':').substringAfterLast('.')
++        return host.startsWith("com.oplus.systemui.qs.") || host.contains(".plugins.qs.") ||
++            host.contains(".systemui.qs.") || simple == "NotificationBackgroundView" ||
++            host.startsWith("com.oplus.systemui.notification.") ||
++            simple.startsWith("OplusQS") || simple.startsWith("OplusQs")
++    }
++
++    fun field(type: Class<*>, name: String): Field {
++        var cursor: Class<*>? = type
++        while (cursor != null) {
++            try { return cursor.getDeclaredField(name).apply { isAccessible = true } }
++            catch (_: NoSuchFieldException) { cursor = cursor.superclass }
++        }
++        throw NoSuchFieldException("${type.name}.$name")
++    }
++}
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/hook/VolumeMaskGuard.kt b/app/src/main/kotlin/com/coloros16/liquidglass/hook/VolumeMaskGuard.kt
+index b8c57ee..e11f92e 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/hook/VolumeMaskGuard.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/hook/VolumeMaskGuard.kt
+@@ -8 +8 @@ import java.util.WeakHashMap
+-/** Preserve the volume window's mask without changing Preview2's glass rendering path. */
++/** Keep the independent volume window's mask and content on their native rendering path. */
+@@ -10,0 +11,9 @@ object VolumeMaskGuard {
++    private val nativeContents = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
++
++    /** Keep both wrapper mask and inner content native, including asynchronous content recording. */
++    fun protectNativeContent(wrapper: Any?, target: Any) {
++        if (wrapper != null) decisions[wrapper] = true
++        nativeContents[target] = true
++    }
++
++    fun preservesContent(target: Any): Boolean = nativeContents.containsKey(target)
+@@ -14,0 +24,10 @@ object VolumeMaskGuard {
++    fun isVolumeHost(host: View?): Boolean {
++        var cursor = host
++        repeat(10) {
++            val view = cursor ?: return false
++            if (isVolumeClass(view.javaClass.name)) return true
++            cursor = view.parent as? View
++        }
++        return false
++    }
++
+@@ -31,8 +50 @@ object VolumeMaskGuard {
+-            var cursor = host
+-            var volume = false
+-            for (i in 0 until 10) {
+-                val view = cursor ?: break
+-                if (isVolumeClass(view.javaClass.name)) { volume = true; break }
+-                cursor = view.parent as? View
+-            }
+-            volume
++            isVolumeHost(host)
+@@ -40 +52,3 @@ object VolumeMaskGuard {
+-        decisions[wrapper] = result
++        // A generic host may be queried before it is attached to the volume hierarchy.
++        // Cache only positive ownership; an early negative result must be reconsidered later.
++        if (result) decisions[wrapper] = true
+diff --git a/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt b/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
+index fbbc722..6fb560b 100644
+--- a/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
++++ b/app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt
+@@ -71,0 +72 @@ object LiquidGlassShader {
++        uniform float uSurfacePolish;    // COS17 controls/cards only: finer rim and clearer background. Other scenes stay unchanged.
+@@ -573,0 +575,2 @@ object LiquidGlassShader {
++            float polish = clamp(uSurfacePolish, 0.0, 1.0);
++            float materialBlur = uBlurRadius * mix(1.0, 0.60, polish);
+@@ -656,2 +659,2 @@ object LiquidGlassShader {
+-                if (uBlurRadius > 0.01) {
+-                    glass = gaussianBlur(coord - uMaskOffset, uBlurRadius);
++                if (materialBlur > 0.01) {
++                    glass = gaussianBlur(coord - uMaskOffset, materialBlur);
+@@ -709,2 +712,2 @@ object LiquidGlassShader {
+-                if (uBlurRadius > 0.01) {
+-                    glass = gaussianBlur(refractedCoord, uBlurRadius);
++                if (materialBlur > 0.01) {
++                    glass = gaussianBlur(refractedCoord, materialBlur);
+@@ -737 +740 @@ object LiquidGlassShader {
+-            glass.rgb = mix(glass.rgb, uMaskColor.rgb, uMaskAlpha * uMaskColor.a);
++            glass.rgb = mix(glass.rgb, uMaskColor.rgb, uMaskAlpha * uMaskColor.a * mix(1.0, 0.65, polish));
+@@ -789,0 +793,7 @@ object LiquidGlassShader {
++            // A narrow reflection with a soft shoulder, instead of a broad opaque-looking bevel.
++            // Scale with element size, while retaining zero width/intensity settings and scene isolation.
++            float fineWidth = max(min(hw * 0.34, min(halfSize.x, halfSize.y) * 0.024), 0.65);
++            float fineCenter = max(fineWidth * 0.65, 1.15);
++            float edgeDistance = (dIn - fineCenter) / max(fineWidth, 0.65);
++            float fineBand = exp(-edgeDistance * edgeDistance * 1.8);
++            band = mix(band, fineBand, polish);
+@@ -800 +810,6 @@ object LiquidGlassShader {
+-            glass.rgb += float3(hl * band * innerAtt * uHighlight);
++            // Keep the highlight inside the same premultiplied alpha as the glass. Adding RGB
++            // after clipping without multiplying by alpha produces a hard bright fringe at corners.
++            float rim = hl * band * innerAtt * uHighlight;
++            float3 polishedRim = max(float3(glass.a) - glass.rgb, 0.0) * clamp(rim * 0.72, 0.0, 1.0);
++            glass.rgb += mix(float3(rim), polishedRim, polish);
++            if (polish > 0.5) glass.rgb = min(glass.rgb, float3(glass.a));
+@@ -865,0 +881,2 @@ object LiquidGlassShader {
++        /** Use the COS17 control/card finish; launcher and clock callers keep the original material. */
++        val surfacePolish: Boolean = false,
+@@ -1039,0 +1057 @@ object LiquidGlassShader {
++        shader.setFloatUniform("uSurfacePolish", if (params.surfacePolish) 1f else 0f)

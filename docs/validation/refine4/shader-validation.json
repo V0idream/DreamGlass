@@ -1,0 +1,55 @@
+{
+  "engine": "desktop Skia 144.1",
+  "androidGpuTested": false,
+  "shaderSourceSha256": "0a119dc4ae47dfba010997f446f9f74572aac38ec406bc12cef654faa6462ccc",
+  "compiledVariants": [
+    "full",
+    "base",
+    "prior-full",
+    "prior-base"
+  ],
+  "cases": [
+    {
+      "shape": "round tile",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "wide tile",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "slider",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "media",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "notification",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    }
+  ],
+  "rimWidthAt30Percent": {
+    "beforePx": 6,
+    "afterPx": 2
+  },
+  "progressClippingPercentages": [
+    0,
+    1,
+    25,
+    50,
+    99,
+    100
+  ]
+}

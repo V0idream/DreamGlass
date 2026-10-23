@@ -1,0 +1,14 @@
+test_api37_capture_family_matches_window_manager (__main__.RomContracts.test_api37_capture_family_matches_window_manager) ... ok
+test_apk_integrity_and_xposed_metadata (__main__.RomContracts.test_apk_integrity_and_xposed_metadata) ... ok
+test_cos17_seekbar_factory_and_actual_render_target (__main__.RomContracts.test_cos17_seekbar_factory_and_actual_render_target) ... ok
+test_launcher_fields_match_bytecode_and_reflection (__main__.RomContracts.test_launcher_fields_match_bytecode_and_reflection) ... ok
+test_module_entry_and_new_product_classes (__main__.RomContracts.test_module_entry_and_new_product_classes) ... ok
+test_qs_surface_shapes_and_icon_background_contract (__main__.RomContracts.test_qs_surface_shapes_and_icon_background_contract) ... ok
+test_systemui_core_signatures (__main__.RomContracts.test_systemui_core_signatures) ... ok
+test_systemui_lifecycle_owner_and_content_draw_bridge (__main__.RomContracts.test_systemui_lifecycle_owner_and_content_draw_bridge) ... ok
+test_volume_mask_host_contract (__main__.RomContracts.test_volume_mask_host_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.079s
+
+OK

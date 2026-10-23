@@ -69,6 +69,7 @@ object LiquidGlassShader {
                                          // 0=无内侧衰减（现状）、1=内半几乎归零（只剩贴边一条线）
         uniform float uInnerGlow;        // 内侧光 0~1：边缘向中心的全向发光强度（区别于定向边缘高光）；0=关
         uniform float uVibrancy;         // 鲜艳度/饱和度倍数（Kyant vibrancy=1.5；1=不变）
+        uniform float uSurfacePolish;    // COS17 controls/cards only: finer rim and clearer background. Other scenes stay unchanged.
         uniform float uLightAngle;       // 光角度（弧度；Kotlin 侧由角度转弧度）
         uniform vec2  uParallax;         // 视差（面板几何中心偏移，可接传感器）
         uniform float uDebugCoord;       // 调试：1 = 输出 coord/uViewport 位置色（坐标可视化）
@@ -571,6 +572,8 @@ object LiquidGlassShader {
         // iOS 26 观感 = 内部清晰透镜 + 边缘环带弯折 + 鲜亮色彩（vibrancy）+ 定向边缘亮线。
         // 注意：整体模糊 = 普通毛玻璃（2026-08-12 重构前的错误形态，已废弃）。
         half4 main(float2 coord) {
+            float polish = clamp(uSurfacePolish, 0.0, 1.0);
+            float materialBlur = uBlurRadius * mix(1.0, 0.60, polish);
             // [调试] uDebugCoord>0.5 → 决定性实验：coord/500 取小数。
             // 像素坐标(0~1440) → fract(coord/500) 周期渐变（每 500px 红/绿各循环一次，
             // 1440 宽 → 红通道约 3 段 0~1 循环）；归一化 [0,1] → coord/500≈0 → 全黑。
@@ -653,8 +656,8 @@ object LiquidGlassShader {
             if (-sdRaw >= uRefractionHeight) {
                 // 2a. 内部：清晰透镜（Kyant 折射 shader 早退等价：content.eval(coord) 原样输出）。
                 //     uBlurRadius>0 时走可选轻模糊（采样 1/4 降采样图，5x5 高斯）。
-                if (uBlurRadius > 0.01) {
-                    glass = gaussianBlur(coord - uMaskOffset, uBlurRadius);
+                if (materialBlur > 0.01) {
+                    glass = gaussianBlur(coord - uMaskOffset, materialBlur);
                 } else {
                     glass = float4(uSource.eval(srcCoord(coord - uMaskOffset, uSourceRect)));
                 }
@@ -706,8 +709,8 @@ object LiquidGlassShader {
                 // 色散让位：spectralDispersion 需 7 次全分辨率采样，与 25-tap 模糊叠加 = 175 tap，
                 // 对控制中心 20+ 元素不可接受；且糊图上的通道分离视觉上也难以分辨。需要色散时把
                 // 「模糊半径」调回 0 即恢复原「清晰透镜 + 边缘色散」观感。
-                if (uBlurRadius > 0.01) {
-                    glass = gaussianBlur(refractedCoord, uBlurRadius);
+                if (materialBlur > 0.01) {
+                    glass = gaussianBlur(refractedCoord, materialBlur);
                 } else if (uDispersion > 0.001) {
                     // 光谱色散（仅环带；Kyant 同一强度公式：四角最强、轴上为 0）
                     float dispersionIntensity = uDispersion * ((centeredCoord.x * centeredCoord.y) / (halfSize.x * halfSize.y));
@@ -734,7 +737,7 @@ object LiquidGlassShader {
             //     （遮罩→底层背景，玻璃区域与卡片间 scrim 黑 tint 展开态同为 `壁纸×(1-maskAlpha)` 统一）。
             //     uMaskAlpha=0 时 mix 系数 0 → 零开销跳过。历史：spec/48 曾整体移除（改为系统 scrim 黑 tint
             //     单一来源），快照叠黑方案验证无效后用户决定恢复 shader 内压暗（uMaskAlpha/uMaskColor 直接生效）。
-            glass.rgb = mix(glass.rgb, uMaskColor.rgb, uMaskAlpha * uMaskColor.a);
+            glass.rgb = mix(glass.rgb, uMaskColor.rgb, uMaskAlpha * uMaskColor.a * mix(1.0, 0.65, polish));
 
             // 3. vibrancy：饱和度提升（Kyant colorControls saturation=1.5 的矩阵等价：mix(luma, rgb, s)）
             float luma = dot(glass.rgb, float3(0.213, 0.715, 0.072));
@@ -787,6 +790,13 @@ object LiquidGlassShader {
             float edgeWidth = max(hw * 0.75, 1.0);
             float edgeCenter = max(edgeWidth * 0.5, 2.0);
             float band = 1.0 - smoothstep(0.0, edgeWidth, abs(dIn - edgeCenter));
+            // A narrow reflection with a soft shoulder, instead of a broad opaque-looking bevel.
+            // Scale with element size, while retaining zero width/intensity settings and scene isolation.
+            float fineWidth = max(min(hw * 0.34, min(halfSize.x, halfSize.y) * 0.024), 0.65);
+            float fineCenter = max(fineWidth * 0.65, 1.15);
+            float edgeDistance = (dIn - fineCenter) / max(fineWidth, 0.65);
+            float fineBand = exp(-edgeDistance * edgeDistance * 1.8);
+            band = mix(band, fineBand, polish);
             // [2026-09-16 圆角弧线高光修复·方案 C] `sdfGrad` 是**边缘法线**：直边法线固定（与光源夹角恒定
             // → 高光恒定），而圆角弧线法线要**旋转 90°**，其中**必然经过与光源垂直的位置** → 原
             // `pow(abs(dot),fo)` 在该处精确归零，弧线约 60% 跨度高光消失（真机实证：192×192 圆磁贴整圈
@@ -797,7 +807,12 @@ object LiquidGlassShader {
             float floorK = clamp(uHighlightFloor, 0.0, 1.0);
             float dirDot = pow(abs(dot(sdfGrad, lightDir)), uHighlightFalloff);
             float hl = floorK + (1.0 - floorK) * dirDot;
-            glass.rgb += float3(hl * band * innerAtt * uHighlight);
+            // Keep the highlight inside the same premultiplied alpha as the glass. Adding RGB
+            // after clipping without multiplying by alpha produces a hard bright fringe at corners.
+            float rim = hl * band * innerAtt * uHighlight;
+            float3 polishedRim = max(float3(glass.a) - glass.rgb, 0.0) * clamp(rim * 0.72, 0.0, 1.0);
+            glass.rgb += mix(float3(rim), polishedRim, polish);
+            if (polish > 0.5) glass.rgb = min(glass.rgb, float3(glass.a));
 
             // [临时诊断 高光] 逐像素可视化（需 uDebugHighlight>0.5）。
             // R = hl（方向因子）、G = band（带包络）、B = sdfGrad.x 映射到 [0,1]（梯度方向）。
@@ -863,6 +878,8 @@ object LiquidGlassShader {
         val parallaxY: Float = 0f,
         /** 内侧光 0~1（uInnerGlow；0=关）。放末尾带默认值，既有位置实参不受影响。 */
         val innerGlow: Float = 0f,
+        /** Use the COS17 control/card finish; launcher and clock callers keep the original material. */
+        val surfacePolish: Boolean = false,
     )
 
     /**
@@ -1037,6 +1054,7 @@ object LiquidGlassShader {
         shader.setFloatUniform("uHighlightWidth", params.highlightWidth)
         shader.setFloatUniform("uHighlightFalloff", params.highlightFalloff)
         shader.setFloatUniform("uVibrancy", params.vibrancy)
+        shader.setFloatUniform("uSurfacePolish", if (params.surfacePolish) 1f else 0f)
         shader.setFloatUniform("uLightAngle", (params.lightAngleDegrees * PI / 180.0).toFloat())
         shader.setFloatUniform("uParallax", params.parallaxX, params.parallaxY)
         shader.setFloatUniform("uDebugCoord", debugCoord)

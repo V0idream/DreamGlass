@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.dreamglass.cos17.QsSurfacePolicyTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-23T04:48:52.138Z" hostname="VOIDREAM" time="0.017">
+  <properties/>
+  <testcase name="dynamicGeometryIsReadFromNativeSuperclass" classname="com.dreamglass.cos17.QsSurfacePolicyTest" time="0.006"/>
+  <testcase name="controlsAndNotificationCardsUsePolishedFinish" classname="com.dreamglass.cos17.QsSurfacePolicyTest" time="0.0"/>
+  <testcase name="onlyWideTileOwnsHiddenIconBackground" classname="com.dreamglass.cos17.QsSurfacePolicyTest" time="0.0"/>
+  <testcase name="missingGeometryFailsExplicitlyInsteadOfInventingRadius" classname="com.dreamglass.cos17.QsSurfacePolicyTest" time="0.008"/>
+  <testcase name="otherScenesRetainTheirMaterial" classname="com.dreamglass.cos17.QsSurfacePolicyTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

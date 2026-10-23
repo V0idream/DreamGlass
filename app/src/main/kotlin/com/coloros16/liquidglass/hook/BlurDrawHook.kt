@@ -2296,6 +2296,7 @@ object BlurDrawHook {
         }
         resolveMethods(classLoader)
         mountAutoBlurDrawable(api, classLoader)
+        mountNativeVolumeOwnership(api)
         // [spec/48 过渡修复 2026-08-13] hook ScrimView.setViewAlpha 捕获 behind_scrim 真实动画 alpha
         //（AutoBlurDrawable.setAlpha 空实现恒 255 → 原黑 tint 读 drawable.alpha 永远=1 无过渡）。
         mountScrimViewAlpha(api, classLoader)
@@ -2369,6 +2370,7 @@ object BlurDrawHook {
         mountCcBlurHooks(api, classLoader)
         // [spec/86 音量条] 进度填充层登记（音量/亮度条玻璃高光被进度填充盖住的修复）
         mountQsSeekBarActiveDrawable(api, classLoader)
+        QsSurfaceHook.install(api, classLoader) { Prefs.glassEnabled(api) && !isPowerSaveGlassOff() }
         // [spec/21 文字反转取色 + spec/35 黑遮罩白字 + spec/63 统一通道] hook 挂载条件：
         // - textContrastEnabled：挂 QsColorUtil（亮度判定）+ TextView#setTextColor（反转取色）+ onDraw 节流重采样。
         // - 仅 maskEnabled / 仅 textForceWhiteEnabled（spec/63 强制白独立开关）：仍须挂 TextView#setTextColor
@@ -4395,6 +4397,14 @@ object BlurDrawHook {
         cardClass: String? = null,
         seekbarWrapper: Any? = null,
     ): Boolean {
+        // The independent hardware-key volume window owns its capture/freeze pipeline. A shared
+        // layer label is insufficient: identify the real host and protect the actual inner drawable.
+        if (VolumeMaskGuard.isVolumeHost(hostView)) {
+            val wrapper = try { mViewProxyGetBlurDrawable?.invoke(proxy, defaultDrawable) } catch (_: Throwable) { null }
+                ?: return false
+            protectNativeVolumeContent(wrapper)
+            return false
+        }
         // [任务 G] 顺手登记宿主 View：运动事件源（QS 翻页/面板展开）触发时 invalidate 它，
         // 强制重录 draw → 映射随新位置更新（WeakReference 防泄漏，去重见 registerHostView）
         registerHostView(hostView)
@@ -4931,6 +4941,37 @@ object BlurDrawHook {
      * 拦截策略：proceed 前把 blurMaskColor 置 0 → draw 内部条件 `blurMaskColor == 0` 直接 return，
      * 跳过 drawRect；finally 恢复原值。失败 → proceed 原样（强兜底不崩）。
      */
+    private fun protectNativeVolumeContent(wrapper: Any) {
+        val target = try {
+            if (mPlatformGetBlurDrawable?.declaringClass?.isInstance(wrapper) == true)
+                mPlatformGetBlurDrawable?.invoke(wrapper) ?: wrapper else wrapper
+        } catch (_: Throwable) { wrapper }
+        VolumeMaskGuard.protectNativeContent(wrapper, target)
+        screenRegionMap.remove(System.identityHashCode(target))
+        if (mGetDrawableShaderPaint?.declaringClass?.isInstance(target) == true) restoreSystemShaderIfReplaced(target)
+        RuntimeDiagnostics.mark("volume_native", "已按真实宿主隔离独立音量面板，保留原生内容及遮罩；外观待核验")
+    }
+
+    /** Bind ownership when the proxy supplies the material, before wrapper drawing/content recording. */
+    private fun mountNativeVolumeOwnership(api: XposedInterface) {
+        val method = mViewProxyGetBlurDrawable ?: return
+        try {
+            api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val result = chain.proceed()
+                try {
+                    val host = mViewProxyGetView?.invoke(chain.getThisObject()) as? View
+                    if (result != null && VolumeMaskGuard.isVolumeHost(host)) protectNativeVolumeContent(result)
+                } catch (t: Throwable) {
+                    Lg.w(TAG, "volume: material ownership unavailable; keep native result", t)
+                }
+                result
+            }
+            RuntimeDiagnostics.mark("volume_native_hook", "已挂载原生材质归属识别；待音量窗口调用")
+        } catch (t: Throwable) {
+            Lg.w(TAG, "volume: material ownership hook unavailable", t)
+        }
+    }
+
     private fun mountPlatformBlurMaskColor(api: XposedInterface, classLoader: ClassLoader) {
         if (mPlatformBlurMaskColor == null) {
             Lg.w(TAG, "Hook B PlatformBlurDrawable.blurMaskColor unresolved, mask-layer suppress disabled")
@@ -4962,6 +5003,7 @@ object BlurDrawHook {
             chain.proceed(); return
         }
         if (VolumeMaskGuard.preserveMask(pbd)) {
+            protectNativeVolumeContent(pbd)
             chain.proceed(); return
         }
         val original = try {
@@ -10212,6 +10254,10 @@ object BlurDrawHook {
      * Missing geometry/source, disabled glass and excluded scenes still fall back to the original once.
      */
     private fun tryRenderOnDrawContent(drawable: Any, canvas: Canvas): Boolean {
+        if (VolumeMaskGuard.preservesContent(drawable)) {
+            restoreSystemShaderIfReplaced(drawable)
+            return false
+        }
         // Whole-panel scrims have a separate policy; this route is for glass controls/cards.
         if (isBackgroundScrimById(drawable)) return false
         val draw = mDrawBlurShader ?: return false
@@ -10265,6 +10311,10 @@ object BlurDrawHook {
      * 返回值 true 仅代表 paint.shader 已替换为液态玻璃（后续由系统 drawPath 完成实际绘制）。
      */
     private fun replaceShaderIfPossible(drawable: Any): Boolean {
+        if (VolumeMaskGuard.preservesContent(drawable)) {
+            restoreSystemShaderIfReplaced(drawable)
+            return false
+        }
         val id = System.identityHashCode(drawable)
         GlassRegistry.bind(id, drawable)
 
@@ -11856,6 +11906,19 @@ object BlurDrawHook {
         return result
     }
 
+    private fun usePolishedMaterial(elementId: Int): Boolean {
+        val entry = screenRegionMap[elementId] ?: return false
+        if (QsSurfacePolicy.polishMaterial(entry.hostViewName)) return true
+        // Some native materials belong to plain ImageView/FrameLayout children of QS containers.
+        var cursor = entry.hostViewRef?.get()
+        repeat(8) {
+            val view = cursor ?: return false
+            if (QsSurfacePolicy.polishMaterial(view.javaClass.name)) return true
+            cursor = view.parent as? View
+        }
+        return false
+    }
+
     private fun buildParams(
         width: Float,
         height: Float,
@@ -11911,6 +11974,7 @@ object BlurDrawHook {
                 lightAngleDegrees = pick(Prefs.KEY_LIGHT_ANGLE, m.lightAngleDegrees),
                 parallaxX = pick(Prefs.KEY_PARALLAX_X, m.parallaxX),
                 parallaxY = pick(Prefs.KEY_PARALLAX_Y, m.parallaxY),
+                surfacePolish = usePolishedMaterial(elementId),
             )
         } catch (t: Throwable) {
             Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)
