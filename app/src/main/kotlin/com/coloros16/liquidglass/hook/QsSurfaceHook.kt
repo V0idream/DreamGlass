@@ -158,11 +158,15 @@ object QsSurfacePolicy {
         return qs && (simple.contains("Tile") || simple.contains("IconView") || simple.contains("Button"))
     }
 
-    fun excludesButtonOpacity(host: String?): Boolean {
+    fun excludesButtonBlur(host: String?): Boolean {
         val name = host?.lowercase() ?: return false
         return name.contains("seekbar") || name.contains("slider") || name.contains("media") ||
             name.contains(".volume.") || name.contains("volumedialog")
     }
+
+    /** Missing/invalid new settings preserve existing per-class/global blur; never read old opacity. */
+    fun resolveButtonBlur(configured: Float, inherited: Float, button: Boolean): Float =
+        if (button && configured.isFinite() && configured >= 0f) configured.coerceAtMost(64f) else inherited
 
     fun field(type: Class<*>, name: String): Field {
         var cursor: Class<*>? = type

@@ -43,6 +43,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.coloros16.liquidglass.App
 import com.coloros16.liquidglass.R
+import com.coloros16.liquidglass.hook.QsSurfacePolicy
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
@@ -404,17 +405,6 @@ class SettingsActivity : AppCompatActivity() {
         // [spec/89] 顶部实时效果预览：滑杆拖动中即时刷新（落盘仍走 onStopTrackingTouch，配置写入时机不变）。
         // 视差 X/Y 不喂预览 —— 它会把采样区整体移出预览框，画面会变成空白玻璃（见 doc/spec/89）。
         val preview: LiquidGlassPreviewView? = view.findViewById(R.id.materialPreview)
-        // A global button setting, independent of the selected per-class material preset.
-        bindFloatSeekBar(
-            seek = view.findViewById(R.id.seekButtonTransparency),
-            valueText = view.findViewById(R.id.buttonTransparencyValue),
-            key = Prefs.KEY_BUTTON_TRANSPARENCY, default = Prefs.DEFAULT_BUTTON_TRANSPARENCY,
-            fromProgress = { it / 100f },
-            toProgress = { (it * 100f).roundToInt().coerceIn(0, 100) },
-            format = { getString(R.string.settings_button_transparency_value, (it * 100).roundToInt()) },
-            onChanged = { v -> preview?.let { it.buttonTransparency = v; it.refresh() } },
-        )
-
         // 顶栏预设：选中预设后下方滑杆改读/改写该预设的参数键，未设的键回落全局值
         val glassPresets = readGlassPresets()
         val presetId = normalizeSelectedPresetId(glassPresets)
@@ -669,6 +659,20 @@ class SettingsActivity : AppCompatActivity() {
             toProgress = { v -> (v + 100f).roundToInt().coerceIn(0, 200) },
             format = { v -> getString(R.string.settings_parallax_y_value, v.roundToInt()) },
             presetParams = presetParams, presetId = presetId,
+        )
+        // A separate QS-button background blur; no View/shader alpha changes.
+        val inheritedButtonBlur = presetParams?.get(Prefs.KEY_BLUR_RADIUS)
+            ?: frameworkPrefs()?.getFloat(Prefs.KEY_BLUR_RADIUS, Prefs.DEFAULT_BLUR_RADIUS)
+            ?: xmlPrefs.getFloat(Prefs.KEY_BLUR_RADIUS, Prefs.DEFAULT_BLUR_RADIUS)
+        bindFloatSeekBar(
+            seek = view.findViewById(R.id.seekButtonBlurRadius),
+            valueText = view.findViewById(R.id.buttonBlurRadiusValue),
+            key = Prefs.KEY_BUTTON_BLUR_RADIUS, default = inheritedButtonBlur,
+            fromProgress = { it.toFloat() },
+            toProgress = { QsSurfacePolicy.resolveButtonBlur(it, inheritedButtonBlur, true).roundToInt()
+                .coerceIn(0, Prefs.BUTTON_BLUR_RADIUS_MAX) },
+            format = { getString(R.string.settings_button_blur_value, it.roundToInt()) },
+            onChanged = { v -> preview?.let { it.blurRadius = v; it.refresh() } },
         )
     }
 
@@ -2050,7 +2054,6 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
     var highlightInnerAtt = Prefs.DEFAULT_HIGHLIGHT_INNER_ATT
     var innerGlow = Prefs.DEFAULT_INNER_GLOW
     var maskGlassDim = Prefs.DEFAULT_MASK_GLASS_DIM
-    var buttonTransparency = Prefs.DEFAULT_BUTTON_TRANSPARENCY
     var lightAngle = Prefs.DEFAULT_LIGHT_ANGLE
 
     /** 参数变了由外部调 [refresh] 重绘；背景滚动则由 [onDraw] 自续帧驱动。 */
@@ -2170,7 +2173,6 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             parallaxX = 0f,
             parallaxY = 0f,
             surfacePolish = true,
-            materialOpacity = 1f - buttonTransparency.coerceIn(0f, 1f),
         )
         // 卡片窗口在样图中的区域（bitmap 坐标）；AGSL 侧 srcCoord = srcRect.xy + coord/uViewport * srcRect.zw
         val srcRect = RectF(cardLeft + scrollX, cardTop, cardLeft + scrollX + cw, cardTop + ch)

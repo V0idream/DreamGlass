@@ -93,9 +93,11 @@ object Prefs {
      *  调整后 ≤1s 生效（readMaterialParams TTL 缓存）。 */
     const val KEY_INNER_GLOW = "inner_glow"
     const val DEFAULT_INNER_GLOW = 0f
-    /** Global QS button glass transparency; does not fade content, sliders or other scenes. */
-    const val KEY_BUTTON_TRANSPARENCY = "button_transparency"
-    const val DEFAULT_BUTTON_TRANSPARENCY = 0f
+    /** Dedicated background blur for QS buttons. Missing (-1) inherits the existing material radius.
+     *  The obsolete button_transparency key is intentionally never read or reinterpreted. */
+    const val KEY_BUTTON_BLUR_RADIUS = "button_blur_radius"
+    const val DEFAULT_BUTTON_BLUR_RADIUS = -1f
+    const val BUTTON_BLUR_RADIUS_MAX = 64
     const val KEY_VIBRANCY = "vibrancy"
     const val KEY_LIGHT_ANGLE = "light_angle"
     const val KEY_PARALLAX_X = "parallax_x"

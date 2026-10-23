@@ -8609,9 +8609,8 @@ object BlurDrawHook {
         }
         val entry = owner ?: return null
         val rect = bounds ?: return null
-        val opacity = buttonOpacityFor(ownerId, readMaterialParams().buttonTransparency)
         val dim = (maskAlphaFor(entry.hostViewName, ownerId) *
-            (if (usePolishedMaterial(ownerId)) 0.65f else 1f) * opacity).coerceIn(0f, 1f)
+            (if (usePolishedMaterial(ownerId)) 0.65f else 1f)).coerceIn(0f, 1f)
         val cached = localRegionColors[ownerId]
         val rgb = if (cached != null && cached.frame === frame && cached.bounds == rect && cached.dim == dim) {
             cached.rgb
@@ -8625,7 +8624,7 @@ object BlurDrawHook {
                 (rect.right - insetX - screen.left) / screen.width(),
                 (rect.bottom - insetY - screen.top) / screen.height(),
             ) ?: return null
-            // Approximate the material's dark tint in linear light; transparency reduces that tint.
+            // Approximate the material's dark tint in linear light; button alpha is not modified.
             val brightness = (1.0 - dim).let { it * it }
             val color = LocalTextContrast.readableColor(-1, l * brightness) and 0x00ffffff
             if (localRegionColors.size >= 1024) localRegionColors.clear()
@@ -11902,7 +11901,7 @@ object BlurDrawHook {
         val highlightInnerAtt: Float = Prefs.DEFAULT_HIGHLIGHT_INNER_ATT,
         /** 内侧光 0~1（默认 0=关）。末尾带默认值，兜底分支位置构造不传即用配置默认。 */
         val innerGlow: Float = Prefs.DEFAULT_INNER_GLOW,
-        val buttonTransparency: Float = Prefs.DEFAULT_BUTTON_TRANSPARENCY,
+        val buttonBlurRadius: Float = Prefs.DEFAULT_BUTTON_BLUR_RADIUS,
     )
 
     @Volatile
@@ -11954,7 +11953,7 @@ object BlurDrawHook {
                     prefs.getFloat(Prefs.KEY_HIGHLIGHT_FLOOR, Prefs.DEFAULT_HIGHLIGHT_FLOOR),
                     prefs.getFloat(Prefs.KEY_HIGHLIGHT_INNER_ATT, Prefs.DEFAULT_HIGHLIGHT_INNER_ATT),
                     prefs.getFloat(Prefs.KEY_INNER_GLOW, Prefs.DEFAULT_INNER_GLOW).coerceIn(0f, 1f),
-                    prefs.getFloat(Prefs.KEY_BUTTON_TRANSPARENCY, Prefs.DEFAULT_BUTTON_TRANSPARENCY).coerceIn(0f, 1f),
+                    prefs.getFloat(Prefs.KEY_BUTTON_BLUR_RADIUS, Prefs.DEFAULT_BUTTON_BLUR_RADIUS),
                 )
             } catch (t: Throwable) {
                 Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)
@@ -11971,19 +11970,19 @@ object BlurDrawHook {
         return result
     }
 
-    private fun buttonOpacityFor(elementId: Int, transparency: Float): Float {
-        val entry = screenRegionMap[elementId] ?: return 1f
-        if (QsSurfacePolicy.excludesButtonOpacity(entry.hostViewName)) return 1f
+    private fun isButtonBlurRegion(elementId: Int): Boolean {
+        val entry = screenRegionMap[elementId] ?: return false
+        if (QsSurfacePolicy.excludesButtonBlur(entry.hostViewName)) return false
         var button = QsSurfacePolicy.buttonMaterial(entry.hostViewName)
         var cursor = entry.hostViewRef?.get()
         repeat(8) {
             cursor?.let { view ->
-                if (QsSurfacePolicy.excludesButtonOpacity(view.javaClass.name)) return 1f
+                if (QsSurfacePolicy.excludesButtonBlur(view.javaClass.name)) return false
                 if (QsSurfacePolicy.buttonMaterial(view.javaClass.name)) button = true
                 cursor = view.parent as? View
             }
         }
-        return if (button && transparency.isFinite()) 1f - transparency.coerceIn(0f, 1f) else 1f
+        return button
     }
 
     private fun usePolishedMaterial(elementId: Int): Boolean {
@@ -12029,7 +12028,9 @@ object BlurDrawHook {
                 cornerWeight = cornerWeight,
                 // [2026-09-16 恢复配置化] 撤回原「强制透明诊断档」的硬编码 0，改回读 KEY_BLUR_RADIUS
                 // （默认 8px）。用户反馈「横幅太透」即因长期被强制成清晰透镜。
-                blurRadius = pick(Prefs.KEY_BLUR_RADIUS, m.blurRadius),
+                blurRadius = QsSurfacePolicy.resolveButtonBlur(
+                    m.buttonBlurRadius, pick(Prefs.KEY_BLUR_RADIUS, m.blurRadius), isButtonBlurRegion(elementId),
+                ),
                 // [doc/spec/95 + spec/96 2026-10-10] 折射环带高度走统一出口 Prefs.refractionHeightPx：
                 // 相对模式 = 元素短边 × KEY_REFRACTION_HEIGHT_RATIO（默认 0.5 = 改动前的 min(w,h)/2f，
                 // 零视觉变化）；绝对模式 = KEY_REFRACTION_HEIGHT_PX（固定像素，默认 64）。
@@ -12055,7 +12056,6 @@ object BlurDrawHook {
                 parallaxX = pick(Prefs.KEY_PARALLAX_X, m.parallaxX),
                 parallaxY = pick(Prefs.KEY_PARALLAX_Y, m.parallaxY),
                 surfacePolish = usePolishedMaterial(elementId),
-                materialOpacity = buttonOpacityFor(elementId, m.buttonTransparency),
             )
         } catch (t: Throwable) {
             Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)

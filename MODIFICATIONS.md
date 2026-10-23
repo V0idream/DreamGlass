@@ -1,10 +1,12 @@
-# DreamGlass 1.0.1 — 修改声明
+# DreamGlass 1.0.2 — 修改声明
 
-修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-23。
+修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-24。
 
 本作品基于 AYwlilwYA / ColorOS16-LiquidGlass `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，整体继续按 GNU GPLv3 分发。原作者及第三方组件的版权与许可均保留，详见 LICENSE、NOTICE 和 THIRD-PARTY-NOTICES.md。
 
 ## 修改范围
+
+- 1.0.2（2026-10-24）：将按钮透明度重做为背景模糊，移除材质 alpha 缩放，旧配置不再读取；补充模糊解析、渲染与应用预览验证。
 
 - 1.0.1：压缩参数页布局，增加全局按钮材质透明度，按局部背景选择文字黑白并补充测试。
 
@@ -18,7 +20,7 @@
 
 ## 对比上游基线的修改文件
 
-相关修改日期为 2026-10-22 至 2026-10-23；新增第三方源码归档保持原始内容。
+相关修改日期为 2026-10-22 至 2026-10-24；新增第三方源码归档保持原始内容。
 
 - `.gitattributes`
 - `.gitignore`
@@ -104,6 +106,7 @@
 - `app/src/test/java/android/window/ScreenCaptureInternal.java`
 - `app/src/test/java/com/android/systemui/SystemUIApplication.java`
 - `app/src/test/java/com/android/systemui/application/impl/SystemUIApplicationImpl.java`
+- `app/src/test/java/com/dreamglass/cos17/ButtonBlurPolicyTest.java`
 - `app/src/test/java/com/dreamglass/cos17/CaptureApiTest.java`
 - `app/src/test/java/com/dreamglass/cos17/ContentDrawBridgeTest.java`
 - `app/src/test/java/com/dreamglass/cos17/LocalTextContrastTest.java`
@@ -158,6 +161,24 @@
 - `docs/validation/1.0.1/rom-contracts.txt`
 - `docs/validation/1.0.1/shader-validation.json`
 - `docs/validation/1.0.1/summary.json`
+- `docs/validation/1.0.2/01-button-blur-default.png`
+- `docs/validation/1.0.2/TEST-com.dreamglass.cos17.ButtonBlurPolicyTest.xml`
+- `docs/validation/1.0.2/TEST-com.dreamglass.cos17.CaptureApiTest.xml`
+- `docs/validation/1.0.2/TEST-com.dreamglass.cos17.ContentDrawBridgeTest.xml`
+- `docs/validation/1.0.2/TEST-com.dreamglass.cos17.LocalTextContrastTest.xml`
+- `docs/validation/1.0.2/TEST-com.dreamglass.cos17.QsSeekbarCompatTest.xml`
+- `docs/validation/1.0.2/TEST-com.dreamglass.cos17.QsSurfacePolicyTest.xml`
+- `docs/validation/1.0.2/TEST-com.dreamglass.cos17.SystemUiLifecycleTest.xml`
+- `docs/validation/1.0.2/TEST-com.dreamglass.cos17.VolumeMaskGuardTest.xml`
+- `docs/validation/1.0.2/apk-signature.txt`
+- `docs/validation/1.0.2/blur-0.png`
+- `docs/validation/1.0.2/blur-32.png`
+- `docs/validation/1.0.2/blur-64.png`
+- `docs/validation/1.0.2/button-blur-comparison.png`
+- `docs/validation/1.0.2/release-build.txt`
+- `docs/validation/1.0.2/rom-contracts.txt`
+- `docs/validation/1.0.2/shader-validation.json`
+- `docs/validation/1.0.2/summary.json`
 - `docs/validation/apk-badging.txt`
 - `docs/validation/apk-manifest.txt`
 - `docs/validation/apk-signature.txt`
@@ -238,6 +259,7 @@
 - `scripts/dex_inspector.py`
 - `scripts/fetch_dependency_sources.py`
 - `scripts/generate_legal_bundle.py`
+- `scripts/qa_button_blur_emulator.py`
 - `scripts/qa_compact_material_emulator.py`
 - `scripts/qa_release_emulator.py`
 - `scripts/validate_surface_shader.py`

@@ -69,7 +69,7 @@ def backdrop(w, h, flat=False):
     return skia.Image.fromarray(array, colorType=skia.ColorType.kRGBA_8888_ColorType)
 
 
-def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6, opacity=1):
+def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6):
     builder = skia.RuntimeEffectBuilder(effect)
     image = backdrop(w, h, flat)
     image_shader = image.makeShader(skia.TileMode.kClamp, skia.TileMode.kClamp,
@@ -91,8 +91,6 @@ def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6, opa
     }
     if 'uSurfacePolish' in [u.name for u in effect.uniforms()]:
         uniforms['uSurfacePolish'] = float(polish)
-    if 'uMaterialOpacity' in [u.name for u in effect.uniforms()]:
-        uniforms['uMaterialOpacity'] = float(opacity)
     for name, value in uniforms.items():
         builder.setUniform(name, value if isinstance(value, list) else float(value))
     surface = skia.Surface.MakeRaster(skia.ImageInfo.Make(w, h,
@@ -177,20 +175,31 @@ for i, (image, value) in enumerate(zip(progress_rows, [0, 1, 25, 50, 99, 100])):
     labels.text((i * 180 + 10, 10), str(value) + '%', fill='white')
     progress_sheet.alpha_composite(image, (i * 180 + 10, 35))
 progress_sheet.save(out / 'slider-clip-fixture.png')
-opacity_checks = []
+blur_checks = []
+blur_sheet = Image.new('RGB', (760, 400), (12, 17, 32))
+blur_labels = ImageDraw.Draw(blur_sheet)
 for name in ('full', 'base'):
-    full, _ = render(effects[name], 360, 160, 80, polish=1, opacity=1)
-    for opacity in (0, .25, .5, .75, 1):
-        pixels, _ = render(effects[name], 360, 160, 80, polish=1, opacity=opacity)
-        error = float(np.max(np.abs(pixels - full * opacity)))
-        assert error < .00001, (name, opacity, error)
+    clear, _ = render(effects[name], 360, 160, 80, polish=1, blur=0)
+    for i, blur in enumerate((0, 16, 32, 64)):
+        pixels, image = render(effects[name], 360, 160, 80, polish=1, blur=blur)
+        error = float(np.max(np.abs(pixels[..., 3] - clear[..., 3])))
+        delta = float(np.mean(np.abs(pixels[..., :3] - clear[..., :3])))
+        assert error < .00001, (name, blur, 'coverage changed', error)
+        assert np.all(np.isfinite(pixels))
         assert np.all(pixels[..., :3] <= pixels[..., 3:4] + .00001)
-        opacity_checks.append({'variant': name, 'opacity': opacity, 'maxPremultipliedScaleError': error})
+        if blur: assert delta > .001, (name, blur, 'background did not change')
+        blur_checks.append({'variant': name, 'blurRadius': blur, 'maxAlphaDelta': error,
+                            'meanRgbDeltaFromClear': delta})
+        if name == 'full':
+            x, y = (i % 2) * 380 + 10, (i // 2) * 200 + 10
+            blur_labels.text((x, y), str(blur) + ' px blur - same material coverage', fill='white')
+            blur_sheet.paste(image, (x, y + 24), image)
+blur_sheet.save(out / 'button-blur-comparison.png')
 
 report = {'engine': 'desktop Skia ' + skia.__version__, 'androidGpuTested': False,
           'shaderSourceSha256': hashlib.sha256(source.encode()).hexdigest(),
           'compiledVariants': list(effects), 'cases': results,
           'rimWidthAt30Percent': {'beforePx': old_width, 'afterPx': new_width},
-          'progressClippingPercentages': [0, 1, 25, 50, 99, 100], 'opacityChecks': opacity_checks}
+          'progressClippingPercentages': [0, 1, 25, 50, 99, 100], 'blurChecks': blur_checks}
 (out / 'shader-validation.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
 print(json.dumps(report, indent=2))

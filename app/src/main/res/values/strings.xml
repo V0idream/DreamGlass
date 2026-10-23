@@ -257,7 +257,7 @@
     <string name="update_dialog_later">以后再说</string>
     <string name="update_dialog_open_failed">无法打开链接，请手动访问 GitHub Releases 页下载</string>
     <string name="update_dialog_notes">更新简介：\n%1$s</string>
-    <string name="settings_button_transparency">按钮整体透明度</string>
-    <string name="settings_button_transparency_value">%1$d%%</string>
-    <string name="settings_button_transparency_desc">全局调整控制中心按钮的玻璃层。0% 保留完整材质，100% 隐去材质；文字和图标保持清晰。不影响通知卡片、滑杆或独立音量面板。</string>
+    <string name="settings_button_blur">按钮背景模糊</string>
+    <string name="settings_button_blur_value">%1$d px</string>
+    <string name="settings_button_blur_desc">只调节按钮背后的模糊：0 清晰，数值越大越柔和。按钮不淡出，文字和图标保持清晰。</string>
 </resources>

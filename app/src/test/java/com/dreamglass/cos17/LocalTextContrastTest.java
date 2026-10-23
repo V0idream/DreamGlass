@@ -51,16 +51,16 @@ public class LocalTextContrastTest {
         assertEquals(0xff000000,math.readableColor(-1,.18));
         assertEquals(0xffffffff,math.readableColor(-1,.17));
     }
-    @Test public void transparencyScopeDoesNotLeakIntoOtherScenes() {
+    @Test public void buttonBlurScopeDoesNotLeakIntoOtherScenes() {
         QsSurfacePolicy p=QsSurfacePolicy.INSTANCE;
         assertTrue(p.buttonMaterial("OplusQSResizeableTileViewTwoXOne"));
         assertTrue(p.buttonMaterial("com.oplus.systemui.plugins.qs.customize.view.tile.OplusQSIconView"));
         for (String name: new String[]{null,"OplusQSRootView","OplusQsVerticalSeekBar",
                 "NotificationBackgroundView","com.android.launcher.Folder","OplusVolumeSeekBar"})
             assertFalse(name,p.buttonMaterial(name));
-        assertTrue(p.excludesButtonOpacity("OplusQsVerticalSeekBar"));
-        assertTrue(p.excludesButtonOpacity("com.oplus.systemui.volume.OplusVolumeDialogView"));
-        assertTrue(p.excludesButtonOpacity("OplusMediaCarouselView"));
-        assertFalse(p.excludesButtonOpacity("OplusQSResizeableTileViewOneXOne"));
+        assertTrue(p.excludesButtonBlur("OplusQsVerticalSeekBar"));
+        assertTrue(p.excludesButtonBlur("com.oplus.systemui.volume.OplusVolumeDialogView"));
+        assertTrue(p.excludesButtonBlur("OplusMediaCarouselView"));
+        assertFalse(p.excludesButtonBlur("OplusQSResizeableTileViewOneXOne"));
     }
 }

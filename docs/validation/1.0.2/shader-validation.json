@@ -1,0 +1,105 @@
+{
+  "engine": "desktop Skia 144.1",
+  "androidGpuTested": false,
+  "shaderSourceSha256": "0a119dc4ae47dfba010997f446f9f74572aac38ec406bc12cef654faa6462ccc",
+  "compiledVariants": [
+    "full",
+    "base",
+    "prior-full",
+    "prior-base"
+  ],
+  "cases": [
+    {
+      "shape": "round tile",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "wide tile",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "slider",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "media",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "notification",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    }
+  ],
+  "rimWidthAt30Percent": {
+    "beforePx": 6,
+    "afterPx": 2
+  },
+  "progressClippingPercentages": [
+    0,
+    1,
+    25,
+    50,
+    99,
+    100
+  ],
+  "blurChecks": [
+    {
+      "variant": "full",
+      "blurRadius": 0,
+      "maxAlphaDelta": 0.0,
+      "meanRgbDeltaFromClear": 0.0
+    },
+    {
+      "variant": "full",
+      "blurRadius": 16,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.015358665958046913
+    },
+    {
+      "variant": "full",
+      "blurRadius": 32,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.02364226244390011
+    },
+    {
+      "variant": "full",
+      "blurRadius": 64,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.052561793476343155
+    },
+    {
+      "variant": "base",
+      "blurRadius": 0,
+      "maxAlphaDelta": 0.0,
+      "meanRgbDeltaFromClear": 0.0
+    },
+    {
+      "variant": "base",
+      "blurRadius": 16,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.015358665958046913
+    },
+    {
+      "variant": "base",
+      "blurRadius": 32,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.02364226244390011
+    },
+    {
+      "variant": "base",
+      "blurRadius": 64,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.052561793476343155
+    }
+  ]
+}

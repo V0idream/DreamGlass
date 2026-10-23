@@ -1,28 +1,26 @@
-# DreamGlass 1.0.1 验证记录
+# DreamGlass 1.0.2 验证记录
 
-日期：2026-10-23。包名 com.dreamglass.cos17；versionCode 1000001；保持原签名。
+日期：2026-10-24。包名 com.dreamglass.cos17；versionCode 1000002；保持原签名。
 
 ## 本次修改
 
-1. 参数页将重复的大标题合并进工具栏，只保留一行提示。预览移到预设条上方，高度由 156dp 降为 104dp，横屏使用 64dp；参数区继续独立滚动。
-2. 「材质参数」首项增加全局「按钮整体透明度」0–100%。默认 0% 不改变既有材质；100% 仅隐去按钮玻璃层。RGB 与 alpha 同步缩放，文字和图标不设 View alpha。按按钮宿主/祖先判定，排除滑杆、媒体和独立音量窗口；通知和 Launcher 沿用默认不透明度。
-3. 自动文字反色先找到文字所在的最小有效玻璃区域，采样其中部背景。捕获 worker 用已有像素缓冲构建最大 64×192 格的不可变线性 sRGB 亮度积分图，主线程只查询区域均值并按帧/区域缓存；不在 TextView 绘制时调用 Bitmap.getPixels。缓存换帧清除，避免持有多份旧图。
-4. 按黑/白与该区域背景的对比度选择颜色，保留原 alpha、彩色文字和状态栏原色。自动模式优先于旧版默认强制白字；自动模式关闭后仍可使用强制白字/横幅跟随。缺少有效背景时保持原色，不改用全屏统一色。内部压暗只作近似补偿，未声称对任意动态/复杂背景保证 WCAG 达标。
+- 将 1.0.1 误做成玻璃层淡出的「按钮整体透明度」替换为「按钮背景模糊」0–64 px。滑杆直接覆盖 QS 按钮材质的 blurRadius，不调整 View alpha、图标、文字或材质输出 alpha。
+- 移除 uMaterialOpacity 及其 RGB/alpha 乘法，恢复 1.0.0 的 AGSL 光学源码；未改折射、高光及轮廓算法。
+- 新键为 button_blur_radius。旧 button_transparency 完全不再读取，也不将旧数值解释为模糊；新键缺失、负数或非有限值时继承既有按类/全局模糊。上限 64；非按钮保留原值。排除滑杆、媒体、通知、Launcher 和独立音量窗口。
+- 保留紧凑参数页、按局部背景决定黑白字、原滑杆轮廓与独立音量保护。现有通用模糊滑杆继续控制其他材质；新增按钮滑杆是 QS 按钮的全局覆盖。
 
 ## 验证
 
-- Release 构建成功；32 项 JVM 测试通过，包含相邻深浅按钮不同文字颜色、纵向区域、部分格查询、透明/无效背景、sRGB/alpha 和透明度场景排除；lint 0 错误、192 警告。
-- 给定 ROM 的 9 项 DEX 合约通过，原独立音量保护、截图入口和滑杆轮廓测试继续通过。
-- 真实 AGSL 的 FULL/BASE 版本在桌面 Skia 上编译/渲染。0/25/50/75/100% 材质不透明度共 10 项检查通过，颜色和 alpha 按相同比例缩放，未产生透明边缘 RGB 残留；默认不透明度下与 1.0.0 的折射等光学代码比较一致。
-- 独立 API33 模拟器六张实际应用截图，验证竖屏、透明度 0/100/中间档预览、返回、1.3 倍字体和横屏。竖屏参数滚动区域占屏高 67.0%。界面树每次重新导出，旋转时不复用旧树。
-- APK 产品名、1.0.1 / 1000001、非 debuggable、完整性、签名、57 项依赖及离线许可内容校验通过。
+- Release 构建成功；36 项 JVM 测试通过，含四项新增解析/继承/范围检查；lint 0 错误、192 警告。
+- 给定 ROM 的 9 项 DEX 合约通过。
+- FULL/BASE 真实 AGSL 在桌面 Skia 编译和渲染，0/16/32/64 px 共 8 项检查通过：背景 RGB 采样改变，最大 alpha 差小于 0.00001，输出有限且保持预乘约束。既有形状、细边缘与进度裁剪检查继续通过。桌面使用程序生成背景，图中较大半径的稀疏采样纹理不代表真实系统画面。
+- 独立 API33 模拟器验证新控件与 0/32/64 px 标签、实际 Android GPU 预览、返回路径；旧透明度控件消失。人工检查两端截图，64 px 时材质仍可见。参数滚动区占屏高 67.0%。
+- APK 名称、版本、非 debuggable、ZIP 完整性、同签名、57 项依赖与 12 项保留声明逐字节校验通过。
 
 ## 边界
 
-本次未连接或安装实体手机，未申请 Root 或重启作用域。模拟器无 LibXposed 框架，因此只证明应用交互/Android GPU 预览，不证明框架配置持久化和 ColorOS SystemUI Hook 运行效果。局部取色和按钮透明度仍需更新后由用户手动重新加载 SystemUI 检查；独立音量面板不属于此透明度调节范围。
+未连接、安装或操作实体手机，未申请 Root 或重启作用域。模拟器无 LibXposed，故不证明框架配置持久化或 ColorOS SystemUI 的实时加载、视觉质量、性能与稳定性。需要用户更新后按自己的方式重新加载 SystemUI 进行实机验收。0 px 表示不增加此材质模糊，背景捕获原有降采样仍可能影响清晰度。大半径继承既有采样算法，尚未进行实机画质或功耗测试。
 
-对比度计算依据：https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum 。原开源来源及许可见 THIRD-PARTY-NOTICES.md。
+证据：docs/validation/1.0.2/。复现脚本：scripts/check_release_package.py、scripts/check_rom_contracts.py、scripts/validate_surface_shader.py、scripts/qa_button_blur_emulator.py。
 
-证据：docs/validation/1.0.1/。复现脚本：scripts/check_release_package.py、scripts/check_rom_contracts.py、scripts/validate_surface_shader.py、scripts/qa_compact_material_emulator.py。
-
-APK SHA-256：9765fb0c10ddc0747bab6f522b6c32805328a149ec272e2fc03ca4a523187ef6
+APK SHA-256：9a8ca298fbb667098398ae3c3b52f66929371877a1e4eee591d3f91b3fb73919

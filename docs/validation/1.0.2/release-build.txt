@@ -1,0 +1,89 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :app:mergeReleaseNativeLibs NO-SOURCE
+> Task :app:stripReleaseDebugSymbols NO-SOURCE
+> Task :app:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateReleaseBuildConfig
+> Task :app:checkReleaseAarMetadata UP-TO-DATE
+> Task :app:processReleaseNavigationResources
+> Task :app:compileReleaseNavigationResources UP-TO-DATE
+> Task :app:generateReleaseResValues UP-TO-DATE
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:packageReleaseResources
+> Task :app:parseReleaseLocalResources
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :app:processReleaseManifestForPackage
+> Task :app:javaPreCompileRelease UP-TO-DATE
+> Task :app:desugarReleaseFileDependencies UP-TO-DATE
+> Task :app:mergeReleaseStartupProfile UP-TO-DATE
+> Task :app:mergeReleaseResources
+> Task :app:mergeExtDexRelease UP-TO-DATE
+> Task :app:mergeReleaseArtProfile UP-TO-DATE
+> Task :app:mergeReleaseShaders UP-TO-DATE
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:mergeReleaseAssets
+> Task :app:compressReleaseAssets
+> Task :app:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:collectReleaseDependencies UP-TO-DATE
+> Task :app:sdkReleaseDependencyData UP-TO-DATE
+> Task :app:writeReleaseAppMetadata UP-TO-DATE
+> Task :app:writeReleaseSigningConfigVersions UP-TO-DATE
+> Task :app:preReleaseUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileReleaseUnitTest UP-TO-DATE
+> Task :app:processReleaseResources
+> Task :app:optimizeReleaseResources
+> Task :app:compileReleaseKotlin
+w: file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/src/main/kotlin/com/coloros16/liquidglass/entry/XposedEntry.kt:148:13 Condition is always 'false'.
+w: file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/src/main/kotlin/com/coloros16/liquidglass/ui/SettingsActivity.kt:1433:28 Condition is always 'false'.
+w: file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/src/main/kotlin/com/coloros16/liquidglass/ui/SettingsActivity.kt:1496:26 Condition is always 'true'.
+w: file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/src/main/kotlin/com/coloros16/liquidglass/entry/XposedEntry.kt:148:13 Condition is always 'false'.
+w: file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/src/main/kotlin/com/coloros16/liquidglass/hook/LauncherHook.kt:1530:29 Condition is always 'true'.
+w: file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/src/main/kotlin/com/coloros16/liquidglass/hook/LauncherHook.kt:1590:29 Condition is always 'true'.
+w: file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/src/main/kotlin/com/coloros16/liquidglass/ui/SettingsActivity.kt:1433:28 Condition is always 'false'.
+w: file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/src/main/kotlin/com/coloros16/liquidglass/ui/SettingsActivity.kt:1496:26 Condition is always 'true'.
+
+> Task :app:compileReleaseJavaWithJavac
+> Task :app:dexBuilderRelease
+> Task :app:mergeReleaseGlobalSynthetics UP-TO-DATE
+> Task :app:generateReleaseLintVitalReportModel
+> Task :app:mergeDexRelease
+> Task :app:compileReleaseArtProfile
+> Task :app:processReleaseJavaRes UP-TO-DATE
+> Task :app:mergeReleaseJavaResource UP-TO-DATE
+> Task :app:bundleReleaseClassesToRuntimeJar
+> Task :app:bundleReleaseClassesToCompileJar
+> Task :app:compileReleaseUnitTestKotlin NO-SOURCE
+> Task :app:compileReleaseUnitTestJavaWithJavac
+> Task :app:processReleaseUnitTestJavaRes NO-SOURCE
+> Task :app:testReleaseUnitTest
+> Task :app:generateReleaseLintReportModel
+> Task :app:generateReleaseUnitTestLintModel
+> Task :app:lintVitalAnalyzeRelease
+> Task :app:lintVitalReportRelease SKIPPED
+> Task :app:lintVitalRelease SKIPPED
+> Task :app:packageRelease
+> Task :app:createReleaseApkListingFileRedirect
+> Task :app:assembleRelease
+> Task :app:lintAnalyzeRelease
+> Task :app:lintAnalyzeReleaseUnitTest
+
+> Task :app:lintReportRelease
+Wrote HTML report to file:///C:/Users/wjy25/Documents/Codex/2026-10-22/ui/outputs/DreamGlassforCOS17/app/build/reports/lint-results-release.html
+
+> Task :app:lintRelease
+
+BUILD SUCCESSFUL in 1m 38s
+57 actionable tasks: 34 executed, 23 up-to-date
