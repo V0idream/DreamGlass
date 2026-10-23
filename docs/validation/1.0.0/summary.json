@@ -1,0 +1,29 @@
+{
+  "product": "DreamGlass",
+  "supportedRelease": "For ColorOS 17",
+  "version": "1.0.0",
+  "versionCode": 1000000,
+  "package": "com.dreamglass.cos17",
+  "debuggable": false,
+  "apkSha256": "0ace1ecb79fbbda61ae1cc7b1c835dcdbbf1d7a7af21975ce4e11bf426edcf6e",
+  "runtimeComponents": 57,
+  "retainedNoticeEntries": 12,
+  "unitTestsPassed": 26,
+  "lintErrors": 0,
+  "lintWarnings": 191,
+  "parameterBindingLayoutsPreserved": 15,
+  "renderBaseline": "3bde6df",
+  "agslUnchangedFromBaseline": true,
+  "hookSourcesUnchangedFromBaseline": true,
+  "physicalDeviceAccessed": false,
+  "colorOsRuntimeTested": false,
+  "romContractsPassed": 9,
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "uiScenariosPassed": 12,
+  "launcherAliasHideRestorePassed": true,
+  "fontScalesTested": [
+    1.0,
+    1.3
+  ],
+  "dependencySourceArchives": 58
+}

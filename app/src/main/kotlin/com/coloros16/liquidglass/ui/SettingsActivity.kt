@@ -47,7 +47,6 @@ import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.log.Lg
-import com.coloros16.liquidglass.update.UpdateChecker
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -60,7 +59,7 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 
 /**
- * 模块配置界面（Material You 动态取色，二级菜单）。
+ * DreamGlass 分组参数界面，沿用既有配置绑定。
  *
  * 二级菜单结构：
  * - 一级 = 大类（总开关 / 液态玻璃材质 / 背景与抓屏 / 文字与可读性 / 遮罩 / 流体云 /
@@ -148,6 +147,7 @@ class SettingsActivity : AppCompatActivity() {
         val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        toolbar.navigationIcon?.setTint(DreamUi.ink)
         // [spec/88] 导航图标 / 扩大热区（backHitOverlay）/ 手势与系统返回，三处共用同一套返回逻辑
         toolbar.setNavigationOnClickListener { navigateUp() }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -182,12 +182,6 @@ class SettingsActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------ [2026-09-17] 启动升级提示 ------------------------------------------------------------
 
-    /**
-     * 启动时检查 GitHub Releases 最新版本，比当前 [appVersionName] 新则弹提示。
-     *
-     * 网络在子线程（[UpdateChecker.fetchLatest] 阻塞），结果回主线程弹窗；
-     * 检查失败/无新版本/该版本已被「忽略此版本」→ 全程静默，不打扰用户。
-     */
     override fun onDestroy() {
         App.removeServiceStateListener(frameworkListener)
         super.onDestroy()
@@ -199,89 +193,15 @@ class SettingsActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
     }
 
-    private fun checkUpdateOnLaunch() {
-        if (updateCheckStarted) return
-        updateCheckStarted = true
-        Thread {
-            val latest = UpdateChecker.fetchLatest() ?: return@Thread
-            val current = appVersionName() ?: return@Thread
-            if (!UpdateChecker.isNewer(latest.version, current)) return@Thread
-            if (xmlPrefs.getString(XML_KEY_IGNORED_UPDATE, null) == latest.version) return@Thread
-            runOnUiThread {
-                if (!isFinishing && !isDestroyed) showUpdateDialog(current, latest)
-            }
-        }.start()
-    }
-
-    /** 当前安装版本名（如 "0.1.1"）；读取失败返回 null（则本次不提示）。 */
-    private fun appVersionName(): String? = try {
-        packageManager.getPackageInfo(packageName, 0).versionName
-    } catch (t: Throwable) {
-        Lg.w(TAG, "read versionName failed", t)
-        null
-    }
-
-    /** 升级提示弹窗：去下载（跳 release 页/APK 直链）/ 忽略此版本（记本地，不再提示该版本）/ 以后再说。 */
-    private fun showUpdateDialog(current: String, latest: UpdateChecker.Release) {
-        val base = getString(R.string.update_dialog_message, current, latest.version)
-        val notes = latest.notes
-            ?.let { n -> if (n.length > 600) n.take(600) + "…" else n }
-            ?.let { n -> getString(R.string.update_dialog_notes, n) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.update_dialog_title)
-            .setMessage(if (notes != null) "$base\n\n$notes" else base)
-            .setPositiveButton(R.string.update_dialog_download) { _, _ ->
-                // 优先 APK 直链（一键下载）；无资产则退到 release 页面
-                val target = latest.apkUrl ?: latest.pageUrl
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
-                } catch (t: Throwable) {
-                    Lg.w(TAG, "open update url failed: $target", t)
-                    Toast.makeText(this, R.string.update_dialog_open_failed, Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNeutralButton(R.string.update_dialog_ignore) { _, _ ->
-                xmlPrefs.edit().putString(XML_KEY_IGNORED_UPDATE, latest.version).apply()
-            }
-            .setNegativeButton(R.string.update_dialog_later, null)
-            .show()
-    }
-
-    // ------------------------------------------------------------ [spec/88] 状态栏/挖孔避让 + 返回热区 ------------------------------------------------------------
-
-    /** [spec/88] toolbar 顶上的 inset 占位条（activity_settings.xml:toolbarTopSpacer）。 */
     private lateinit var toolbarTopSpacer: View
-
-    /** 最近一次收到的系统条带 inset（屏幕坐标系，px）；-1 = 尚未收到任何 inset。 */
     private var insetTop = -1
     private var insetBottom = 0
     private var insetLeft = 0
     private var insetRight = 0
-
-    /** 已应用到 [toolbarTopSpacer] 的高度 px —— 用于反推 toolbar 的「无补偿基准 top」。 */
     private var appliedSpacerHeight = 0
-
-    /** 单轮 settle 内 spacer 连改次数上限（防布局振荡把主线程拖死）。 */
     private var spacerAdjustCount = 0
-
-    /** 上一条已打印的诊断日志（相同则不重打，防刷屏）。 */
     private var lastInsetLog = ""
 
-    /**
-     * [spec/88] 注册窗口 inset 监听：把 toolbar 顶边顶到状态栏/挖孔之下，内容区避开导航栏。
-     *
-     * 关键点是**按屏幕坐标实测几何自校正**，而不是无条件按 inset 加 padding：
-     *
-     * ```
-     * baseTop = toolbar 屏幕 top − 已加 spacer 高   // 与 spacer 无关的不变量
-     * spacer  = max(0, 状态栏高 − baseTop)
-     * ```
-     *
-     * 于是三种形态自动收敛到正确值，且因 baseTop 恒定，一次调整即收敛、不会振荡：
-     * - edge-to-edge（Android 15+ 强制，toolbar 屏幕 top=0）→ 补满状态栏高；
-     * - 旧式 fitsSystemWindows（系统已把 DecorView 顶下去，baseTop=状态栏高）→ 补 0，不重复让位；
-     * - 悬浮/小窗（窗口顶边不在屏幕顶，toolbar 屏幕 top 远大于状态栏高）→ 补 0，不凭空压低 toolbar。
-     */
     private fun setupWindowInsets(toolbar: View) {
         toolbarTopSpacer = findViewById(R.id.toolbarTopSpacer)
         val types = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
@@ -384,6 +304,20 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun presentParameters(view: View, title: String, detail: String) {
+        supportActionBar?.title = "DreamGlass"
+        val wrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(DreamUi.canvas) }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(DreamUi.dp(context, 22), DreamUi.dp(context, 7), DreamUi.dp(context, 22), DreamUi.dp(context, 12))
+        }
+        header.addView(DreamUi.label(this, "参数详情", 10f, DreamUi.accent, true))
+        header.addView(DreamUi.label(this, title, 24f, DreamUi.ink, true))
+        header.addView(DreamUi.label(this, detail, 12f, DreamUi.muted))
+        wrap.addView(header)
+        wrap.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
+        contentFrame.removeAllViews(); contentFrame.addView(wrap)
+    }
+
     /** 二级设置页：切换到大类子视图并绑定控件。 */
     private fun openCategory(catId: String) {
         val cat = categories.firstOrNull { it.id == catId } ?: return
@@ -391,8 +325,7 @@ class SettingsActivity : AppCompatActivity() {
         currentAnimGroup = null
         supportActionBar?.title = getString(cat.titleRes)
         val view = layoutInflater.inflate(cat.layoutRes, contentFrame, false)
-        contentFrame.removeAllViews()
-        contentFrame.addView(view)
+        presentParameters(view, getString(cat.titleRes), getString(cat.descRes))
         bindCategory(catId)
     }
 
@@ -401,8 +334,7 @@ class SettingsActivity : AppCompatActivity() {
         currentAnimGroup = group
         supportActionBar?.title = getString(animGroupTitleRes(group))
         val view = layoutInflater.inflate(R.layout.view_anim_params, contentFrame, false)
-        contentFrame.removeAllViews()
-        contentFrame.addView(view)
+        presentParameters(view, getString(animGroupTitleRes(group)), "微调动画的阻尼与弹性，按需应用。")
         bindAnimParams(view, group)
     }
 
@@ -878,6 +810,13 @@ class SettingsActivity : AppCompatActivity() {
             isCheckable = checkable
             isChecked = checkable && checked
             isCloseIconVisible = false
+            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            chipBackgroundColor = android.content.res.ColorStateList(states, intArrayOf(DreamUi.accent, DreamUi.raised))
+            setTextColor(android.content.res.ColorStateList(states, intArrayOf(DreamUi.canvas, DreamUi.ink)))
+            chipStrokeColor = android.content.res.ColorStateList.valueOf(DreamUi.line)
+            chipStrokeWidth = resources.displayMetrics.density
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            isCheckedIconVisible = false
         }
         val defaultChip = chip(getString(R.string.glass_preset_default), true, selectedId == null)
         defaultChip.setOnClickListener {
@@ -1699,46 +1638,12 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun bindAbout(view: View) {
-        // TG 频道完整网址 → 点击跳转浏览器；失败回退复制
-        val tgRow = view.findViewById<View>(R.id.aboutTgRow)
-        tgRow.setOnClickListener {
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/c16lg666")))
-            } catch (t: Throwable) {
-                Lg.w(TAG, "about open tg failed, fallback copy", t)
-                bindCopyRow(tgRow, getString(R.string.about_tg))
-            }
-        }
-        bindCopyRow(view.findViewById(R.id.aboutQqRow), getString(R.string.about_qq))
-        bindCopyRow(view.findViewById(R.id.aboutDeveloperRow), getString(R.string.about_developer))
-        // GitHub 完整网址 → 点击跳转浏览器；失败回退复制
-        val githubRow = view.findViewById<View>(R.id.aboutGithubRow)
-        githubRow.setOnClickListener {
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/AYwlilwYA/ColorOS16-LiquidGlass")))
-            } catch (t: Throwable) {
-                Lg.w(TAG, "about open github failed, fallback copy", t)
-                bindCopyRow(githubRow, getString(R.string.about_github))
-            }
+        view.findViewById<View>(R.id.aboutOpenLegal).setOnClickListener { startActivity(Intent(this, LicenseActivity::class.java)) }
+        view.findViewById<View>(R.id.aboutOpenSource).setOnClickListener {
+            DreamUi.openLink(this, "https://github.com/V0idream/DreamGlass")
         }
     }
 
-    /** 给关于条目绑定点击复制（点击复制整行文案到剪贴板）。 */
-    private fun bindCopyRow(row: View, text: String) {
-        row.setOnClickListener {
-            try {
-                val cm = getSystemService(ClipboardManager::class.java)
-                cm.setPrimaryClip(ClipData.newPlainText("about", text))
-                Toast.makeText(this, getString(R.string.about_copy_hint), Toast.LENGTH_SHORT).show()
-            } catch (t: Throwable) {
-                Lg.w(TAG, "about copy failed", t)
-            }
-        }
-    }
-
-    // ------------------------------------------------------------ 存储访问 ------------------------------------------------------------
-
-    /** 框架侧存储（与 hook 端 getRemotePreferences 同一份；框架未注入/未就绪时为 null）。 */
     private fun frameworkPrefs(): SharedPreferences? =
         App.serviceRef?.let { Prefs.remote(it) }
 

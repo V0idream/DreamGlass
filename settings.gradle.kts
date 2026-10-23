@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "DreamGlassforCOS17"
+rootProject.name = "DreamGlass"
 include(":app")
 include(":demo")
 include(":testnotif")

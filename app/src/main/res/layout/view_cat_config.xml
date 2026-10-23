@@ -1,48 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fillViewport="true">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/cat_config"
-            android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-        <TextView
-            android:id="@+id/configExportRow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="?attr/selectableItemBackground"
-            android:padding="12dp"
-            android:text="@string/config_export"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
-
-        <TextView
-            android:id="@+id/configImportRow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="?attr/selectableItemBackground"
-            android:padding="12dp"
-            android:text="@string/config_import"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/config_hint"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/cat_config" android:textAppearance="?attr/textAppearanceTitleMedium" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_accent" android:textSize="12sp" android:letterSpacing="0.06" android:layout_marginTop="18dp" android:layout_marginBottom="10dp" />
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <TextView android:id="@+id/configExportRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:background="?attr/selectableItemBackground" android:padding="12dp" android:text="@string/config_export" android:textAppearance="?attr/textAppearanceBodyMedium" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" android:textColor="@color/dream_muted" />
+            <TextView android:id="@+id/configImportRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="?attr/selectableItemBackground" android:padding="12dp" android:text="@string/config_import" android:textAppearance="?attr/textAppearanceBodyMedium" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" android:textColor="@color/dream_muted" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/config_hint" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
     </LinearLayout>
 </ScrollView>

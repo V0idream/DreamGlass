@@ -7,7 +7,7 @@
       - 入口类注册：src/main/resources/META-INF/xposed/java_init.list
       - 模块元信息：src/main/resources/META-INF/xposed/module.prop（minApiVersion/targetApiVersion）
       - 注入作用域：src/main/resources/META-INF/xposed/scope.list
-        （com.android.systemui：Hook B/C 绘制与场景过滤；com.oplus.blur：Hook A 拦截未模糊原图）
+        （com.android.systemui、com.android.launcher；以 scope.list 为准）
       见 api 源码 package-info.java 的 "Entry Registration / Module Configuration / Scope" 章节。
       与同类 Xposed 模块（META-INF/xposed 三件套）做法一致。
 
@@ -48,6 +48,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+        <activity android:name=".ui.LicenseActivity" android:exported="false" />
         <!-- 完整高级配置。 -->
         <activity
             android:name=".ui.SettingsActivity"

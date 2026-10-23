@@ -14,19 +14,17 @@ val signingProps = Properties().apply {
 
 android {
     namespace = "com.coloros16.liquidglass"
+    buildFeatures { buildConfig = true }
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
         applicationId = "com.dreamglass.cos17"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        // [Drip 适配] Drip 按 versionCode 判定模块 APK 是否更新：固定值会让框架一直复用已解析的
-        // dex 缓存（框架日志特征 `reusing parsed APK (apk unchanged), skip re-parse`），表现为
-        // 「代码改了、编译安装也成功、设备上 APK 的 md5 也一致，但功能就是不生效」。
-        // 改用构建时间戳（秒）保证每次构建都递增，框架必然走 `module apk changed: rebuilding cache`
-        // 重新解析。注：秒级时间戳 2038-01 起溢出 Int，本项目调试期足够。
-        versionCode = 10009
-        versionName = "0.1.1-COS17-Refine4"
+        // Published versions use SemVer; increment this code for every distributed update so
+        // Android and the module framework can recognize the new APK. Do not publish timestamp suffixes.
+        versionCode = 1_000_000
+        versionName = "1.0.0"
     }
 
     signingConfigs {
@@ -81,7 +79,20 @@ dependencies {
     implementation(files("libs/libxposed-interface-102.0.0.aar"))
     implementation(files("libs/libxposed-service-102.0.0.aar"))
 
-    // 模块自身 UI（SettingsActivity，Material You 动态取色）
+    // 模块自身 UI：DreamGlass 配色与 Material 参数控件。
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+}
+
+// Release compliance inventory: exact resolved runtime artifacts, including transitive dependencies.
+tasks.register("writeReleaseComponentInventory") {
+    doLast {
+        val rows = configurations.getByName("releaseRuntimeClasspath").resolvedConfiguration.resolvedArtifacts
+            .map { artifact -> "${artifact.moduleVersion.id.group}\t${artifact.name}\t${artifact.moduleVersion.id.version}\t${artifact.file.absolutePath}" }
+            .sorted()
+        val output = layout.buildDirectory.file("reports/release-components.tsv").get().asFile
+        output.parentFile.mkdirs()
+        output.writeText(rows.joinToString("\n", postfix = "\n"))
+        println("Release component inventory: ${rows.size} resolved artifacts")
+    }
 }

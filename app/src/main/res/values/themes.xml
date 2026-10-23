@@ -1,5 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material You 动态取色主题（Android 12+ 自动跟随壁纸取色，低版本回退静态色） -->
-    <style name="Theme.LiquidGlass" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar" />
+    <!-- DreamGlass 固定深色配色；避免系统动态色改变参数控件的可读性。 -->
+    <style name="Theme.LiquidGlass" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/dream_canvas</item>
+        <item name="android:colorBackground">@color/dream_canvas</item>
+        <item name="colorSurface">@color/dream_canvas</item>
+        <item name="colorOnSurface">@color/dream_ink</item>
+        <item name="colorOnSurfaceVariant">@color/dream_muted</item>
+        <item name="colorSurfaceVariant">@color/dream_raised</item>
+        <item name="colorPrimary">@color/dream_accent</item>
+        <item name="colorOnPrimary">@color/dream_canvas</item>
+        <item name="colorSecondary">@color/dream_accent</item>
+        <item name="colorOnSecondary">@color/dream_canvas</item>
+        <item name="colorPrimaryContainer">@color/dream_raised</item>
+        <item name="colorOnPrimaryContainer">@color/dream_accent</item>
+        <item name="colorSecondaryContainer">@color/dream_raised</item>
+        <item name="colorOnSecondaryContainer">@color/dream_accent</item>
+        <item name="colorControlNormal">@color/dream_muted</item>
+        <item name="colorControlActivated">@color/dream_accent</item>
+        <item name="colorOutline">@color/dream_line</item>
+        <item name="android:textColorPrimary">@color/dream_ink</item>
+        <item name="android:textColorSecondary">@color/dream_muted</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:navigationBarColor">@color/dream_canvas</item>
+        <item name="android:statusBarColor">@color/dream_canvas</item>
+        <item name="android:colorAccent">@color/dream_accent</item>
+    </style>
 </resources>

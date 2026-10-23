@@ -1,3 +1,5 @@
+> 上游历史 README 摘录；不代表 DreamGlass 的版本、验证结论或赞助入口。原文：https://github.com/AYwlilwYA/ColorOS16-LiquidGlass/tree/aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd 。本摘录移除了收款二维码，原始版权/许可不变。
+
 # ColorOS16 Liquid Glass
 
 为 **ColorOS 16** 的通知中心 / 控制中心实现 **iOS 26 风格液态玻璃（Liquid Glass）** 动效的 LSPosed 模块。
@@ -12,7 +14,7 @@
 
 针对通知中心 / 控制中心的模糊控件（通知卡片、快捷开关、媒体卡、滑块胶囊等）渲染液态玻璃材质：内部清晰透镜、边缘折射环带、光谱色散、定向高光、vibrancy 增艳。
 
-![控制中心](screenshots/control-center.jpg)
+上游效果图见上述原文链接。
 
 ## 实现原理
 
@@ -71,11 +73,7 @@ gradle -p . :app:assembleDebug
 
 ## 赞助
 
-如果这个模块对你有帮助，欢迎扫码请作者喝杯咖啡 ☕
-
-<p align="center">
-  <img src="screenshots/sponsor-qr.png" width="260" alt="微信收款二维码">
-</p>
+上游原文的赞助入口不作为 DreamGlass 的联系人或收款入口；请参阅原文。
 
 ## 许可证
 

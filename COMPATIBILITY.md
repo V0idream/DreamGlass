@@ -1,6 +1,8 @@
-# ColorOS 17 兼容性报告 — Preview2 Refine4
+# DreamGlass 1.0.0 · ColorOS 17 兼容性报告
 
-Refine3 的按钮玻璃效果已经由用户反馈和截图确认生效。Refine4 在同一入口上修复控制中心滑杆方底和横向图标重复底圈，并调整按钮/通知卡片的边缘与通透度；本版未安装或进行真机验收。当前验证详情见 docs/PREVIEW2_REFINE4.md；下面的早期审计条目保留为历史资料，不代表 Refine4 的视觉验收。
+本版以 Refine4 绘制代码为基线，重做应用界面和开源交付，未更改 Hook 或 AGSL 算法。产品名 DreamGlass，For ColorOS 17 为支持说明。26 项 JVM、9 项真实 ROM DEX 合约、release lint、签名与独立 API33 模拟器界面检查通过，详见 TEST_REPORT.md。
+
+Refine3 的按钮玻璃效果已由用户反馈确认。Refine4 的滑杆轮廓、横向图标内圈、材质边缘和独立音量窗口保护未获本次真机复核；1.0.0 未连接实体设备。下方历史审计说明各入口覆盖，不应将静态存在解释为全功能或全机型支持。
 
 ## 样本信息
 
@@ -39,7 +41,7 @@ ElbowHitColor  f94f0fe3456029d7ebbbbfd7d14c41f3fbd3bf27cff1a0c3b3cf32e3acd70f4d
 | 功能 | 参考目标 / 源码 | 本次样本与处理 | 状态 |
 | --- | --- | --- | --- |
 | SystemUI 初始化 | SystemUIApplicationImpl.onCreate() | 原方法完成后安装，声明方法精确匹配，门控避免重复安装 | DEX 与 JVM 通过；真机待验 |
-| SystemUI 主玻璃 | BaseDrawable.drawBlurShader(Canvas)，BlurDrawHook.mountDrawBlurShader | 类和精确签名仍存在；与内容绘制接管配合 | 旧版曾收到调用；Refine3 效果待验 |
+| SystemUI 主玻璃 | BaseDrawable.drawBlurShader(Canvas)，BlurDrawHook.mountDrawBlurShader | 类和精确签名仍存在；与内容绘制接管配合 | Refine3 用户已确认；本版细节待实机复核 |
 | 控件与卡片内容绘制 | BaseDrawable / BlendDrawable.onDrawContent(Canvas)，mountOnDrawContent | 模块背景与几何就绪时直接录制玻璃；不再依赖原生图像分支是否绘制；未就绪保留原生一次 | DEX 与离线路由测试通过；像素效果待验 |
 | shader 取值 | DrawableShader.getShaderOrNull()、BaseDrawable.getDrawableShaderPaint() | 返回 RuntimeShader / Paint 的签名存在 | 静态匹配 |
 | 背景完成回调 | BlurDrawableManager.onBlurReady(List, HardwareBuffer, int, float, Rect) | SystemUI 精确签名存在；不将模糊结果冒充未模糊原图 | 静态匹配 |
@@ -56,7 +58,7 @@ ElbowHitColor  f94f0fe3456029d7ebbbbfd7d14c41f3fbd3bf27cff1a0c3b3cf32e3acd70f4d
 | 通知倾斜 | ScaleState、RowAnimationStateEx 等 | 类存在；保留独立实验开关 | 静态部分匹配；真机待验 |
 | 锁屏大时钟玻璃 | LockScreenClockHook | 上游已有停用记录；源码保留，不擅自恢复宽泛 View 绘制接管 | 暂未启用 |
 | 流体云卡片 / 胶囊 | 插件 CardBackgroundView / CapsuleView | 所给 SystemUI DEX 中缺少插件类，未发现内嵌插件 APK；宿主容器 CapsulePluginContainer 存在 | 插件部分待补充材料 |
-| 3D、模糊、折射、色散、高光、圆角、色彩与遮罩参数 | Prefs、LiquidGlassShader、SettingsActivity | 保留现有参数能力；新增清透、柔雾、棱光三个只修改材质的预设 | 配置及 APK 静态验证；GPU 和显示待验 |
+| 3D、模糊、折射、色散、高光、圆角、色彩与遮罩参数 | Prefs、LiquidGlassShader、SettingsActivity | 保留现有参数能力；新增清透、柔雾、棱光三个只修改材质的预设 | 应用内 API33 GPU 预览通过；系统场景待实机复核 |
 
 ## 可选外部材料
 

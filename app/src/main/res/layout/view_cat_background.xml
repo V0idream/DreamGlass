@@ -1,271 +1,58 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fillViewport="true">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/settings_capture_params_section"
-            android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-        <TextView
-            android:id="@+id/captureModeLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/settings_capture_mode"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <Spinner
-            android:id="@+id/spinnerCaptureMode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:id="@+id/captureModeDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_capture_mode_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- 即时抓屏速率（瞬态场景与即时模式共用，任何模式下都显示） -->
-        <TextView
-            android:id="@+id/panelCaptureHzLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_panel_capture_hz"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <SeekBar
-            android:id="@+id/seekPanelCaptureHz"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:max="90"
-            android:progress="30" />
-
-        <TextView
-            android:id="@+id/panelCaptureHzValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall" />
-
-        <TextView
-            android:id="@+id/panelCaptureHzDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_panel_capture_hz_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- 最大抓屏间隔（仅模式=变化抓屏时显示） -->
-        <TextView
-            android:id="@+id/periodicCaptureIntervalLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_periodic_capture_interval"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <SeekBar
-            android:id="@+id/seekPeriodicCaptureInterval"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:max="4900"
-            android:progress="400" />
-
-        <TextView
-            android:id="@+id/periodicCaptureIntervalValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall" />
-
-        <TextView
-            android:id="@+id/periodicCaptureIntervalDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_periodic_capture_interval_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:id="@+id/captureScaleLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_capture_scale"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <Spinner
-            android:id="@+id/spinnerCaptureScale"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:id="@+id/captureScaleDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_capture_scale_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/settings_section_capture_retry"
-            android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-        <Switch
-            android:id="@+id/switchCaptureRetryEnabled"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/settings_capture_retry_enabled" />
-
-        <TextView
-            android:id="@+id/captureRetryEnabledDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_capture_retry_enabled_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <Switch
-            android:id="@+id/switchRegionCaptureExperimental"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_bg_region_capture_experimental" />
-
-        <TextView
-            android:id="@+id/regionCaptureExperimentalDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_bg_region_capture_experimental_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:id="@+id/wallpaperMaxDimLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_bg_wallpaper_max_dim"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <SeekBar
-            android:id="@+id/seekWallpaperMaxDim"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:max="2048"
-            android:progress="1024" />
-
-        <TextView
-            android:id="@+id/wallpaperMaxDimValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall" />
-
-        <TextView
-            android:id="@+id/wallpaperMaxDimDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_bg_wallpaper_max_dim_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- [spec/61] 系统控制中心模糊力度（2026-08-23） -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/settings_section_cc_blur"
-            android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-        <TextView
-            android:id="@+id/ccBlurStrengthLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/settings_cc_blur_strength"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <SeekBar
-            android:id="@+id/seekCcBlurStrength"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:max="200"
-            android:progress="100" />
-
-        <TextView
-            android:id="@+id/ccBlurStrengthValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall" />
-
-        <TextView
-            android:id="@+id/ccBlurStrengthDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_cc_blur_strength_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <Switch
-            android:id="@+id/switchKeepSystemCcBlur"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_keep_system_cc_blur" />
-
-        <TextView
-            android:id="@+id/keepSystemCcBlurDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_keep_system_cc_blur_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <Switch
-            android:id="@+id/switchRemovePanelMixColor"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_remove_panel_mix_color" />
-
-        <TextView
-            android:id="@+id/removePanelMixColorDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_remove_panel_mix_color_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_capture_params_section" android:textAppearance="?attr/textAppearanceTitleMedium" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_accent" android:textSize="12sp" android:letterSpacing="0.06" android:layout_marginTop="18dp" android:layout_marginBottom="10dp" />
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <TextView android:id="@+id/captureModeLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_capture_mode" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <Spinner android:id="@+id/spinnerCaptureMode" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" />
+            <TextView android:id="@+id/captureModeDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_capture_mode_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <TextView android:id="@+id/panelCaptureHzLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_panel_capture_hz" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekPanelCaptureHz" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:max="90" android:progress="30" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/panelCaptureHzValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:textColor="@color/dream_accent" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:id="@+id/panelCaptureHzDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_panel_capture_hz_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <TextView android:id="@+id/periodicCaptureIntervalLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_periodic_capture_interval" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekPeriodicCaptureInterval" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:max="4900" android:progress="400" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/periodicCaptureIntervalValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:textColor="@color/dream_accent" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:id="@+id/periodicCaptureIntervalDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_periodic_capture_interval_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <TextView android:id="@+id/captureScaleLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_capture_scale" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <Spinner android:id="@+id/spinnerCaptureScale" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" />
+            <TextView android:id="@+id/captureScaleDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_capture_scale_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:text="@string/settings_section_capture_retry" android:textAppearance="?attr/textAppearanceTitleMedium" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_accent" android:textSize="12sp" android:letterSpacing="0.06" android:layout_marginBottom="10dp" />
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <Switch android:id="@+id/switchCaptureRetryEnabled" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_capture_retry_enabled" android:fontFamily="sans-serif-medium" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+            <TextView android:id="@+id/captureRetryEnabledDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_capture_retry_enabled_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <Switch android:id="@+id/switchRegionCaptureExperimental" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_bg_region_capture_experimental" android:fontFamily="sans-serif-medium" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+            <TextView android:id="@+id/regionCaptureExperimentalDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_bg_region_capture_experimental_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <TextView android:id="@+id/wallpaperMaxDimLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_bg_wallpaper_max_dim" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekWallpaperMaxDim" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:max="2048" android:progress="1024" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/wallpaperMaxDimValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:textColor="@color/dream_accent" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:id="@+id/wallpaperMaxDimDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_bg_wallpaper_max_dim_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:text="@string/settings_section_cc_blur" android:textAppearance="?attr/textAppearanceTitleMedium" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_accent" android:textSize="12sp" android:letterSpacing="0.06" android:layout_marginBottom="10dp" />
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <TextView android:id="@+id/ccBlurStrengthLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_cc_blur_strength" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekCcBlurStrength" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:max="200" android:progress="100" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/ccBlurStrengthValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:textColor="@color/dream_accent" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:id="@+id/ccBlurStrengthDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_cc_blur_strength_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <Switch android:id="@+id/switchKeepSystemCcBlur" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_keep_system_cc_blur" android:fontFamily="sans-serif-medium" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+            <TextView android:id="@+id/keepSystemCcBlurDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_keep_system_cc_blur_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <Switch android:id="@+id/switchRemovePanelMixColor" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_remove_panel_mix_color" android:fontFamily="sans-serif-medium" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+            <TextView android:id="@+id/removePanelMixColorDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_remove_panel_mix_color_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
     </LinearLayout>
 </ScrollView>

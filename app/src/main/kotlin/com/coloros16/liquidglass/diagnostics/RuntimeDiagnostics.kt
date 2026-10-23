@@ -1,5 +1,7 @@
 package com.coloros16.liquidglass.diagnostics
 
+import com.coloros16.liquidglass.BuildConfig
+
 import android.os.Process
 import android.os.SystemClock
 import android.util.Log
@@ -50,7 +52,7 @@ object RuntimeDiagnostics {
         val version = revision.get()
         val snapshot = JSONObject().apply {
             put("host", host); put("pid", Process.myPid()); put("at", System.currentTimeMillis())
-            put("version", "0.1.1-COS17-Refine4"); put("stages", JSONObject(stages.toMap()))
+            put("version", BuildConfig.VERSION_NAME); put("stages", JSONObject(stages.toMap()))
         }.toString()
         val classes = classesSnapshot
         val accepted = try {

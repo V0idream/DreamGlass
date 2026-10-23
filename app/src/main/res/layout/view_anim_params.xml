@@ -1,313 +1,48 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- [doc/spec/64] 桌面动画参数三级页（打开/关闭/打断三组共用，键名由代码按组拼装） -->
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fillViewport="true">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <Switch
-            android:id="@+id/switchAnimEnabled"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/settings_anim_enable_custom" />
-
-        <TextView
-            android:id="@+id/animEnabledDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_anim_enable_custom_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- [spec/64] 一键预设：iOS 风格弹簧档位，一键套用本组全部 9 个参数 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/settings_anim_preset_title"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_anim_preset_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/animPresetChips"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:chipSpacingHorizontal="8dp" />
-
-        <!-- [spec/64] 仅「打断动画」页可见：把「打开动画」参数整组复制过来 -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSyncFromOpen"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/settings_anim_sync_open"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/txtSyncFromOpenDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/settings_anim_sync_open_desc"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary"
-            android:visibility="gone" />
-
-        <!-- 中心 X 轴 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_anim_sec_x"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/settings_anim_damping"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <SeekBar
-            android:id="@+id/seekAnimXDamping"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="290"
-            android:progress="130" />
-
-        <TextView
-            android:id="@+id/animXDampingValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/settings_anim_stiffness"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <SeekBar
-            android:id="@+id/seekAnimXStiffness"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="2999"
-            android:progress="579" />
-
-        <TextView
-            android:id="@+id/animXStiffnessValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- 中心 Y 轴 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_anim_sec_y"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/settings_anim_damping"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <SeekBar
-            android:id="@+id/seekAnimYDamping"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="290"
-            android:progress="130" />
-
-        <TextView
-            android:id="@+id/animYDampingValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/settings_anim_stiffness"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <SeekBar
-            android:id="@+id/seekAnimYStiffness"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="2999"
-            android:progress="579" />
-
-        <TextView
-            android:id="@+id/animYStiffnessValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- 宽度缩放 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_anim_sec_width"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/settings_anim_damping"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <SeekBar
-            android:id="@+id/seekAnimWidthDamping"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="290"
-            android:progress="130" />
-
-        <TextView
-            android:id="@+id/animWidthDampingValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/settings_anim_stiffness"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <SeekBar
-            android:id="@+id/seekAnimWidthStiffness"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="2999"
-            android:progress="579" />
-
-        <TextView
-            android:id="@+id/animWidthStiffnessValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- 宽高比例 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_anim_sec_height"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/settings_anim_damping"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <SeekBar
-            android:id="@+id/seekAnimHeightDamping"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="290"
-            android:progress="130" />
-
-        <TextView
-            android:id="@+id/animHeightDampingValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/settings_anim_stiffness"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <SeekBar
-            android:id="@+id/seekAnimHeightStiffness"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="2999"
-            android:progress="579" />
-
-        <TextView
-            android:id="@+id/animHeightStiffnessValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- 图标透明度 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/settings_anim_sec_fade"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-        <SeekBar
-            android:id="@+id/seekAnimFadeDuration"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:max="145"
-            android:progress="29" />
-
-        <TextView
-            android:id="@+id/animFadeDurationValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/settings_anim_restart_note"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary" />
-
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <Switch android:id="@+id/switchAnimEnabled" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_anim_enable_custom" android:fontFamily="sans-serif-medium" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" android:layout_marginTop="0dp" />
+            <TextView android:id="@+id/animEnabledDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_anim_enable_custom_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="@string/settings_anim_preset_title" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_anim_preset_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <com.google.android.material.chip.ChipGroup android:id="@+id/animPresetChips" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" app:chipSpacingHorizontal="8dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnSyncFromOpen" style="?attr/materialButtonOutlinedStyle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="0dp" android:text="@string/settings_anim_sync_open" android:visibility="gone" />
+            <TextView android:id="@+id/txtSyncFromOpenDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_anim_sync_open_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:visibility="gone" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_anim_sec_x" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/settings_anim_damping" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <SeekBar android:id="@+id/seekAnimXDamping" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="290" android:progress="130" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animXDampingValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/settings_anim_stiffness" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <SeekBar android:id="@+id/seekAnimXStiffness" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="2999" android:progress="579" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animXStiffnessValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_anim_sec_y" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/settings_anim_damping" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <SeekBar android:id="@+id/seekAnimYDamping" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="290" android:progress="130" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animYDampingValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/settings_anim_stiffness" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <SeekBar android:id="@+id/seekAnimYStiffness" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="2999" android:progress="579" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animYStiffnessValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_anim_sec_width" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/settings_anim_damping" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <SeekBar android:id="@+id/seekAnimWidthDamping" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="290" android:progress="130" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animWidthDampingValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/settings_anim_stiffness" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <SeekBar android:id="@+id/seekAnimWidthStiffness" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="2999" android:progress="579" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animWidthStiffnessValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_anim_sec_height" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/settings_anim_damping" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <SeekBar android:id="@+id/seekAnimHeightDamping" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="290" android:progress="130" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animHeightDampingValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/settings_anim_stiffness" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+            <SeekBar android:id="@+id/seekAnimHeightStiffness" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="2999" android:progress="579" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animHeightStiffnessValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_anim_sec_fade" android:textAppearance="?attr/textAppearanceTitleSmall" android:fontFamily="sans-serif-medium" android:lineSpacingExtra="3dp" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekAnimFadeDuration" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:max="145" android:progress="29" android:thumbTint="@color/dream_accent" android:progressTint="@color/dream_accent" android:progressBackgroundTint="@color/dream_line" android:minHeight="44dp" />
+            <TextView android:id="@+id/animFadeDurationValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_accent" android:fontFamily="monospace" android:lineSpacingExtra="3dp" android:background="@drawable/dream_value_background" android:gravity="end" android:textSize="12sp" android:layout_marginTop="4dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="@string/settings_anim_restart_note" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
     </LinearLayout>
 </ScrollView>

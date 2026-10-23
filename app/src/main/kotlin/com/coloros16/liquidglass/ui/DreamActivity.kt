@@ -16,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
+import com.coloros16.liquidglass.BuildConfig
 import com.coloros16.liquidglass.App
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
@@ -29,9 +30,9 @@ import java.util.Locale
 
 /** Product dashboard. All host configuration uses the same framework store as the hooks. */
 class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
-    private val ink = Color.rgb(239, 241, 251)
-    private val muted = Color.rgb(168, 177, 203)
-    private val accent = Color.rgb(186, 170, 255)
+    private val ink = DreamUi.ink
+    private val muted = DreamUi.muted
+    private val accent = DreamUi.accent
     private lateinit var root: LinearLayout
     private lateinit var body: LinearLayout
     private lateinit var frameworkLabel: TextView
@@ -54,30 +55,19 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
     override fun onServiceStateChanged(service: XposedService?) { runOnUiThread { if (!isDestroyed) refreshState() } }
 
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
-    private fun bg(color: Int, radius: Int = 24) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
-    private fun text(value: String, size: Float = 15f, color: Int = ink, bold: Boolean = false) = TextView(this).apply {
-        text = value; textSize = size; setTextColor(color); setPadding(0, dp(4), 0, dp(4))
-        if (bold) typeface = Typeface.create("sans-serif", Typeface.BOLD)
-    }
+    private fun bg(color: Int, radius: Int = 20) = DreamUi.shape(this, color, radius)
+    private fun text(value: String, size: Float = 15f, color: Int = ink, bold: Boolean = false) = DreamUi.label(this, value, size, color, bold)
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun card(parent: LinearLayout = body) = column().apply {
-        background = bg(Color.rgb(26, 33, 55)); setPadding(dp(19), dp(16), dp(19), dp(16))
-        parent.addView(this, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
-    }
-    private fun action(parent: LinearLayout, title: String, secondary: Boolean = false, click: () -> Unit) = Button(this).apply {
-        text = title; isAllCaps = false; textSize = 14f; minHeight = dp(48)
-        setTextColor(if (secondary) ink else Color.rgb(27, 24, 49))
-        background = bg(if (secondary) Color.rgb(48, 57, 82) else accent, 16)
-        setOnClickListener { click() }
-        parent.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
-    }
+    private fun card(parent: LinearLayout = body) = DreamUi.card(parent)
+    private fun action(parent: LinearLayout, title: String, secondary: Boolean = false, click: () -> Unit) =
+        DreamUi.action(parent, title, !secondary, click)
     private fun advanced(category: String) = startActivity(Intent(this, SettingsActivity::class.java).apply {
         putExtra("category", category)
     })
 
     private fun showPage() {
         preview = null
-        root = column().apply { setBackgroundColor(Color.rgb(12, 18, 34)) }
+        root = column().apply { setBackgroundColor(DreamUi.canvas) }
         setContentView(root)
         WindowCompat.getInsetsController(window, root).apply {
             isAppearanceLightStatusBars = false
@@ -90,8 +80,14 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         ViewCompat.requestApplyInsets(root)
         val head = column().apply { setPadding(dp(23), dp(14), dp(23), dp(10)) }
         root.addView(head)
-        head.addView(text("DREAMGLASS  /  COS 17", 12f, accent, true))
-        head.addView(text(listOf("让光，有形。", "调出你的玻璃。", "每一步，都看得见。", "你的玻璃，你做主。")[selected], 29f, ink, true))
+        val brand = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        brand.addView(DreamMarkView(this), LinearLayout.LayoutParams(dp(37), dp(37)).apply { marginEnd = dp(10) })
+        brand.addView(text("DreamGlass", 20f, ink, true), LinearLayout.LayoutParams(0, -2, 1f))
+        brand.addView(text(BuildConfig.VERSION_NAME, 11f, accent).apply {
+            background = bg(DreamUi.raised, 9); setPadding(dp(10), dp(5), dp(10), dp(5))
+        })
+        head.addView(brand)
+        head.addView(text(listOf("工作台", "材质工作室", "运行状态", "偏好与工具")[selected], 25f, ink, true).apply { setPadding(0, dp(17), 0, dp(2)) })
         frameworkLabel = text("正在读取框架状态…", 12f, muted)
         head.addView(frameworkLabel)
         val scroll = ScrollView(this).apply { isFillViewport = true }
@@ -100,10 +96,11 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         scroll.addView(body)
         when (selected) { 0 -> overview(); 1 -> material(); 2 -> diagnostics(); else -> settings() }
         val nav = LinearLayout(this).apply { setPadding(dp(12), dp(7), dp(12), dp(7)) }
-        listOf("概览", "材质", "诊断", "设置").forEachIndexed { i, name ->
-            nav.addView(Button(this).apply {
-                text = name; isAllCaps = false; minHeight = dp(48)
-                setTextColor(if (i == selected) Color.rgb(27, 24, 49) else muted)
+        listOf("工作台", "材质", "状态", "设置").forEachIndexed { i, name ->
+            nav.addView(TextView(this).apply {
+                gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); textSize = 13f; isClickable = true; isFocusable = true; setPadding(0, dp(14), 0, dp(14))
+                text = name; minHeight = dp(48)
+                setTextColor(if (i == selected) DreamUi.canvas else muted)
                 background = bg(if (i == selected) accent else Color.TRANSPARENT, 16)
                 setOnClickListener { selected = i; showPage() }
             }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(3); marginEnd = dp(3) })
@@ -114,11 +111,11 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
 
     private fun overview() {
         val hero = card()
-        hero.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xff333252.toInt(), 0xff163b50.toInt())).apply { cornerRadius = dp(26).toFloat() }
-        hero.addView(text("DREAM MATERIAL  01", 11f, accent, true))
-        hero.addView(text("通透 · 流光 · 折射", 22f, ink, true))
+        hero.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xff1b3b42.toInt(), 0xff132a35.toInt())).apply { cornerRadius = dp(26).toFloat() }
+        hero.addView(text("FOR COLOROS 17", 11f, accent, true))
+        hero.addView(text("让系统界面，轻一点", 22f, ink, true))
         attachPreview(hero)
-        hero.addView(text("应用内材质示意 · 系统效果请在诊断页验证", 11f, muted))
+        hero.addView(text("实时材质预览 · 参数调整在材质工作室完成", 11f, muted))
         val control = card()
         master = Switch(this).apply {
             text = "启用 DreamGlass"; textSize = 18f; setTextColor(ink); minHeight = dp(48)
@@ -138,13 +135,12 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         control.addView(master)
         control.addView(text("总开关在目标进程启动时读取。首次启用后，先测试桌面，再测试 SystemUI。", 12f, muted))
         val features = card()
-        features.addView(text("把效果用在合适的地方", 17f, ink, true))
+        features.addView(text("界面与交互", 17f, ink, true))
         action(features, "通知与控制中心  ›", true) { advanced("master") }
         action(features, "桌面文件夹与 Dock  ›", true) { advanced("desktop") }
         action(features, "动画与空间感  ›", true) { advanced("tilt") }
         features.addView(text("桌面 17.3.12 的旧版弹簧与 Zuyqa 倾斜入口不适用；通知卡倾斜保留实验设置。", 12f, muted))
-        action(features, "完整高级设置  ›", true) { selected = 3; showPage() }
-        rootControls()
+        action(features, "全部设置  ›", true) { selected = 3; showPage() }
         val safe = card()
         safe.addView(text("回到系统原有质感", 17f, ink, true))
         safe.addView(text("暂停玻璃会还原系统材质。彻底停用请关闭总开关，并在 LSPosed 撤销作用域后手动重启。", 12f, muted))
@@ -152,7 +148,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, false) }
         }
         action(safe, "恢复玻璃效果", true) { write { it.putBoolean(Prefs.KEY_GLASS_ENABLE, true) } }
-        body.addView(text("DreamGlassforCOS17  ·  0.1.1 Refine 3\n基于 ColorOS16-LiquidGlass 的渲染能力继续开发", 11f, muted))
+        body.addView(text("DreamGlass  ${BuildConfig.VERSION_NAME}  ·  For ColorOS 17", 11f, muted).apply { setOnClickListener { startActivity(Intent(this@DreamActivity, LicenseActivity::class.java)) } })
     }
 
     private fun attachPreview(parent: LinearLayout) {
@@ -164,7 +160,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
 
     private fun material() {
         val canvas = card()
-        canvas.addView(text("光的实验室", 22f, ink, true))
+        canvas.addView(text("材质预览", 22f, ink, true))
         canvas.addView(text("先预览，再将材质写入系统配置。", 13f, muted))
         attachPreview(canvas)
         for (style in Styles.all) {
@@ -178,7 +174,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             }
         }
         val tuning = card()
-        tuning.addView(text("细调每一束光", 18f, ink, true))
+        tuning.addView(text("自定义参数", 18f, ink, true))
         action(tuning, "折射 / 色散 / 高光 / 模糊  ›", true) { advanced("material") }
         action(tuning, "背景采样与性能  ›", true) { advanced("background") }
         tuning.addView(text("预设只调整材质，不会自动启用总开关、Dock、锁屏或实验性动画。", 12f, muted))
@@ -193,14 +189,12 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
     }
 
     private fun settings() {
-        val intro = card()
-        intro.addView(text("完整控制台", 22f, ink, true))
-        intro.addView(text("进入子菜单调整参数，返回即回到 DreamGlass。", 13f, muted))
         val entry = card()
-        entry.addView(text("启动入口", 18f, ink, true))
+        entry.addView(text("应用入口", 17f, ink, true))
         val alias = android.content.ComponentName(this, "$packageName.LauncherAlias")
         val icon = Switch(this).apply {
             text = "显示桌面图标"; setTextColor(ink); minHeight = dp(48)
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
             isChecked = packageManager.getComponentEnabledSetting(alias) != android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
             setOnCheckedChangeListener { control, visible ->
                 try {
@@ -208,23 +202,24 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
                         if (visible) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                         android.content.pm.PackageManager.DONT_KILL_APP)
                     notice(if (visible) "桌面入口已显示" else "桌面入口已隐藏，可从 LSPosed 模块设置中恢复")
-                } catch (_: Exception) {
-                    control.setOnCheckedChangeListener(null)
-                    control.isChecked = !visible
-                    notice("切换失败，请重新打开设置重试")
-                }
+                } catch (_: Exception) { control.setOnCheckedChangeListener(null); control.isChecked = !visible; notice("切换失败，请稍后重试") }
             }
         }
         entry.addView(icon)
-        entry.addView(text("隐藏仅影响桌面入口；LSPosed 模块设置入口始终保留。", 12f, muted))
-        for ((key, label) in listOf(
-            "master" to "总开关与渲染", "material" to "液态玻璃材质", "background" to "背景采样与性能",
-            "text" to "文字与可读性", "mask" to "遮罩", "desktop" to "桌面文件夹与 Dock",
-            "seedling" to "流体云", "anim" to "桌面动画参数", "tilt" to "倾斜与透视",
-            "log" to "日志与导出", "config" to "配置管理", "about" to "开源参考信息"
-        )) {
-            val c = card()
-            action(c, "$label  ›", true) { advanced(key) }
+        entry.addView(text("隐藏后仍可通过 LSPosed 的模块设置打开 DreamGlass。", 12f, muted))
+        val groups = listOf(
+            "系统外观" to listOf(Triple("master", "渲染开关", "管理模块入口与玻璃效果"), Triple("material", "材质参数", "折射、鲜艳度与边缘高光"), Triple("text", "文字与可读性", "颜色跟随与对比度"), Triple("mask", "背景压暗", "平衡通透感与文字可读性")),
+            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹和底部程序坞"), Triple("seedling", "流体云卡片", "展开卡片的材质与形状"), Triple("tilt", "空间效果", "通知倾斜与透视"), Triple("anim", "桌面动画", "打开、关闭与打断参数")),
+            "维护与数据" to listOf(Triple("background", "采样与性能", "背景刷新、质量及省电策略"), Triple("log", "运行日志", "查看和导出排查记录"), Triple("config", "配置备份", "导入、导出与恢复参数"))
+        )
+        for ((title, rows) in groups) {
+            val c = card(); c.addView(text(title, 11f, accent, true))
+            for ((id, label, detail) in rows) DreamUi.row(c, label, detail) { advanced(id) }
+        }
+        rootControls()
+        val about = card()
+        DreamUi.row(about, "关于 DreamGlass", "${BuildConfig.VERSION_NAME} · 开源许可与项目来源") {
+            startActivity(Intent(this, LicenseActivity::class.java))
         }
     }
 
@@ -263,7 +258,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
 
     private fun diagnostics() {
         val d = card()
-        d.addView(text("连接 ≠ 已绘制", 21f, ink, true))
+        d.addView(text("目标进程记录", 21f, ink, true))
         d.addView(text("这里显示目标进程上次回传的实际阶段。首次绘制记录只证明绘制调用完成，视觉与稳定性仍需真机检查。", 13f, muted))
         action(d, "刷新运行记录", true) { showPage() }
         for ((pkg, label) in listOf("com.android.launcher" to "系统桌面", "com.android.systemui" to "SystemUI")) {
@@ -276,14 +271,12 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         tools.addView(text("验证与恢复", 18f, ink, true))
         tools.addView(text("1. 安装后先打开设置检查框架通道。\n2. 在 LSPosed 启用桌面作用域，保存总开关，手动重启桌面后检查文件夹。\n3. 确认可用后，再启用 SystemUI 并手动重启。\n4. 如遇异常，通过 LSPosed 禁用本模块并重启；不要清除桌面数据。", 13f, muted))
         action(tools, "复制诊断摘要", true) {
-            val report = "DreamGlassforCOS17 0.1.1 Refine3\n${frameworkLabel.text}\n" + listOf("com.android.launcher", "com.android.systemui").joinToString("\n") { "$it\n${readReport(it)}" }
+            val report = "DreamGlass ${BuildConfig.VERSION_NAME}\n${frameworkLabel.text}\n" + listOf("com.android.launcher", "com.android.systemui").joinToString("\n") { "$it\n${readReport(it)}" }
             (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DreamGlass", report))
             notice("已复制；摘要不含截图或应用内容")
         }
         action(tools, "详细日志与导出  ›", true) { advanced("log") }
-        action(tools, "许可证与开源来源", true) {
-            android.app.AlertDialog.Builder(this).setTitle("开源与授权").setMessage("DreamGlassforCOS17\n\n基于 AYwlilwYA/ColorOS16-LiquidGlass\nGPL-3.0，保留原作者版权。\n\n液态玻璃着色器包含 Kyant0/AndroidLiquidGlass 的 Apache-2.0 派生实现。完整声明见源码 THIRD-PARTY-NOTICES.md。\n\nElbowHitColor 仅作参考，未复制其代码或素材。").setPositiveButton("知道了", null).show()
-        }
+        action(tools, "开源许可与项目来源", true) { startActivity(Intent(this, LicenseActivity::class.java)) }
     }
 
     private fun readReport(pkg: String): String = try {

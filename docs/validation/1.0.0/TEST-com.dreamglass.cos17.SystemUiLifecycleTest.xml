@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.dreamglass.cos17.SystemUiLifecycleTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-23T06:18:18.822Z" time="0.003">
+  <properties/>
+  <testcase name="olderHostsUseTheirDeclaredApplicationLifecycle" classname="com.dreamglass.cos17.SystemUiLifecycleTest" time="0.001"/>
+  <testcase name="failedInitializationCanRetryWithoutLeavingGateLocked" classname="com.dreamglass.cos17.SystemUiLifecycleTest" time="0.001"/>
+  <testcase name="repeatedAndReentrantStartupDoesNotInstallDuplicateHooks" classname="com.dreamglass.cos17.SystemUiLifecycleTest" time="0.0"/>
+  <testcase name="modernImplementationOwnsTheChosenLifecycleMethod" classname="com.dreamglass.cos17.SystemUiLifecycleTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

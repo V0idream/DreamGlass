@@ -1,0 +1,4 @@
+# Preserve original third-party notice bytes and intentionally retained trailing blank lines.
+licenses/third-party/** -text whitespace=-blank-at-eof
+app/src/main/assets/legal/third-party/** -text whitespace=-blank-at-eof
+third_party_sources/*.jar -text

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="dream_canvas">#0B141D</color>
+    <color name="dream_surface">#14212C</color>
+    <color name="dream_raised">#1B2C37</color>
+    <color name="dream_ink">#EBF3F4</color>
+    <color name="dream_muted">#92A6B1</color>
+    <color name="dream_accent">#97E5D0</color>
+    <color name="dream_line">#2B3F4A</color>
+</resources>
