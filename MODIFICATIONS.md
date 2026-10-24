@@ -1,10 +1,14 @@
-# DreamGlass 1.0.2 — 修改声明
+# DreamGlass 1.0.3 — 修改声明
 
 修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-24。
 
 本作品基于 AYwlilwYA / ColorOS16-LiquidGlass `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，整体继续按 GNU GPLv3 分发。原作者及第三方组件的版权与许可均保留，详见 LICENSE、NOTICE 和 THIRD-PARTY-NOTICES.md。
 
 ## 修改范围
+
+- 1.0.3（2026-10-24）：增加按钮背景跟随系统模糊开关、后台共用预模糊图及对应测试；默认关闭，未更改现有 AGSL 光学算法。
+
+- 1.0.3（2026-10-24）：增加按钮背景跟随系统模糊开关、后台共用预模糊图及对应测试；默认关闭，未更改现有 AGSL 光学算法。
 
 - 1.0.2（2026-10-24）：将按钮透明度重做为背景模糊，移除材质 alpha 缩放，旧配置不再读取；补充模糊解析、渲染与应用预览验证。
 
@@ -59,6 +63,8 @@
 - `app/src/main/kotlin/com/coloros16/liquidglass/glass/GlassRegistry.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurCaptureHook.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt`
+- `app/src/main/kotlin/com/coloros16/liquidglass/hook/ButtonBackdropBlur.kt`
+- `app/src/main/kotlin/com/coloros16/liquidglass/hook/ButtonBackdropWorker.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/CaptureApi.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/ContentDrawBridge.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/Cos17Contract.kt`
@@ -106,6 +112,7 @@
 - `app/src/test/java/android/window/ScreenCaptureInternal.java`
 - `app/src/test/java/com/android/systemui/SystemUIApplication.java`
 - `app/src/test/java/com/android/systemui/application/impl/SystemUIApplicationImpl.java`
+- `app/src/test/java/com/dreamglass/cos17/ButtonBackdropBlurTest.java`
 - `app/src/test/java/com/dreamglass/cos17/ButtonBlurPolicyTest.java`
 - `app/src/test/java/com/dreamglass/cos17/CaptureApiTest.java`
 - `app/src/test/java/com/dreamglass/cos17/ContentDrawBridgeTest.java`
@@ -179,6 +186,22 @@
 - `docs/validation/1.0.2/rom-contracts.txt`
 - `docs/validation/1.0.2/shader-validation.json`
 - `docs/validation/1.0.2/summary.json`
+- `docs/validation/1.0.3/01-system-blur-switch-off.png`
+- `docs/validation/1.0.3/02-system-blur-switch-on.png`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.ButtonBackdropBlurTest.xml`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.ButtonBlurPolicyTest.xml`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.CaptureApiTest.xml`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.ContentDrawBridgeTest.xml`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.LocalTextContrastTest.xml`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.QsSeekbarCompatTest.xml`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.QsSurfacePolicyTest.xml`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.SystemUiLifecycleTest.xml`
+- `docs/validation/1.0.3/TEST-com.dreamglass.cos17.VolumeMaskGuardTest.xml`
+- `docs/validation/1.0.3/apk-signature.txt`
+- `docs/validation/1.0.3/offline-backdrop-comparison.png`
+- `docs/validation/1.0.3/offline-filter-timing.txt`
+- `docs/validation/1.0.3/release-build.txt`
+- `docs/validation/1.0.3/summary.json`
 - `docs/validation/apk-badging.txt`
 - `docs/validation/apk-manifest.txt`
 - `docs/validation/apk-signature.txt`
@@ -262,6 +285,8 @@
 - `scripts/qa_button_blur_emulator.py`
 - `scripts/qa_compact_material_emulator.py`
 - `scripts/qa_release_emulator.py`
+- `scripts/qa_system_button_blur_emulator.py`
+- `scripts/render_button_backdrop_fixture.java`
 - `scripts/validate_surface_shader.py`
 - `settings.gradle.kts`
 - `third_party_sources/README.md`

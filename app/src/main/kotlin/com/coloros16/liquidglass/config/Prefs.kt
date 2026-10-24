@@ -347,6 +347,10 @@ object Prefs {
     /** 系统控制中心模糊力度默认值（100 = 系统原值，不干预） */
     const val DEFAULT_CC_BLUR_STRENGTH = 8
 
+    /** 2026-10-24: use the panel's observed native blur radius/strength for QS button backdrops. */
+    const val KEY_CC_BLUR_ON_BUTTONS = "cc_blur_on_buttons"
+    const val DEFAULT_CC_BLUR_ON_BUTTONS = false
+
     /** 保留系统控制中心背景模糊：true = 恢复系统模糊（力度可调、阻止缩小）；
      *  false = 短路背景模糊链（背景透明露壁纸）。
      *  DreamGlass 默认 true，保留系统模糊作为安全回退；改动需重启 SystemUI 生效。 */

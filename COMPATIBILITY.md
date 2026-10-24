@@ -1,8 +1,8 @@
-# DreamGlass 1.0.2 · ColorOS 17 兼容性报告
+# DreamGlass 1.0.3 · ColorOS 17 兼容性报告
 
-本版将误实现的按钮透明度改为背景模糊控制，恢复 1.0.0 材质输出 alpha。保留紧凑参数页、局部文字反色及独立音量保护。36 项 JVM、9 项 ROM DEX 合约、release lint 和独立 API33 模拟器应用检查通过，详见 TEST_REPORT.md。
+新增控制中心按钮背景跟随系统模糊开关，默认关闭。42 项 JVM 测试、release Lint 和独立模拟器开关交互通过。系统模糊半径的观察沿用现有 ViewBlurProxy 挂点；以同参数后台高斯近似提供按钮背景，并非厂商原生滤镜的逐像素复用。
 
-1.0.2 尚未进行 ColorOS 真机验证；模拟器应用预览和静态 ROM 合约不等于 SystemUI 作用域验收。下方历史入口审计继续保留。
+本版没有 ColorOS 真机效果/性能验证。ROM 输入 APK 已不在原路径，9 项 DEX 合约未重跑；下方历史审计及 1.0.2 报告是历史证据。详见 TEST_REPORT.md。
 
 ## 样本信息
 

@@ -1973,6 +1973,16 @@ object BlurDrawHook {
      *  「要么透明、要么 100% 模糊，中间档位无效」）。改为原值基准后改写幂等，力度回 100 可精确复位。
      *  BlurConfig 由 ScrimControllerExImp.refreshBehindDrawable 重建 → 新 identityHashCode → 自动重记基准。 */
     private val ccBlurBaseRadius = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+    @Volatile private var observedPanelBlurRadius = 0
+    @Volatile private var cachedCcBlurOnButtons = Prefs.DEFAULT_CC_BLUR_ON_BUTTONS
+    @Volatile private var cachedCcBlurOnButtonsTimeMs = 0L
+    private val buttonBackdropWorker by lazy {
+        ButtonBackdropWorker(::postInvalidateHosts) { error ->
+            logThrottled("button-system-blur-failed", Log.WARN) {
+                "button system blur unavailable; keep independent material: ${error.javaClass.simpleName}"
+            }
+        }
+    }
     /** BlurConfig.blurRadius public 字段（模糊力度调整反射写） */
     private var mBlurConfigBlurRadiusField: Field? = null
     /** [spec/61 修正] ViewBlurProxy.view 字段（面板背景 ScrimView 判定） */
@@ -7379,6 +7389,28 @@ object BlurDrawHook {
         return v
     }
 
+    private fun ccBlurOnButtonsEnabled(): Boolean {
+        if (isPowerSaveGlassOff()) return false
+        val now = SystemClock.uptimeMillis()
+        if (now - cachedCcBlurOnButtonsTimeMs < CAPTURE_PREFS_CACHE_MS) return cachedCcBlurOnButtons
+        cachedCcBlurOnButtons = try {
+            api?.let { Prefs.read(it).getBoolean(Prefs.KEY_CC_BLUR_ON_BUTTONS, Prefs.DEFAULT_CC_BLUR_ON_BUTTONS) }
+                ?: Prefs.DEFAULT_CC_BLUR_ON_BUTTONS
+        } catch (_: Throwable) { Prefs.DEFAULT_CC_BLUR_ON_BUTTONS }
+        cachedCcBlurOnButtonsTimeMs = now
+        return cachedCcBlurOnButtons
+    }
+
+    /** Remember the ROM's positive original radius, never our previously scaled value. */
+    private fun observePanelBlurRadius(vbp: Any) {
+        val config = mViewBlurProxyBlurConfigField?.get(vbp) ?: return
+        val key = System.identityHashCode(config)
+        val base = ccBlurBaseRadius[key] ?: reflectBlurConfigRadius(config).takeIf { it > 0 } ?: return
+        if (ccBlurBaseRadius.size > 32) ccBlurBaseRadius.clear()
+        ccBlurBaseRadius.putIfAbsent(key, base)
+        observedPanelBlurRadius = base
+    }
+
     /** [spec/61 2026-08-23] 保留系统控制中心模糊开关（默认 true = 恢复系统模糊）。改动 ≤1s 生效。 */
     private fun keepSystemCcBlurEnabled(): Boolean {
         // [spec/85 省电模式] 省电开启 → 恒 true = 保留系统模糊（模块不插手）
@@ -7609,6 +7641,7 @@ object BlurDrawHook {
                             "cc-blur: ENTER this=${vbp?.javaClass?.name} view=${viewBlurProxyViewName(vbp)} isPanel=$isPanel keep=$keep strength=${ccBlurStrength()}%"
                         }
                         if (vbp != null && isPanel) {
+                            observePanelBlurRadius(vbp)
                             if (keep) applyCcBlurStrength(vbp)
                             // [2026-09-16 面板材质底色] 去掉 MixColor 灰底（那层灰不随模糊力度缩放）。
                             // 与 keep 无关地保持状态一致；keep=false 时整链短路，改了也看不到。
@@ -10800,7 +10833,7 @@ object BlurDrawHook {
             if (cg.bodyRect != wantBody) {
                 submitGeometryCompute(id, bounds, force = true)
             }
-            val srcRect = resolveLiveSrcRect(id, entry, bounds, cg) ?: return true
+            var srcRect = resolveLiveSrcRect(id, entry, bounds, cg) ?: return true
             // [doc/spec/100 方案2] metaball uniform 输入（cg.bodyRect==null → null → shader 零变化）
             val mbNow = resolveMetaBalls(entry, cg.bodyRect, cg.viewport)
             val applied = appliedUniformsMap[id]
@@ -10809,7 +10842,23 @@ object BlurDrawHook {
             val tiltNow = notifTiltAngleFor(entry?.hostViewRef?.get())
             val frame = cg.frame
             // 源变化判断用主线程【当前】快照实例 id（后台计算后快照可能换新 → 立即重建绑定新图，玻璃内容不冻结）
-            val currentBitmap = screenSnapshot?.bitmap
+            val snapshot = screenSnapshot
+            var currentBitmap = snapshot?.bitmap
+            var renderParams = cg.params
+            var sharedButtonBlur = false
+            if (snapshot != null && ccBlurOnButtonsEnabled() && isButtonBlurRegion(id) && observedPanelBlurRadius > 0) {
+                val radius = ButtonBackdropBlur.radius(observedPanelBlurRadius, ccBlurStrength())
+                val blurred = if (radius == 0f) snapshot.bitmap else
+                    buttonBackdropWorker.resolve(snapshot.bitmap, RectF(snapshot.region), radius)
+                if (blurred != null) {
+                    val sx = blurred.width.toFloat() / snapshot.bitmap.width
+                    val sy = blurred.height.toFloat() / snapshot.bitmap.height
+                    srcRect = RectF(srcRect.left * sx, srcRect.top * sy, srcRect.right * sx, srcRect.bottom * sy)
+                    currentBitmap = blurred
+                    renderParams = cg.params.copy(blurRadius = 0f)
+                    sharedButtonBlur = true
+                }
+            }
             val sourceBitmapId = if (currentBitmap != null) System.identityHashCode(currentBitmap) else 0
             val viewport = cg.viewport
             // [2026-08-13 优化] srcRect 已从 sourceChanged 拆出：滑动时 srcRect 每帧变但源位图未变，
@@ -10835,7 +10884,7 @@ object BlurDrawHook {
             val maskOverlayChanged = applied == null || applied.maskAlpha != cg.maskAlpha
             // [2026-09-16 doc/spec/67] 材质参数指纹变化（任何材质滑杆改动）→ 必须走全量 setUniforms 重设。
             // 否则材质改动被 `if (!uniformsChanged) return true` 吃掉，直到几何变化才生效。
-            val materialChanged = applied == null || applied.materialHash != cg.params.hashCode()
+            val materialChanged = applied == null || applied.materialHash != renderParams.hashCode()
             // [doc/spec/100 方案2] metaball 球心/半尺寸/blendShape 逐帧随动画变 → data class equals
             // 命中差异 → 必须走全量 setUniforms 重设 uBall1/2/3（否则桥位置停在上一帧）。
             val metaBallChanged = applied != null && applied.metaBalls != mbNow
@@ -10863,7 +10912,7 @@ object BlurDrawHook {
             val lowResShader: Shader?
             val lowResSrcRect: RectF
             if (sourceBitmapChanged) {
-                if (cg.isElementSource && currentBitmap != null) {
+                if ((sharedButtonBlur || cg.isElementSource) && currentBitmap != null) {
                     lowResShader = sourceShader
                     lowResSrcRect = srcRect
                 } else if (currentBitmap != null) {
@@ -10923,7 +10972,7 @@ object BlurDrawHook {
 
             // 全量：材质参数（cg.params，后台 buildParams 结果）已在后台算好，主线程只传值 setUniforms
             LiquidGlassShader.setUniforms(
-                shader, cg.params, sourceShader, lowResShader,
+                shader, renderParams, sourceShader, lowResShader,
                 sourceRect = srcRect,
                 lowResSourceRect = lowResSrcRect,
                 debugCoord = 0f,
@@ -10947,7 +10996,7 @@ object BlurDrawHook {
                 cornerIsConic = cg.cornerIsConic, cornerWeight = cg.cornerWeight, cornerRadius = cg.cornerRadius,
                 cornerConicBlend = cg.cornerConicBlend,
                 maskAlpha = cg.maskAlpha,
-                materialHash = cg.params.hashCode(),
+                materialHash = renderParams.hashCode(),
                 // [doc/spec/100 方案2] metaball 状态（球动 → 下帧 metaBallChanged 触发全量重设）
                 metaBalls = mbNow,
                 // [doc/spec/112] 倾斜角（θ 变 → 下帧 tiltChanged 继续走全量；归零后回轻量路径）

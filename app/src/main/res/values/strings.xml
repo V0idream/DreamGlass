@@ -92,6 +92,8 @@
     <string name="settings_cc_blur_strength">系统模糊力度（%）</string>
     <string name="settings_cc_blur_strength_value">%1$d%%</string>
     <string name="settings_cc_blur_strength_desc">调整控制中心背景模糊程度。100 为系统默认，0 为不模糊。</string>
+    <string name="settings_cc_blur_on_buttons">同时应用到按钮背景</string>
+    <string name="settings_cc_blur_on_buttons_desc">按钮背景跟随上方的系统模糊力度，保留玻璃折射、文字和图标。开启时替代按钮独立模糊；关闭后恢复原设置。</string>
     <string name="settings_keep_system_cc_blur">保留系统控制中心模糊（默认关）</string>
     <string name="settings_keep_system_cc_blur_desc">开启后保留系统模糊；关闭后背景透明，直接显示壁纸。</string>
     <string name="settings_remove_panel_mix_color">移除面板灰底</string>

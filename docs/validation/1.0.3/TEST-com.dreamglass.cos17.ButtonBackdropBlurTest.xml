@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.dreamglass.cos17.ButtonBackdropBlurTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-24T03:33:08.815Z" time="0.015">
+  <properties/>
+  <testcase name="zeroBlurPreservesEveryPixelAndDoesNotMutateInput" classname="com.dreamglass.cos17.ButtonBackdropBlurTest" time="0.003"/>
+  <testcase name="strongerBlurSuppressesHighFrequencyBackdropVariation" classname="com.dreamglass.cos17.ButtonBackdropBlurTest" time="0.008"/>
+  <testcase name="transparentHiddenColorCannotBleedIntoVisibleBackdrop" classname="com.dreamglass.cos17.ButtonBackdropBlurTest" time="0.0"/>
+  <testcase name="strengthUsesOriginalNativeRadiusAndDoesNotCompound" classname="com.dreamglass.cos17.ButtonBackdropBlurTest" time="0.0"/>
+  <testcase name="flatBackdropAndClampedEdgesStayFlatForLargeRadii" classname="com.dreamglass.cos17.ButtonBackdropBlurTest" time="0.001"/>
+  <testcase name="blurSpreadsFineDetailWithoutFadingOpaqueCoverage" classname="com.dreamglass.cos17.ButtonBackdropBlurTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

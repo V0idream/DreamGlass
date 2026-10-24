@@ -1053,6 +1053,14 @@ class SettingsActivity : AppCompatActivity() {
             format = { v -> getString(R.string.settings_cc_blur_strength_value, v) },
         )
         // 保留系统控制中心模糊（默认开）
+        val switchButtonBlur = view.findViewById<Switch>(R.id.switchCcBlurOnButtons)
+        val buttonBlurListener = CompoundButton.OnCheckedChangeListener { _, checked ->
+            writePrefBoolean(Prefs.KEY_CC_BLUR_ON_BUTTONS, checked)
+        }
+        switchButtonBlur.setOnCheckedChangeListener(buttonBlurListener)
+        refreshBooleanSwitch(switchButtonBlur, buttonBlurListener,
+            Prefs.KEY_CC_BLUR_ON_BUTTONS, Prefs.DEFAULT_CC_BLUR_ON_BUTTONS)
+
         val switchKeepBlur = view.findViewById<Switch>(R.id.switchKeepSystemCcBlur)
         val keepBlurListener = CompoundButton.OnCheckedChangeListener { _, checked ->
             writePrefBoolean(Prefs.KEY_KEEP_SYSTEM_CC_BLUR, checked)
