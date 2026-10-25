@@ -1,0 +1,176 @@
+{
+  "product": "DreamGlass",
+  "supportedRelease": "For ColorOS 17",
+  "version": "1.0.5",
+  "versionCode": 1000005,
+  "package": "com.dreamglass.cos17",
+  "debuggable": false,
+  "apkSha256": "f9ec89c2c0f1d242abf779e68d7391cd21bf7a9f70516925cecfe43abc8c5c1f",
+  "runtimeComponents": 57,
+  "retainedNoticeEntries": 12,
+  "unitTestsPassed": 54,
+  "lintErrors": 0,
+  "lintWarnings": 198,
+  "parameterBindingLayoutsPreserved": 15,
+  "opticalBaseline": "25c47e7",
+  "originalOpticsRestored": true,
+  "materialAlphaControlRemoved": true,
+  "physicalDeviceAccessed": false,
+  "colorOsRuntimeTested": false,
+  "iconRenderer": {
+    "serial": "emulator-5580",
+    "androidRendererTested": true,
+    "xposedHookExecuted": false,
+    "physicalDeviceAccessed": false,
+    "colorOsSystemUiTested": false,
+    "rows": 6,
+    "localBlackWhitePassed": true,
+    "coloredStatusPreserved": true,
+    "originalAlphaPreserved": true,
+    "untintedImagesPreserved": true,
+    "missingBackgroundPreserved": true,
+    "disabledIconsPreserved": true,
+    "toggleOffRestoresNativeDrawing": true,
+    "canvasRestoredAfterException": true,
+    "drawableMutationDetected": false,
+    "buttonBackdropsUnchanged": true,
+    "onRgb": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        0,
+        102,
+        255
+      ],
+      [
+        0,
+        102,
+        255
+      ],
+      [
+        127,
+        127,
+        127
+      ],
+      [
+        128,
+        128,
+        128
+      ],
+      [
+        255,
+        0,
+        0
+      ],
+      [
+        255,
+        0,
+        0
+      ],
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        136,
+        136,
+        136
+      ],
+      [
+        136,
+        136,
+        136
+      ]
+    ],
+    "offRgb": [
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        0,
+        102,
+        255
+      ],
+      [
+        0,
+        102,
+        255
+      ],
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        128,
+        128,
+        128
+      ],
+      [
+        255,
+        0,
+        0
+      ],
+      [
+        255,
+        0,
+        0
+      ],
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        136,
+        136,
+        136
+      ],
+      [
+        136,
+        136,
+        136
+      ]
+    ]
+  },
+  "ui": {
+    "serial": "emulator-5580",
+    "physicalDeviceAccessed": false,
+    "colorOsSystemUiTested": false,
+    "defaultOffPassed": true,
+    "toggleOnOffPassed": true,
+    "textSwitchUnchanged": true,
+    "navigationBackPassed": true,
+    "frameworkPreferencePersistenceTested": false
+  },
+  "debugProbesExcludedFromRelease": true,
+  "romContractsRerun": false,
+  "xposedHookExecuted": false,
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96"
+}

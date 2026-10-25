@@ -299,6 +299,10 @@ object Prefs {
     /** 文字反转取色开关默认值（true = 默认开启） */
     const val DEFAULT_TEXT_CONTRAST_ENABLE = true
 
+    /** 2026-10-25: adapt neutral QS icon foregrounds independently from text contrast. */
+    const val KEY_QS_ICON_CONTRAST = "qs_icon_contrast"
+    const val DEFAULT_QS_ICON_CONTRAST = false
+
     // ---------- 黑遮罩 + 白字（doc/spec/35 + spec/40 + spec/41，2026-08-13；替代 spec/21 逐文字采样反色） ----------
     /** 黑遮罩总开关：true=开启（默认，保证玻璃上文字可读性）；false=不叠加黑遮罩压暗背景。
      *  [spec/63 2026-08-26 语义收窄] 仅控制**背景压暗**（shader uMaskAlpha / scrim 黑 tint）；

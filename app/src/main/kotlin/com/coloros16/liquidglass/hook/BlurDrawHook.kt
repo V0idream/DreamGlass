@@ -2382,6 +2382,7 @@ object BlurDrawHook {
         // [spec/86 音量条] 进度填充层登记（音量/亮度条玻璃高光被进度填充盖住的修复）
         mountQsSeekBarActiveDrawable(api, classLoader)
         QsSurfaceHook.install(api, classLoader) { Prefs.glassEnabled(api) && !isPowerSaveGlassOff() }
+        QsIconContrastHook.install(api, qsIconContrastRenderer)
         // [spec/21 文字反转取色 + spec/35 黑遮罩白字 + spec/63 统一通道] hook 挂载条件：
         // - textContrastEnabled：挂 QsColorUtil（亮度判定）+ TextView#setTextColor（反转取色）+ onDraw 节流重采样。
         // - 仅 maskEnabled / 仅 textForceWhiteEnabled（spec/63 强制白独立开关）：仍须挂 TextView#setTextColor
@@ -8611,6 +8612,35 @@ object BlurDrawHook {
      *  被误判"玻璃区域内" → 文字变色逻辑（mask 开强制白 / mask 关 systemQsColorInjected 注入黑）误伤。
      *  scoped：仅顶部状态栏条带；通知卡/媒体卡/QS tile 等玻璃文字（y ≥ statusBarBottom）不受影响，
      *  spec/38（ScrimView 不写 map）与 spec/47（heads-up 跟随）语义均保留。 */
+    @Volatile private var cachedIconContrast = Prefs.DEFAULT_QS_ICON_CONTRAST
+    @Volatile private var cachedIconContrastAt = 0L
+    private fun qsIconContrastActive(): Boolean {
+        if (isPowerSaveGlassOff() || !Prefs.glassEnabled(api)) return false
+        val now = SystemClock.uptimeMillis()
+        if (now - cachedIconContrastAt < 500L) return cachedIconContrast
+        val before = cachedIconContrast
+        cachedIconContrast = try {
+            api?.let {
+                val prefs = Prefs.read(it)
+                prefs.getBoolean(Prefs.KEY_QS_ICON_CONTRAST, Prefs.DEFAULT_QS_ICON_CONTRAST) &&
+                    prefs.getBoolean(Prefs.KEY_MASTER, false)
+            } ?: false
+        } catch (_: Throwable) { false }
+        cachedIconContrastAt = now
+        if (cachedIconContrast && !before) screenSnapshot?.let { runTextContrastScanAsync(it) }
+        return cachedIconContrast
+    }
+
+    private val qsIconContrastRenderer by lazy {
+        QsIconContrastRenderer(::qsIconContrastActive, { panelExpansionActive }, { localContrastFrame }) { view, color ->
+            if (isInStatusBarArea(view)) null else {
+                val xy = IntArray(2); view.getLocationOnScreen(xy)
+                val x = xy[0] + view.width / 2; val y = xy[1] + view.height / 2
+                if (y < statusBarBottom()) null else localRegionTextColor(color, x, y)
+            }
+        }
+    }
+
     private class LocalContrastFrame(val map: BackgroundContrastMap, val region: RectF, val capturedAtMs: Long)
     private class LocalRegionColor(val frame: LocalContrastFrame, val bounds: RectF, val dim: Float, val rgb: Int)
     @Volatile private var localContrastFrame: LocalContrastFrame? = null
@@ -9112,7 +9142,7 @@ object BlurDrawHook {
         // 并发写同一份 qsPixelBuf 且**无单飞闸**；复用同一道 CAS 单飞 + updateQsBrightness 的互斥锁。
         // 已有扫描在跑时本次补算跳过（在跑的那次会照常 post resample，效果等价）。
         val bg = screenSnapshot
-        if (textContrastEnabled && bg != null) {
+        if ((textContrastEnabled || qsIconContrastActive()) && bg != null) {
             try {
                 runTextContrastScanAsync(bg)
             } catch (t: Throwable) {
@@ -12759,7 +12789,7 @@ object BlurDrawHook {
             screenSnapshot = bg
             RuntimeDiagnostics.mark("source", "成功取得系统背景缓冲")
             if (mainThreadSync) diagFirstLog("snapshot-replace", " source=$source")
-            if (textContrastEnabled && !isMotionActive) {
+            if ((textContrastEnabled || qsIconContrastActive()) && !isMotionActive) {
                 runTextContrastScanAsync(bg)
             }
             val exclTag = if (shade?.isValid == true) "excl shade" else "force full"
@@ -12823,7 +12853,10 @@ object BlurDrawHook {
             Thread {
                 try {
                     updateQsBrightness(bg)
-                    mainHandler().post { resampleAllTextContrast() }
+                    mainHandler().post {
+                        if (textContrastEnabled) resampleAllTextContrast()
+                        qsIconContrastRenderer.invalidateTracked()
+                    }
                 } catch (t: Throwable) {
                     Lg.e(TAG, "bg-element: text contrast scan failed", t)
                 } finally {

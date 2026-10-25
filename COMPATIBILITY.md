@@ -1,8 +1,8 @@
-# DreamGlass 1.0.4 · ColorOS 17 兼容性报告
+# DreamGlass 1.0.5 · ColorOS 17 兼容性报告
 
-修复 BitmapShader 作为 RuntimeShader 输入时默认最近邻放大的像素块，并改善共享按钮背景的工作图密度、模糊精度和半径连续性。48 项 JVM、release Lint、实际 Android GPU 采样对照及正式 APK 模拟器预览验证通过。AGSL 光学代码和系统 Hook 接口保持不变。
+增加 QS 中性色图标的独立黑白适配开关，复用文字的局部背景亮度图。54 项 JVM、release Lint、Android 生产渲染器图标对照和正式 APK 开关交互通过。1.0.4 的模糊修复和 AGSL 光学代码保留。
 
-本版没有 ColorOS 真机画质或性能验收。原 ROM APK 不在提供路径，9 项 DEX 合约未重跑。详见 TEST_REPORT.md；下方审计及旧版本验证报告属于历史证据。
+本版未执行真实 LSPosed/SystemUI Hook 或 ColorOS 真机验收。无有效区域/背景、未知 tint 通道、自绘/动画图标将保留原样。原 ROM APK 不在提供路径，9 项 DEX 合约未重跑。详见 TEST_REPORT.md；下方历史审计不是本次新增图标 Hook 的运行证明。
 
 ## 样本信息
 

@@ -1,10 +1,12 @@
-# DreamGlass 1.0.4 — 修改声明
+# DreamGlass 1.0.5 — 修改声明
 
 修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-25。
 
 本作品基于 AYwlilwYA / ColorOS16-LiquidGlass `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，整体继续按 GNU GPLv3 分发。原作者及第三方组件的版权与许可均保留，详见 LICENSE、NOTICE 和 THIRD-PARTY-NOTICES.md。
 
 ## 修改范围
+
+- 1.0.5（2026-10-25）：新增中性色按钮图标自动黑白适配、独立开关、公共 tint 参数观察及 Android 绘制/恢复测试；不改既有玻璃算法。
 
 - 1.0.4（2026-10-25）：显式线性纹理采样、改善共享背景尺寸和模糊精度；增加仅在调试包中的 Android GPU 回归及画质测试。
 
@@ -42,6 +44,7 @@
 - `app/libs/libxposed-interface-102.0.0.aar`
 - `app/libs/libxposed-service-102.0.0.aar`
 - `app/src/debug/AndroidManifest.xml`
+- `app/src/debug/kotlin/com/dreamglass/cos17/IconContrastProbeActivity.kt`
 - `app/src/debug/kotlin/com/dreamglass/cos17/SamplingProbeActivity.kt`
 - `app/src/main/AndroidManifest.xml`
 - `app/src/main/assets/legal/Apache-2.0.txt`
@@ -76,6 +79,8 @@
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/LauncherHook.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/LocalTextContrast.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/LockScreenClockHook.kt`
+- `app/src/main/kotlin/com/coloros16/liquidglass/hook/QsIconContrastHook.kt`
+- `app/src/main/kotlin/com/coloros16/liquidglass/hook/QsIconContrastPolicy.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSeekbarCompat.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/QsSurfaceHook.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/SystemUiLifecycle.kt`
@@ -121,6 +126,7 @@
 - `app/src/test/java/com/dreamglass/cos17/CaptureApiTest.java`
 - `app/src/test/java/com/dreamglass/cos17/ContentDrawBridgeTest.java`
 - `app/src/test/java/com/dreamglass/cos17/LocalTextContrastTest.java`
+- `app/src/test/java/com/dreamglass/cos17/QsIconContrastPolicyTest.java`
 - `app/src/test/java/com/dreamglass/cos17/QsSeekbarCompatTest.java`
 - `app/src/test/java/com/dreamglass/cos17/QsSurfacePolicyTest.java`
 - `app/src/test/java/com/dreamglass/cos17/SystemUiLifecycleTest.java`
@@ -225,6 +231,24 @@
 - `docs/validation/1.0.4/offline-filter-timing.txt`
 - `docs/validation/1.0.4/release-build.txt`
 - `docs/validation/1.0.4/summary.json`
+- `docs/validation/1.0.5/01-icon-switch-off.png`
+- `docs/validation/1.0.5/01-icons-auto-on.png`
+- `docs/validation/1.0.5/02-icon-switch-on.png`
+- `docs/validation/1.0.5/02-icons-auto-off.png`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.ButtonBackdropBlurTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.ButtonBlurPolicyTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.CaptureApiTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.ContentDrawBridgeTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.LocalTextContrastTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.QsIconContrastPolicyTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.QsSeekbarCompatTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.QsSurfacePolicyTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.SystemUiLifecycleTest.xml`
+- `docs/validation/1.0.5/TEST-com.dreamglass.cos17.VolumeMaskGuardTest.xml`
+- `docs/validation/1.0.5/apk-signature.txt`
+- `docs/validation/1.0.5/probe-build.txt`
+- `docs/validation/1.0.5/release-build.txt`
+- `docs/validation/1.0.5/summary.json`
 - `docs/validation/apk-badging.txt`
 - `docs/validation/apk-manifest.txt`
 - `docs/validation/apk-signature.txt`
@@ -307,6 +331,8 @@
 - `scripts/generate_legal_bundle.py`
 - `scripts/qa_button_blur_emulator.py`
 - `scripts/qa_compact_material_emulator.py`
+- `scripts/qa_icon_contrast_gpu_emulator.py`
+- `scripts/qa_icon_contrast_ui_emulator.py`
 - `scripts/qa_release_emulator.py`
 - `scripts/qa_sampling_gpu_emulator.py`
 - `scripts/qa_system_button_blur_emulator.py`

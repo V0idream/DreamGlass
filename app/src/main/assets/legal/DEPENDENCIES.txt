@@ -1,4 +1,4 @@
-DreamGlass 1.0.4 — 实际发布依赖清单
+DreamGlass 1.0.5 — 实际发布依赖清单
 
 下列运行时组件按 Apache License 2.0 分发；许可全文另附。版本来自 Gradle 的 releaseRuntimeClasspath。
 重复的 JAR/AAR 变体按同一坐标合并，不把仅编译/测试工具误称为 APK 运行库。

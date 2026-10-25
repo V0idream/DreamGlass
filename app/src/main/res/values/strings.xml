@@ -99,6 +99,8 @@
     <string name="settings_remove_panel_mix_color">移除面板灰底</string>
     <string name="settings_remove_panel_mix_color_desc">去掉系统面板背景的灰色底，模糊效果仍然保留。</string>
     <string name="settings_text_contrast">文字自动反色</string>
+    <string name="settings_qs_icon_contrast">按钮图标自动反色</string>
+    <string name="settings_qs_icon_contrast_desc">控制中心的中性色图标按所在按钮背景选择黑色或白色。独立于文字开关，保留彩色状态、头像与原有透明度。</string>
     <string name="settings_text_contrast_desc">按各按钮或卡片自己的背景区域选择黑字或白字；优先于强制白字。保留彩色文字和状态栏原色。</string>
     <string name="settings_heads_up_text_follow">横幅文字跟随背景</string>
     <string name="settings_heads_up_text_follow_desc">弹出通知的文字颜色：开启遮罩时强制白色，关闭时按背景明暗自动调整。</string>

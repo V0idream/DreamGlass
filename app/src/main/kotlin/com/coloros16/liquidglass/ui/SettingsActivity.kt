@@ -1085,6 +1085,13 @@ class SettingsActivity : AppCompatActivity() {
 
     /** 文字与可读性：文字反色 / 弹出通知文字跟随。 */
     private fun bindText(view: View) {
+        val switchIcons = view.findViewById<Switch>(R.id.switchQsIconContrast)
+        val iconListener = CompoundButton.OnCheckedChangeListener { _, checked ->
+            writePrefBoolean(Prefs.KEY_QS_ICON_CONTRAST, checked)
+        }
+        switchIcons.setOnCheckedChangeListener(iconListener)
+        refreshBooleanSwitch(switchIcons, iconListener, Prefs.KEY_QS_ICON_CONTRAST, Prefs.DEFAULT_QS_ICON_CONTRAST)
+
         // 文字背景反转取色开关（doc/spec/21；改动需重启 SystemUI 生效）
         val switchTextContrast = view.findViewById<Switch>(R.id.switchTextContrast)
         val textContrastListener = CompoundButton.OnCheckedChangeListener { _, checked ->
