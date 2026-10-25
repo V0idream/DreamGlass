@@ -1,6 +1,6 @@
-DreamGlass 1.0.3 — Copyright and attribution notices
+DreamGlass 1.0.4 — Copyright and attribution notices
 
-Copyright © 2026 DreamGlass contributors. Modifications dated 2026-10-24.
+Copyright © 2026 DreamGlass contributors. Modifications dated 2026-10-25.
 Combined application distributed under GNU GPL version 3; see LICENSE.
 No warranty is provided. Recipients may modify and redistribute under GPLv3.
 

@@ -1,57 +1,76 @@
 package com.coloros16.liquidglass.hook
 
+import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
-/** DreamGlass, 2026-10-24. Bounded three-box Gaussian approximation on a worker-sized image.
- * Pixels enter/leave as straight ARGB; filtering uses premultiplied channels to avoid color halos. */
+/** DreamGlass, 2026-10-25. Three fractional boxes approximate a Gaussian.
+ * Preserve premultiplied floating-point channels through all passes; quantize only at output. */
 object ButtonBackdropBlur {
     fun radius(base: Int, strength: Int): Float =
         if (base <= 0) 0f else base.toFloat() * strength.coerceIn(0, 200) / 100f
 
+    /** Prefer <=4 screen pixels per working pixel; preserve more detail for weak blur.
+     * Never enlarge the source. Bound memory to 524288 pixels and longest edge to 1536. */
+    fun workingSize(w: Int, h: Int, screenW: Float, screenH: Float, radius: Float): IntArray {
+        require(w > 0 && h > 0 && screenW > 0 && screenH > 0)
+        val step = (radius / 6f).coerceIn(1f, 4f)
+        val scale = minOf(1.0, screenW.toDouble() / (step * w), screenH.toDouble() / (step * h),
+            1536.0 / maxOf(w, h), sqrt(524288.0 / (w.toDouble() * h)))
+        return intArrayOf(floor(w * scale).toInt().coerceAtLeast(1), floor(h * scale).toInt().coerceAtLeast(1))
+    }
+
     fun apply(pixels: IntArray, width: Int, height: Int, sigma: Float): IntArray {
         require(width > 0 && height > 0 && pixels.size == width * height)
         if (!sigma.isFinite() || sigma <= 0f) return pixels.copyOf()
-        val radius = sigma.roundToInt().coerceIn(1, 1024)
-        var source = IntArray(pixels.size) { i ->
-            val p = pixels[i]; val a = p ushr 24
-            (a shl 24) or ((((p ushr 16 and 255) * a + 127) / 255) shl 16) or
-                ((((p ushr 8 and 255) * a + 127) / 255) shl 8) or (((p and 255) * a + 127) / 255)
+        val variance = sigma.coerceAtMost(1024f).toDouble().let { it * it } / 3.0
+        val r = floor((sqrt(1.0 + 12.0 * variance) - 1.0) / 2.0).toInt()
+        val count = 2 * r + 1
+        // Weighted outer taps match variance continuously, including subpixel radii.
+        val edge = ((variance * count - r.toDouble() * (r + 1) * count / 3.0) /
+            (2.0 * ((r + 1).toDouble() * (r + 1) - variance))).coerceIn(0.0, 1.0).toFloat()
+        var source = FloatArray(pixels.size * 4)
+        for (i in pixels.indices) {
+            val p = pixels[i]; val a = (p ushr 24).toFloat(); val j = i * 4
+            source[j] = a
+            source[j + 1] = (p ushr 16 and 255) * a / 255f
+            source[j + 2] = (p ushr 8 and 255) * a / 255f
+            source[j + 3] = (p and 255) * a / 255f
         }
-        var target = IntArray(pixels.size)
+        var target = FloatArray(source.size)
         repeat(3) {
-            box(source, target, width, height, radius, true)
+            box(source, target, width, height, r, edge, true)
             val swap = source; source = target; target = swap
-            box(source, target, width, height, radius, false)
+            box(source, target, width, height, r, edge, false)
             val swap2 = source; source = target; target = swap2
         }
-        return IntArray(source.size) { i ->
-            val p = source[i]; val a = p ushr 24
-            fun straight(shift: Int) = if (a == 0) 0 else
-                (((p ushr shift and 255) * 255 + a / 2) / a).coerceAtMost(255)
-            (a shl 24) or (straight(16) shl 16) or (straight(8) shl 8) or straight(0)
+        return IntArray(pixels.size) { i ->
+            val j = i * 4; val alpha = source[j].coerceIn(0f, 255f); val a = alpha.roundToInt()
+            fun straight(c: Int) = if (a == 0) 0 else
+                (source[j + c] * 255f / alpha).roundToInt().coerceIn(0, 255)
+            (a shl 24) or (straight(1) shl 16) or (straight(2) shl 8) or straight(3)
         }
     }
 
-    private fun box(src: IntArray, dst: IntArray, w: Int, h: Int, r: Int, horizontal: Boolean) {
+    private fun box(src: FloatArray, dst: FloatArray, w: Int, h: Int, r: Int, edge: Float, horizontal: Boolean) {
         val length = if (horizontal) w else h
         val lines = if (horizontal) h else w
-        val count = 2 * r + 1
+        val weight = 2 * r + 1 + 2 * edge
         for (line in 0 until lines) {
-            fun index(x: Int) = if (horizontal) line * w + x.coerceIn(0, length - 1)
-                else x.coerceIn(0, length - 1) * w + line
-            var a = 0; var red = 0; var green = 0; var blue = 0
+            fun index(x: Int) = (if (horizontal) line * w + x.coerceIn(0, length - 1)
+                else x.coerceIn(0, length - 1) * w + line) * 4
+            val sums = FloatArray(4)
             for (x in -r..r) {
-                val p = src[index(x)]
-                a += p ushr 24; red += p ushr 16 and 255; green += p ushr 8 and 255; blue += p and 255
+                val j = index(x)
+                for (c in 0..3) sums[c] += src[j + c]
             }
             for (x in 0 until length) {
-                dst[index(x)] = ((a / count) shl 24) or ((red / count) shl 16) or
-                    ((green / count) shl 8) or (blue / count)
-                val remove = src[index(x - r)]; val add = src[index(x + r + 1)]
-                a += (add ushr 24) - (remove ushr 24)
-                red += (add ushr 16 and 255) - (remove ushr 16 and 255)
-                green += (add ushr 8 and 255) - (remove ushr 8 and 255)
-                blue += (add and 255) - (remove and 255)
+                val j = index(x); val lo = index(x - r - 1); val hi = index(x + r + 1)
+                val remove = index(x - r); val add = index(x + r + 1)
+                for (c in 0..3) {
+                    dst[j + c] = (sums[c] + edge * (src[lo + c] + src[hi + c])) / weight
+                    sums[c] += src[add + c] - src[remove + c]
+                }
             }
         }
     }

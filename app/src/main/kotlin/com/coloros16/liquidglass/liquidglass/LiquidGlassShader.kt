@@ -14,7 +14,7 @@
    limitations under the License.
  */
 /* Modified for Android AGSL / ColorOS by ColorOS16-LiquidGlass and DreamGlass contributors.
- * DreamGlass modifications: 2026-10-23. See THIRD-PARTY-NOTICES.md and MODIFICATIONS.md.
+ * DreamGlass modifications: 2026-10-23, 2026-10-25. See THIRD-PARTY-NOTICES.md and MODIFICATIONS.md.
  * The combined DreamGlass application is distributed under GPL-3.0. */
 package com.coloros16.liquidglass.liquidglass
 
@@ -1205,7 +1205,11 @@ object LiquidGlassShader {
      * 由 [setUniforms] 传入），此处仅提供 CLAMP 位图采样。
      */
     fun createSourceBitmapShader(bitmap: Bitmap): BitmapShader =
-        BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+            // RuntimeShader children default to NEAREST, regardless of Paint.isFilterBitmap.
+            // Interpolate explicitly so magnified backdrop pixels do not become square blocks.
+            setFilterMode(BitmapShader.FILTER_MODE_LINEAR)
+        }
 
     /**
      * 构造 uSourceLowRes 用的 BitmapShader：1/4 降采样原图 + 单位矩阵（不做 setRectToRect 映射）。
@@ -1215,5 +1219,5 @@ object LiquidGlassShader {
      * @param lowResBitmap 1/4 降采样原图（原图 `Bitmap.createScaledBitmap(w/4, h/4, true)`）。
      */
     fun createLowResSourceBitmapShader(lowResBitmap: Bitmap): BitmapShader =
-        BitmapShader(lowResBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        createSourceBitmapShader(lowResBitmap)
 }

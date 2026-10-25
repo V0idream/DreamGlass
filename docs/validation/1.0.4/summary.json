@@ -1,0 +1,70 @@
+{
+  "product": "DreamGlass",
+  "supportedRelease": "For ColorOS 17",
+  "version": "1.0.4",
+  "versionCode": 1000004,
+  "package": "com.dreamglass.cos17",
+  "debuggable": false,
+  "apkSha256": "90aae26895464e465e0af243b065e20db10bdeacf6d896f4ef6178791338b611",
+  "runtimeComponents": 57,
+  "retainedNoticeEntries": 12,
+  "unitTestsPassed": 48,
+  "lintErrors": 0,
+  "lintWarnings": 196,
+  "parameterBindingLayoutsPreserved": 15,
+  "opticalBaseline": "25c47e7",
+  "originalOpticsRestored": true,
+  "materialAlphaControlRemoved": true,
+  "physicalDeviceAccessed": false,
+  "colorOsRuntimeTested": false,
+  "gpuSampling": {
+    "serial": "emulator-5580",
+    "androidRuntimeShaderGpuTested": true,
+    "physicalDeviceAccessed": false,
+    "colorOsSystemUiTested": false,
+    "panels": [
+      {
+        "panel": "nearest-reference",
+        "row": 296,
+        "distinctGrayLevels": 32,
+        "largestAdjacentJump": 8
+      },
+      {
+        "panel": "production-source",
+        "row": 556,
+        "distinctGrayLevels": 249,
+        "largestAdjacentJump": 1
+      },
+      {
+        "panel": "production-low-res",
+        "row": 816,
+        "distinctGrayLevels": 249,
+        "largestAdjacentJump": 1
+      }
+    ],
+    "productionBitmapInputsInterpolate": true
+  },
+  "ui": {
+    "serial": "emulator-5580",
+    "physicalDeviceAccessed": false,
+    "colorOsHookTested": false,
+    "blurRadiusEndpointsPassed": [
+      0,
+      32,
+      64
+    ],
+    "oldTransparencyControlAbsent": true,
+    "previewTopFraction": 0.1403985507246377,
+    "parameterScrollHeightFraction": 0.6702898550724637,
+    "navigationBackPassed": true,
+    "frameworkPreferencePersistenceTested": false,
+    "appCrashDetected": false,
+    "screenshots": 4
+  },
+  "debugProbeExcludedFromRelease": true,
+  "maximumIntermediatePixels": 524288,
+  "maximumIntermediateEdge": 1536,
+  "romContractsRerun": false,
+  "colorOsVisualTested": false,
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96"
+}

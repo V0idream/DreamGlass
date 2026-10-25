@@ -48,6 +48,7 @@ with zipfile.ZipFile(args.apk) as apk:
         assert hashlib.sha256(data).hexdigest() == notice['sha256']
     dex = b''.join(apk.read(n) for n in entries if re.fullmatch(r'classes\d*\.dex', n))
     assert b'com/coloros16/liquidglass/update/UpdateChecker;' not in dex
+    assert b'SamplingProbeActivity' not in dex, 'Debug sampling probe leaked into release'
 
 shader_path = 'app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt'
 shader = (root / shader_path).read_text(encoding='utf-8')
@@ -72,7 +73,7 @@ for layout in (root / 'app/src/main/res/layout').glob('view_*.xml'):
     layout_count += 1
 
 unit = [ET.parse(f).getroot() for f in (root / 'app/build/test-results/testReleaseUnitTest').glob('TEST-*.xml')]
-assert sum(int(t.get('tests')) for t in unit) == 42
+assert sum(int(t.get('tests')) for t in unit) == 48
 assert sum(int(t.get('failures')) + int(t.get('errors')) for t in unit) == 0
 lint = ET.parse(root / 'app/build/reports/lint-results-release.xml').getroot()
 lint_errors = [n for n in lint if n.get('severity') in ('Error', 'Fatal')]
@@ -83,7 +84,7 @@ report = {
     'apkSha256': hashlib.sha256(args.apk.read_bytes()).hexdigest(),
     'runtimeComponents': len(inventory['components']),
     'retainedNoticeEntries': len(inventory['retainedOriginalNotices']),
-    'unitTestsPassed': 42, 'lintErrors': 0,
+    'unitTestsPassed': 48, 'lintErrors': 0,
     'lintWarnings': sum(n.get('severity') == 'Warning' for n in lint),
     'parameterBindingLayoutsPreserved': layout_count,
     'opticalBaseline': baseline, 'originalOpticsRestored': True, 'materialAlphaControlRemoved': True,

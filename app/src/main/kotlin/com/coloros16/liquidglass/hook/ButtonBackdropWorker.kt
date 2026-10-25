@@ -32,10 +32,18 @@ internal class ButtonBackdropWorker(private val invalidate: () -> Unit, private 
                     android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
                     var small = source
                     if (source.config == Bitmap.Config.HARDWARE) small = source.copy(Bitmap.Config.ARGB_8888, false)
-                    // Successive halves preserve fine detail better than a single large downsample.
-                    while (maxOf(small.width, small.height) > 384) {
+                    val size = ButtonBackdropBlur.workingSize(source.width, source.height,
+                        screen.width(), screen.height(), radius)
+                    // Stop above the target, then resize exactly; never overshoot to a tiny mip.
+                    while (small.width / 2 >= size[0] && small.height / 2 >= size[1] &&
+                        (small.width > size[0] || small.height > size[1])) {
                         val next = Bitmap.createScaledBitmap(small, (small.width / 2).coerceAtLeast(1),
                             (small.height / 2).coerceAtLeast(1), true)
+                        if (small !== source && small !== next) small.recycle()
+                        small = next
+                    }
+                    if (small.width != size[0] || small.height != size[1]) {
+                        val next = Bitmap.createScaledBitmap(small, size[0], size[1], true)
                         if (small !== source && small !== next) small.recycle()
                         small = next
                     }

@@ -1,10 +1,12 @@
-# DreamGlass 1.0.3 — 修改声明
+# DreamGlass 1.0.4 — 修改声明
 
-修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-24。
+修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-25。
 
 本作品基于 AYwlilwYA / ColorOS16-LiquidGlass `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，整体继续按 GNU GPLv3 分发。原作者及第三方组件的版权与许可均保留，详见 LICENSE、NOTICE 和 THIRD-PARTY-NOTICES.md。
 
 ## 修改范围
+
+- 1.0.4（2026-10-25）：显式线性纹理采样、改善共享背景尺寸和模糊精度；增加仅在调试包中的 Android GPU 回归及画质测试。
 
 - 1.0.3（2026-10-24）：增加按钮背景跟随系统模糊开关、后台共用预模糊图及对应测试；默认关闭，未更改现有 AGSL 光学算法。
 
@@ -24,7 +26,7 @@
 
 ## 对比上游基线的修改文件
 
-相关修改日期为 2026-10-22 至 2026-10-24；新增第三方源码归档保持原始内容。
+相关修改日期为 2026-10-22 至 2026-10-25；新增第三方源码归档保持原始内容。
 
 - `.gitattributes`
 - `.gitignore`
@@ -39,6 +41,8 @@
 - `app/libs/README.md`
 - `app/libs/libxposed-interface-102.0.0.aar`
 - `app/libs/libxposed-service-102.0.0.aar`
+- `app/src/debug/AndroidManifest.xml`
+- `app/src/debug/kotlin/com/dreamglass/cos17/SamplingProbeActivity.kt`
 - `app/src/main/AndroidManifest.xml`
 - `app/src/main/assets/legal/Apache-2.0.txt`
 - `app/src/main/assets/legal/DEPENDENCIES.txt`
@@ -202,6 +206,25 @@
 - `docs/validation/1.0.3/offline-filter-timing.txt`
 - `docs/validation/1.0.3/release-build.txt`
 - `docs/validation/1.0.3/summary.json`
+- `docs/validation/1.0.4/01-button-blur-default.png`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.ButtonBackdropBlurTest.xml`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.ButtonBlurPolicyTest.xml`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.CaptureApiTest.xml`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.ContentDrawBridgeTest.xml`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.LocalTextContrastTest.xml`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.QsSeekbarCompatTest.xml`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.QsSurfacePolicyTest.xml`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.SystemUiLifecycleTest.xml`
+- `docs/validation/1.0.4/TEST-com.dreamglass.cos17.VolumeMaskGuardTest.xml`
+- `docs/validation/1.0.4/android-gpu-sampling.png`
+- `docs/validation/1.0.4/apk-signature.txt`
+- `docs/validation/1.0.4/blur-0.png`
+- `docs/validation/1.0.4/blur-32.png`
+- `docs/validation/1.0.4/blur-64.png`
+- `docs/validation/1.0.4/offline-backdrop-comparison.png`
+- `docs/validation/1.0.4/offline-filter-timing.txt`
+- `docs/validation/1.0.4/release-build.txt`
+- `docs/validation/1.0.4/summary.json`
 - `docs/validation/apk-badging.txt`
 - `docs/validation/apk-manifest.txt`
 - `docs/validation/apk-signature.txt`
@@ -285,6 +308,7 @@
 - `scripts/qa_button_blur_emulator.py`
 - `scripts/qa_compact_material_emulator.py`
 - `scripts/qa_release_emulator.py`
+- `scripts/qa_sampling_gpu_emulator.py`
 - `scripts/qa_system_button_blur_emulator.py`
 - `scripts/render_button_backdrop_fixture.java`
 - `scripts/validate_surface_shader.py`
