@@ -43,7 +43,8 @@ else:
     old = subprocess.check_output(['git', '-C', str(repo), 'show', args.baseline + ':' + relative]).decode('utf-8')
     prior = extract(old)
 effects = {name: skia.RuntimeEffect.MakeForShader(code) for name, code in {
-    'full': source, 'base': base(source), 'prior-full': prior, 'prior-base': base(prior)
+    'full': source, 'base': base(source), 'prior-full': prior, 'prior-base': base(prior),
+    '1.0.5': base(extract(subprocess.check_output(['git','-C',str(repo),'show','d11d93b:'+relative]).decode('utf-8')))
 }.items()}
 out = Path(args.output)
 out.mkdir(parents=True, exist_ok=True)
@@ -69,7 +70,7 @@ def backdrop(w, h, flat=False):
     return skia.Image.fromarray(array, colorType=skia.ColorType.kRGBA_8888_ColorType)
 
 
-def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6):
+def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6, preblurred=0):
     builder = skia.RuntimeEffectBuilder(effect)
     image = backdrop(w, h, flat)
     image_shader = image.makeShader(skia.TileMode.kClamp, skia.TileMode.kClamp,
@@ -89,6 +90,8 @@ def render(effect, w, h, radius, polish=0, blur=8, flat=False, highlight=.6):
         'uMaskWeight': 1.3968, 'uMaskOffset': [0, 0], 'uMaskAlpha': .10,
         'uMaskColor': [0, 0, 0, 1], 'uTilt': [0, 1, 800, 0],
     }
+    if 'uSourcePreblurred' in [u.name for u in effect.uniforms()]:
+        uniforms['uSourcePreblurred'] = float(preblurred)
     if 'uSurfacePolish' in [u.name for u in effect.uniforms()]:
         uniforms['uSurfacePolish'] = float(polish)
     for name, value in uniforms.items():
@@ -196,7 +199,31 @@ for name in ('full', 'base'):
             blur_sheet.paste(image, (x, y + 24), image)
 blur_sheet.save(out / 'button-blur-comparison.png')
 
-report = {'engine': 'desktop Skia ' + skia.__version__, 'androidGpuTested': False,
+
+# Inner volume changes light/shade within the shape, preserving coverage and central transmission.
+volume_results=[]
+volume_height=40+sum(h+44 for _,_,h,_ in cases[:4])
+volume_sheet=Image.new('RGB',(1000,volume_height),(12,17,32));vd=ImageDraw.Draw(volume_sheet)
+vd.text((16,12),'1.0.5 / 1.0.6 - OFFLINE SKIA, same background and fine rim',fill='white')
+vy=40
+for label,w,h,r in cases[:4]:
+    old,oi=render(effects['1.0.5'],w,h,r,polish=1,flat=True)
+    new,ni=render(effects['base'],w,h,r,polish=1,flat=True)
+    delta=new[...,:3]-old[...,:3]
+    assert np.max(np.abs(new[...,3]-old[...,3]))<1e-6
+    assert float(np.max(delta))>.001 and float(np.min(delta))<-.001,(label,'missing light/dark shoulder')
+    assert np.max(np.abs(delta[h//2,w//2]))<1e-6,(label,'central transmission changed')
+    volume_results.append({'shape':label,'alphaUnchanged':True,'centerUnchanged':True,
+                           'minRgbDelta':float(delta.min()),'maxRgbDelta':float(delta.max())})
+    vd.text((16,vy),label,fill='white');volume_sheet.paste(oi,(16,vy+18),oi);volume_sheet.paste(ni,(510,vy+18),ni)
+    vy+=h+44
+volume_sheet.save(out/'inner-volume-comparison.png')
+# A prefiltered source must not be put through the sparse grid again at larger requested radii.
+pre_a,_=render(effects['base'],160,160,80,polish=1,blur=8,preblurred=1)
+pre_b,_=render(effects['base'],160,160,80,polish=1,blur=64,preblurred=1)
+assert np.max(np.abs(pre_a-pre_b))<2e-6,'F16 source was resampled through sparse blur grid'
+
+report = {'innerVolumeChecks':volume_results,'prefilterBypassesSparseGrid':True,'engine': 'desktop Skia ' + skia.__version__, 'androidGpuTested': False,
           'shaderSourceSha256': hashlib.sha256(source.encode()).hexdigest(),
           'compiledVariants': list(effects), 'cases': results,
           'rimWidthAt30Percent': {'beforePx': old_width, 'afterPx': new_width},

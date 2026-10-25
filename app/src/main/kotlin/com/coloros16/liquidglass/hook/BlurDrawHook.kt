@@ -10876,8 +10876,10 @@ object BlurDrawHook {
             var currentBitmap = snapshot?.bitmap
             var renderParams = cg.params
             var sharedButtonBlur = false
-            if (snapshot != null && ccBlurOnButtonsEnabled() && isButtonBlurRegion(id) && observedPanelBlurRadius > 0) {
-                val radius = ButtonBackdropBlur.radius(observedPanelBlurRadius, ccBlurStrength())
+            if (snapshot != null && !cg.isElementSource) {
+                val followPanel = ccBlurOnButtonsEnabled() && isButtonBlurRegion(id) && observedPanelBlurRadius > 0
+                val radius = if (followPanel) ButtonBackdropBlur.radius(observedPanelBlurRadius, ccBlurStrength())
+                    else ButtonBackdropBlur.materialSigma(cg.params.blurRadius, cg.params.surfacePolish)
                 val blurred = if (radius == 0f) snapshot.bitmap else
                     buttonBackdropWorker.resolve(snapshot.bitmap, RectF(snapshot.region), radius)
                 if (blurred != null) {
@@ -10885,7 +10887,10 @@ object BlurDrawHook {
                     val sy = blurred.height.toFloat() / snapshot.bitmap.height
                     srcRect = RectF(srcRect.left * sx, srcRect.top * sy, srcRect.right * sx, srcRect.bottom * sy)
                     currentBitmap = blurred
-                    renderParams = cg.params.copy(blurRadius = 0f)
+                    renderParams = cg.params.copy(
+                        blurRadius = if (followPanel) { if (radius > 0f) 1f else 0f } else cg.params.blurRadius,
+                        sourcePreblurred = radius > 0f,
+                    )
                     sharedButtonBlur = true
                 }
             }

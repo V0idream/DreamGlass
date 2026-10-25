@@ -44,6 +44,8 @@ import androidx.core.view.WindowInsetsCompat
 import com.coloros16.liquidglass.App
 import com.coloros16.liquidglass.R
 import com.coloros16.liquidglass.hook.QsSurfacePolicy
+import com.coloros16.liquidglass.hook.ButtonBackdropBlur
+import com.coloros16.liquidglass.hook.ButtonBackdropWorker
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
@@ -2080,6 +2082,9 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
 
     private var shader: RuntimeShader? = null
     private var shaderBroken = false
+    private val qualityBlur by lazy {
+        ButtonBackdropWorker({ postInvalidateOnAnimation() }, { Lg.w("DreamGlass-preview", "F16 backdrop not ready; retain fallback", it) })
+    }
     private var bg: Bitmap? = null
     private var bgLow: Bitmap? = null
     private var bgShader: BitmapShader? = null
@@ -2190,14 +2195,28 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             surfacePolish = true,
         )
         // 卡片窗口在样图中的区域（bitmap 坐标）；AGSL 侧 srcCoord = srcRect.xy + coord/uViewport * srcRect.zw
-        val srcRect = RectF(cardLeft + scrollX, cardTop, cardLeft + scrollX + cw, cardTop + ch)
-        val lowRect = RectF(
+        var srcRect = RectF(cardLeft + scrollX, cardTop, cardLeft + scrollX + cw, cardTop + ch)
+        var qualityParams = params
+        var qualitySource: Shader = src
+        var qualityLow: Shader? = bgLowShader
+        val raw = bg
+        val sigma = ButtonBackdropBlur.materialSigma(blurRadius, true)
+        val filtered = if (raw != null && sigma > 0f) qualityBlur.resolve(raw,
+            RectF(0f, 0f, raw.width.toFloat(), raw.height.toFloat()), sigma) else null
+        if (raw != null && filtered != null) {
+            val sx = filtered.width.toFloat() / raw.width; val sy = filtered.height.toFloat() / raw.height
+            srcRect = RectF(srcRect.left*sx, srcRect.top*sy, srcRect.right*sx, srcRect.bottom*sy)
+            qualitySource = LiquidGlassShader.createSourceBitmapShader(filtered)
+            qualityLow = qualitySource
+            qualityParams = params.copy(sourcePreblurred = true)
+        }
+        val lowRect = if (filtered != null) srcRect else RectF(
             srcRect.left / LOW_SCALE, srcRect.top / LOW_SCALE,
             srcRect.right / LOW_SCALE, srcRect.bottom / LOW_SCALE,
         )
         try {
             LiquidGlassShader.setUniforms(
-                sh, params, src, bgLowShader,
+                sh, qualityParams, qualitySource, qualityLow,
                 sourceRect = srcRect, lowResSourceRect = lowRect,
                 maskAlpha = maskGlassDim,
             )

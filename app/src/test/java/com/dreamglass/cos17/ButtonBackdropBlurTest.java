@@ -16,8 +16,8 @@ public class ButtonBackdropBlurTest {
         int[] weak = blur.workingSize(720, 1584, 1440, 3168, 8);
         int[] strong = blur.workingSize(720, 1584, 1440, 3168, 64);
         assertTrue(weak[0] >= strong[0] && weak[1] >= strong[1]);
-        assertTrue((long)weak[0] * weak[1] <= 524288);
-        assertTrue(Math.max(weak[0], weak[1]) <= 1536);
+        assertTrue((long)weak[0] * weak[1] <= 1048576);
+        assertTrue(Math.max(weak[0], weak[1]) <= 2048);
         assertArrayEquals(new int[]{2,3}, blur.workingSize(2,3,1440,3168,64));
     }
     @Test public void subpixelBlurDoesNotSnapToAWholePixelKernel() {
@@ -35,7 +35,7 @@ public class ButtonBackdropBlurTest {
         int[] output=blur.apply(pixels,256,1,4.3f);
         for(int x=32;x<224;x++) assertTrue(Math.abs((output[x]&255)-x)<=1);
     }
-    @Test public void translucentFlatColorDoesNotDarkenAcrossSixPasses() {
+    @Test public void translucentFlatColorDoesNotDarkenAcrossTenPasses() {
         int[] pixels=new int[77];Arrays.fill(pixels,0x802346ac);
         int[] output=blur.apply(pixels,11,7,6.7f);
         for(int p:output) assertEquals(0x802346ac,p);
@@ -98,5 +98,42 @@ public class ButtonBackdropBlurTest {
             if ((p >>> 24) > 0) { visible = true; assertEquals(255, p & 255); }
         }
         assertTrue(visible);
+    }
+
+    @Test public void productionOutputRetainsFractionalChannelPrecision() {
+        int[] p=new int[65]; Arrays.fill(p,0xff000000); p[32]=0xffffffff;
+        float[] out=blur.applyPremultiplied(p,65,1,3.7f);boolean fractional=false;
+        for(int x=0;x<65;x++){float v=out[x*4+1];if(v>.01f && Math.abs(v-Math.round(v))>.01f)fractional=true;}
+        assertTrue(fractional);
+    }
+    @Test public void impulseVarianceMatchesRequestedGaussianSigma() {
+        int[] p=new int[257];Arrays.fill(p,0xff000000);p[128]=0xffffffff;
+        for(float sigma:new float[]{.2f,1.3f,4.7f,15.2f}) {
+            float[] out=blur.applyPremultiplied(p,257,1,sigma);double mass=0,variance=0;
+            for(int x=0;x<257;x++){double v=out[x*4+1]/255.0;mass+=v;variance+=v*(x-128)*(x-128);}
+            assertEquals(1,mass,.00001);assertEquals(sigma*sigma,variance,.002);
+        }
+    }
+    @Test public void floatChannelsRemainPremultipliedAndFinite() {
+        int[] p={0x00ff0000,0x80402010,0xff2040ee,0x08010302};
+        float[] out=blur.applyPremultiplied(p,4,1,100f);
+        for(int i=0;i<4;i++)for(int c=1;c<4;c++) {
+            assertTrue(Float.isFinite(out[i*4+c]));assertTrue(out[i*4+c]>=0);assertTrue(out[i*4+c]<=out[i*4]+.00001);
+        }
+    }
+    @Test public void materialSigmaKeepsPreviousVisualStrength() {
+        assertEquals(30.72f,blur.materialSigma(64,true),.0001);assertEquals(51.2f,blur.materialSigma(64,false),.0001);
+        assertEquals(0,blur.materialSigma(Float.NaN,true),0);
+    }
+    @Test public void blurStrengthDoesNotReduceCaptureDensity() {
+        assertArrayEquals(blur.workingSize(720,1584,1440,3168,1),blur.workingSize(720,1584,1440,3168,800));
+        assertArrayEquals(new int[]{500,1000},blur.workingSize(500,1000,1440,3168,64));
+        int[] cap=blur.workingSize(10000,10000,10000,10000,20);assertTrue((long)cap[0]*cap[1]<=1048576);
+    }
+    @Test public void gaussianApproximationTracksDenseReferenceWithoutGridGaps() {
+        int[] p=new int[129];Arrays.fill(p,0xff000000);p[64]=0xffffffff;
+        double sigma=4.7;float[] out=blur.applyPremultiplied(p,129,1,(float)sigma);double norm=0;
+        for(int x=0;x<129;x++)norm+=Math.exp(-(x-64.0)*(x-64)/(2*sigma*sigma));
+        for(int x=20;x<109;x++)assertEquals(255*Math.exp(-(x-64.0)*(x-64)/(2*sigma*sigma))/norm,out[x*4+1],1.2);
     }
 }

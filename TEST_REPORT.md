@@ -1,30 +1,29 @@
-# DreamGlass 1.0.5 验证记录
+# DreamGlass 1.0.6 验证记录
 
-日期：2026-10-25。包名 com.dreamglass.cos17；versionCode 1000005；沿用原签名。
+日期：2026-10-25。包名 com.dreamglass.cos17，versionCode 1000006，沿用原签名。
 
-## 功能与范围
+## 修改及原因
 
-- 「文字与可读性 → 按钮图标自动反色」是独立开关，默认关闭。中性色图标按各自按钮区域的背景选择黑色或白色；复用文字的线性 sRGB 背景亮度图和最小玻璃区域判定。
-- 图标开关独立于文字反色。只有图标启用时，也会异步构建/更新亮度图。UI 绘制查询不可变亮度图，不读 Bitmap 像素。
-- 新 Hook 作用于 ImageView.onDraw(Canvas)。要求祖先属于 QS、控件 ID 表示图标/按钮、尺寸受限且颜色是可识别的中性色 tint。状态栏、通知、媒体、独立音量、滑杆、背景图和头像排除；彩色状态、未知颜色/滤镜、动画 Drawable 和明确禁用图标保持原样。
-- 支持 ImageView 的 ColorStateList、公共 BlendModeColorFilter，以及通过 ImageView/Drawable 公共整数 setColorFilter 参数观察到的 PorterDuff 滤镜。PorterDuff 的隐藏 getter/私有字段未反射读取。未知自绘图标或不经过这些通道的 tint 可能保持原色，未声称覆盖所有 ROM 图标。
-- 仅在目标 RGB 有变化时，用小范围 Canvas 图层替换前景 RGB；图标背景不在 ImageView.onDraw 内，因此不随图标染色。不改写 View/Drawable 的 tint、状态列表、颜色滤镜或 alpha。
-- 替换 tint 使用不透明黑白，已有绘制 alpha 保留，避免半透明状态被再次乘 alpha。原始绘制只执行一次；finally 恢复 Canvas 层，异常也恢复。
-- 弱引用跟踪最多 512 个图标，单独缓存黑/白 Paint；主线程之外的 View 绘制保持原样。面板可见时 500ms 检查颜色配置/背景变化，面板收起后停止周期检查；切换关闭时使已跟踪图标重画原样。性能开销及复杂 ROM 动画仍待实机测量。
+之前提高了共享系统模糊的浮点中间精度与插值，但独立材质仍在使用稀疏的 7×7 网格，且共享输出仍转成了 8bit。大半径下前者会产生重复纹理/网格，后者会丢失细微色阶。本版将普通 SystemUI 截图材质路径也接入后台密集滤波；非屏幕截图的元素源仍保留原回退路径。
 
-API 依据：[ImageView tint](https://developer.android.com/reference/android/widget/ImageView#setImageTintList(android.content.res.ColorStateList))、[Canvas.saveLayer](https://developer.android.com/reference/android/graphics/Canvas#saveLayer(float,%20float,%20float,%20float,%20android.graphics.Paint))。实现为本项目新增代码。
+- 生产模糊采用五轮可分离加权盒式高斯近似，不声称逐像素精确高斯卷积。双精度滑动累加、浮点预乘中间图，最终将 binary16 位直接写入 RGBA_F16 Bitmap，避免 setPixels 的整数出口。输入截图仍可能只有 8bit，增加计算精度不能恢复输入已丢失的信息。
+- 保留源采样密度，仅对超大图限制到 1048576 像素及 2048px 长边；模糊半径不再决定粗采样网格。后台单线程、最多四个样式缓存、每种样式合并最新帧。首次结果就绪前沿用原渲染，随后使用上一次完成结果直至新结果就绪；动态延迟和资源开销需要设备测量。
+- 高精度背景通过专用 uniform 直接进入原折射路径，避免再次稀疏模糊，也避免把正半径误设为零而触发不同色散分支。零半径依旧保持清晰原图。
+- 抛光材质内侧新增柔和的亮肩和暗部，随轮廓法线、光源方向、深度和高光强度变化；原细高光保留。过渡只在轮廓内，不改变 alpha 与中央背景；非抛光场景保持原算法。本版未复制 Elbow 源码。
+- 应用预览使用同一生产后台滤波与 F16 输入。保留图标独立反色、圆角滑杆裁剪、横向按钮内圈清除、独立音量窗口的原生保护和既有配置格式。
 
-## 验证
+## 已验证
 
-- Release/Debug 构建成功；54 项 JVM 测试通过。新增六项测试覆盖中性色、状态色排除、原 alpha、与文字同一黑白策略、相邻深浅区域及 QS 归属/排除规则。
-- Lint 0 错误、198 警告；同签名、非 debuggable、版本/包名、原布局 ID、57 项依赖及 12 项保留声明校验通过。
-- 独立 API33 模拟器使用实际生产渲染器绘制六组图标：深浅背景黑白选择、蓝色状态保留、50% alpha 保留、无 tint 红色图片保留、缺少背景保持原色、禁用灰色图标保留。关闭开关后同一批 View 恢复原绘制；Canvas 异常恢复、只绘制一次和原对象/tint 引用不变的断言通过。
-- 正式 APK 模拟器验证默认关闭、开关操作、文字开关未联动及返回路径。无 LibXposed，故未证明框架配置持久化或 Hook 本身已在 SystemUI 命中。
-- 调试 IconContrastProbeActivity/SamplingProbeActivity 不在发行 DEX；探针 APK 不加入分发包。截图为测试图形，不是 ColorOS 系统截图。
-- 原 ROM APK 仍未在提供路径，9 项 DEX 合约未重跑，历史报告不计作本次新功能的运行证据。新增 Hook 仅使用 Android SDK 的 ImageView/Drawable 方法，不新增厂商私有反射入口。
+- Release/Debug 构建成功；60 项 JVM 测试通过。新增六项覆盖分数色阶、脉冲总能量/方差、密集高斯参考误差、预乘颜色、采样密度及旧视觉力度映射。
+- Lint 0 错误、201 警告；原签名、非 debuggable、版本/包名、15 份参数布局 ID、57 项依赖与 12 项原始声明通过打包检查。HalfFloat 的局部 Lint 抑制只针对 raw binary16 写入 ByteBuffer，并由实际 Android 读取结果验证，未关闭全局检查。
+- 隔离 API33 模拟器实际运行生产 F16 打包器：小数通道保留、透明度及预乘格式正确；四种半径的后台任务均完成；FULL/BASE 着色器编译成功。截图是程序化测试图案，不是 ColorOS 截图；模拟器使用软件 GPU。
+- 正式 APK 模拟器检查按钮背景模糊 0/32/64 px、预览上移、参数滚动空间及返回路径。未发现应用崩溃。无 LibXposed，故不证明框架偏好持久化或 SystemUI Hook 命中。
+- 桌面 Skia 对圆形、横向按钮、滑杆、媒体及通知形状验证有限值、预乘输出、形状外无漏光、非抛光回归、FULL/BASE 一致；新旧边缘比较检查中央透光及 alpha 不变，内侧同时存在柔和明暗变化。预滤波输入绕过稀疏网格的测试通过。此证据不等于 Android 驱动或真机效果证明。
+- 调试探针未打入正式 DEX；原 ROM APK 不在指定路径，九项厂商 DEX 合约未重跑，既往报告未冒充本次证据。已有独立音量保护单元测试通过，本版未扩大音量窗口 Hook 范围。
+- 未新增依赖或改变许可：保留 GPLv3 派生来源、Kyant Apache-2.0 着色器署名、全部离线许可与依赖源码。
 
-## 边界
+## 待真机确认
 
-未操作实体手机、申请 Root 或重启作用域。需要更新模块后由用户按自己的方式重新加载 SystemUI，并开启该选项进行设备验收。生产渲染器已通过 Android 绘制测试；真实 LSPosed Hook 命中、ROM 特殊图标的 tint 通道、动态画质、功耗及稳定性仍未真机确认。
+没有操作实体手机、Root 或作用域重启。需用户加载本版模块后确认 ColorOS 17 视觉、缓存更新延迟、CPU/内存、功耗、帧率和稳定性。未声称完全消除所有来源的马赛克、复刻 iOS 或确认通知/控制中心 Hook 已在本版真机运行。
 
-证据：docs/validation/1.0.5/。APK SHA-256：f9ec89c2c0f1d242abf779e68d7391cd21bf7a9f70516925cecfe43abc8c5c1f
+证据：docs/validation/1.0.6/。APK SHA-256：c2683559521ae57395f4ae244e017ce230ad75531064c7b26b53d92975a55878

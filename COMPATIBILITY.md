@@ -1,8 +1,8 @@
-# DreamGlass 1.0.5 · ColorOS 17 兼容性报告
+# DreamGlass 1.0.6 · ColorOS 17 兼容性报告
 
-增加 QS 中性色图标的独立黑白适配开关，复用文字的局部背景亮度图。54 项 JVM、release Lint、Android 生产渲染器图标对照和正式 APK 开关交互通过。1.0.4 的模糊修复和 AGSL 光学代码保留。
+独立材质与共享按钮模糊增加密集高精度预处理、F16 输出；抛光边缘增加柔和方向性明暗。60 项 JVM、release Lint、Android 浮点图像/后台任务/着色器探针及正式 APK 预览交互通过。
 
-本版未执行真实 LSPosed/SystemUI Hook 或 ColorOS 真机验收。无有效区域/背景、未知 tint 通道、自绘/动画图标将保留原样。原 ROM APK 不在提供路径，9 项 DEX 合约未重跑。详见 TEST_REPORT.md；下方历史审计不是本次新增图标 Hook 的运行证明。
+未执行 ColorOS 真机、真实 LSPosed/SystemUI Hook 或性能验收；非截图元素源保留原回退。原 ROM APK 缺失，九项 DEX 合约未重跑。详见 TEST_REPORT.md；下方历史审计不能充当本版运行证明。
 
 ## 样本信息
 

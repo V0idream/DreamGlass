@@ -65,6 +65,7 @@ object LiquidGlassShader {
         // ============================================================================
         uniform shader uSource;          // 未模糊原图（全分辨率；折射/色散/锐化采样用，Hook A 喂入）
         uniform shader uSourceLowRes;    // 未模糊原图 1/4 降采样（高斯模糊采样用；消除全分辨率欠采样网格伪影）
+        uniform float uSourcePreblurred; // 2026-10-25: high-resolution F16 Gaussian backdrop, no sparse resampling.
         uniform vec4  uSourceRect;       // uSource 原图 srcRect（xy=原点, zw=尺寸）
         uniform vec4  uSourceLowResRect; // uSourceLowRes 低分辨率 srcRect（xy=原点, zw=尺寸）
         uniform vec2  uViewport;         // 面板绘制尺寸 px（fragCoord ∈ [0,W]×[0,H]，local 坐标）
@@ -494,6 +495,9 @@ object LiquidGlassShader {
         }
 
         float4 gaussianBlur(float2 coord, float spread) {
+            if (uSourcePreblurred > 0.5) {
+                return float4(uSource.eval(srcCoord(coord, uSourceRect)));
+            }
             // 采样 1/4 降采样图（uSourceLowRes）：其 BitmapShader 矩阵已把 viewport 折算到
             // 低分辨率 srcRect（等价于「在 1/4 图上取 coord/4 处采样」），tapStep 在低分辨率
             // 图内等效缩小 4 倍（视口 5px / 低分辨率图 1.25px），配合双线性插值——消除
@@ -829,6 +833,19 @@ object LiquidGlassShader {
             // after clipping without multiplying by alpha produces a hard bright fringe at corners.
             float rim = hl * band * innerAtt * uHighlight;
             float3 polishedRim = max(float3(glass.a) - glass.rgb, 0.0) * clamp(rim * 0.72, 0.0, 1.0);
+            // 2026-10-25: a rounded glass cross-section, separate from the fine specular line.
+            // Low-energy interior shading and a soft lit shoulder give volume without a hard white border.
+            float volumeWidth = clamp(min(halfSize.x, halfSize.y) * 0.065, 2.5, 8.0);
+            float shoulderX = (dIn - volumeWidth * 0.90) / max(volumeWidth * 0.65, 1.0);
+            float shoulder = exp(-shoulderX * shoulderX * 1.8);
+            float direction = dot(sdfGrad, lightDir);
+            float litFace = smoothstep(-0.25, 0.85, direction);
+            float darkFace = smoothstep(-0.25, 0.85, -direction);
+            float volumeGain = polish * clamp(uDepth / 2.4, 0.0, 1.4) *
+                clamp(uHighlight, 0.0, 1.5) * step(0.01, uHighlightWidth);
+            glass.rgb *= 1.0 - shoulder * (0.045 + 0.09 * darkFace) * volumeGain;
+            glass.rgb += max(float3(glass.a) - glass.rgb, 0.0) * shoulder *
+                (0.035 + 0.10 * litFace) * volumeGain;
             glass.rgb += mix(float3(rim), polishedRim, polish);
             if (polish > 0.5) glass.rgb = min(glass.rgb, float3(glass.a));
 
@@ -898,6 +915,7 @@ object LiquidGlassShader {
         val innerGlow: Float = 0f,
         /** Use the COS17 control/card finish; launcher and clock callers keep the original material. */
         val surfacePolish: Boolean = false,
+        val sourcePreblurred: Boolean = false,
     )
 
     /**
@@ -1064,6 +1082,7 @@ object LiquidGlassShader {
         shader.setFloatUniform("uCornerWeight", params.cornerWeight)
         shader.setFloatUniform("uCornerConicBlend", cornerConicBlend)
         shader.setFloatUniform("uBlurRadius", params.blurRadius)
+        shader.setFloatUniform("uSourcePreblurred", if (params.sourcePreblurred) 1f else 0f)
         shader.setFloatUniform("uRefractionHeight", params.refractionHeight)
         shader.setFloatUniform("uRefractionAmount", params.refractionAmount)
         shader.setFloatUniform("uDepth", params.depth)
