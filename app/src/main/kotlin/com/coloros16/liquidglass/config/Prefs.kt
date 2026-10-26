@@ -53,6 +53,9 @@ object Prefs {
     /** [KEY_UI_GLASS_PRESET] 的默认取值 = 编辑全局参数。 */
     const val GLASS_PRESET_DEFAULT_ID = "default"
 
+    /** Optional overlay only; original global/custom values are never overwritten. */
+    const val KEY_BUILTIN_MATERIAL_PRESET = "builtin_material_preset"
+
     // [2026-09-17 死键清理] 背景档位已删除：KEY_BACKGROUND_MODE + BACKGROUND_TRANSPARENT/LIGHT/SYSTEM
     // 三个取值 + Prefs.backgroundMode()，全部零调用方（档位语义早已被材质参数逐项取代）。
 

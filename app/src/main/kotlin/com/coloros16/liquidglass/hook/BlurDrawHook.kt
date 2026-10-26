@@ -29,6 +29,7 @@ import android.view.WindowManager
 import android.widget.TextView
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
+import com.coloros16.liquidglass.glass.IosGlassPreset
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.liquidglass.ShaderInstancePool
@@ -1673,7 +1674,8 @@ object BlurDrawHook {
             }
         }
         // 预设覆盖：该元素归属的预设有压暗值则用预设值，否则用全局缓存值
-        return GlassRegistry.overridesFor(elementId)?.get(Prefs.KEY_MASK_GLASS_DIM)?.coerceIn(0f, 1f)
+        return IosGlassPreset.resolve(readMaterialParams().builtinPreset, usePolishedMaterial(elementId),
+            GlassRegistry.overridesFor(elementId))?.get(Prefs.KEY_MASK_GLASS_DIM)?.coerceIn(0f, 1f)
             ?: maskGlassDim
     }
 
@@ -11988,6 +11990,7 @@ object BlurDrawHook {
         /** 内侧光 0~1（默认 0=关）。末尾带默认值，兜底分支位置构造不传即用配置默认。 */
         val innerGlow: Float = Prefs.DEFAULT_INNER_GLOW,
         val buttonBlurRadius: Float = Prefs.DEFAULT_BUTTON_BLUR_RADIUS,
+        val builtinPreset: String = Prefs.GLASS_PRESET_DEFAULT_ID,
     )
 
     @Volatile
@@ -12040,6 +12043,7 @@ object BlurDrawHook {
                     prefs.getFloat(Prefs.KEY_HIGHLIGHT_INNER_ATT, Prefs.DEFAULT_HIGHLIGHT_INNER_ATT),
                     prefs.getFloat(Prefs.KEY_INNER_GLOW, Prefs.DEFAULT_INNER_GLOW).coerceIn(0f, 1f),
                     prefs.getFloat(Prefs.KEY_BUTTON_BLUR_RADIUS, Prefs.DEFAULT_BUTTON_BLUR_RADIUS),
+                    prefs.getString(Prefs.KEY_BUILTIN_MATERIAL_PRESET, Prefs.GLASS_PRESET_DEFAULT_ID) ?: Prefs.GLASS_PRESET_DEFAULT_ID,
                 )
             } catch (t: Throwable) {
                 Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)
@@ -12099,7 +12103,8 @@ object BlurDrawHook {
             // 动画期 IPC 读降至 ~1 次/s；配置改动 ≤1s 生效（无需重启）。渲染输出不变（同值复用）。
             val m = readMaterialParams()
             // 预设逐键覆盖：该元素类被某个预设接管的键取预设值，其余键仍取全局值
-            val ov = GlassRegistry.overridesFor(elementId)
+            val ov = IosGlassPreset.resolve(m.builtinPreset, usePolishedMaterial(elementId),
+                GlassRegistry.overridesFor(elementId))
             fun pick(key: String, base: Float): Float = ov?.get(key) ?: base
             LiquidGlassShader.Params(
                 viewportWidth = width,
@@ -12115,7 +12120,7 @@ object BlurDrawHook {
                 // [2026-09-16 恢复配置化] 撤回原「强制透明诊断档」的硬编码 0，改回读 KEY_BLUR_RADIUS
                 // （默认 8px）。用户反馈「横幅太透」即因长期被强制成清晰透镜。
                 blurRadius = QsSurfacePolicy.resolveButtonBlur(
-                    m.buttonBlurRadius, pick(Prefs.KEY_BLUR_RADIUS, m.blurRadius), isButtonBlurRegion(elementId),
+                    pick(Prefs.KEY_BUTTON_BLUR_RADIUS, m.buttonBlurRadius), pick(Prefs.KEY_BLUR_RADIUS, m.blurRadius), isButtonBlurRegion(elementId),
                 ),
                 // [doc/spec/95 + spec/96 2026-10-10] 折射环带高度走统一出口 Prefs.refractionHeightPx：
                 // 相对模式 = 元素短边 × KEY_REFRACTION_HEIGHT_RATIO（默认 0.5 = 改动前的 min(w,h)/2f，

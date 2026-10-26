@@ -1,8 +1,8 @@
-# DreamGlass 1.0.7 · ColorOS 17 兼容性报告
+# DreamGlass 1.0.8 · ColorOS 17 兼容性报告
 
-修正 1.0.6 高精度模糊接入条件取反，首次及刷新共用背景绑定，并避免等待阶段显示粗网格。60 项 JVM、Lint、Android 生产绑定探针、高频图案对照及正式 APK 交互通过。
+有限边缘透镜、分层方向反光和 IOS风 内置参数层。65 项 JVM、Lint、实际 AGSL 光学矩阵、Android 相同背景对照及正式 APK 预设界面流程通过。
 
-真实 ColorOS/LSPosed Hook、动态性能及稳定性仍待设备验证。AGSL 光学保持 1.0.6 不变；原 ROM APK 缺失，九项 DEX 合约未重跑。下方历史审计不代表本版实机验证。详见 TEST_REPORT.md。
+未验证本版 ColorOS/LSPosed Hook、框架偏好持久化或真机性能。原 ROM APK 缺失，九项 DEX 合约未重跑。下方历史审计不代表本版设备验证；详见 TEST_REPORT.md 与视觉审阅说明。
 
 ## 样本信息
 

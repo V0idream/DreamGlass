@@ -1,0 +1,265 @@
+{
+  "product": "DreamGlass",
+  "supportedRelease": "For ColorOS 17",
+  "version": "1.0.8",
+  "versionCode": 1000008,
+  "package": "com.dreamglass.cos17",
+  "debuggable": false,
+  "apkSha256": "2f7b4694180d08ed431bd5c939997ae5cccd8a3f123dd7951530e4dfdc02e3b3",
+  "runtimeComponents": 57,
+  "retainedNoticeEntries": 12,
+  "unitTestsPassed": 65,
+  "lintErrors": 0,
+  "lintWarnings": 203,
+  "parameterBindingLayoutsPreserved": 15,
+  "opticalBaseline": "1.0.7 fixture",
+  "parameterBindingBaseline": "25c47e7",
+  "opticalChangesLimitedToMarkedLensAndCoat": true,
+  "materialAlphaControlRemoved": true,
+  "snapshotBindingFirstDrawAndRefreshChecked": true,
+  "physicalDeviceAccessed": false,
+  "colorOsRuntimeTested": false,
+  "androidMaterialStudy": {
+    "serial": "emulator-5580",
+    "productionIosPresetUsed": true,
+    "productionF16BindingUsed": true,
+    "oldNewAgslRendered": true,
+    "physicalDeviceAccessed": false,
+    "colorOsHookTested": false,
+    "existingSnapshotBindingRegressionPassed": true,
+    "existingF16AndFourStylesPassed": true,
+    "sameBackdropOnBothSides": true,
+    "pixelCoordinatesUnscaled": true
+  },
+  "ui": {
+    "serial": "emulator-5580",
+    "physicalDeviceAccessed": false,
+    "colorOsHookTested": false,
+    "iosPresetPresent": true,
+    "selectedPreviewRadius": 8,
+    "builtinSlidersReadOnly": true,
+    "localPreviewSelectionReopened": true,
+    "originalUiValuesRestored": true,
+    "navigationBackPassed": true,
+    "frameworkPreferencePersistenceTested": false,
+    "onlyPreviewWithoutFramework": true,
+    "originalButtonBlurDisplay": "13 px",
+    "appCrashDetected": false
+  },
+  "materialStudy": {
+    "monotoneLensChecks": [
+      {
+        "amount": 0,
+        "minCoordinateStep": 0.0
+      },
+      {
+        "amount": 16,
+        "minCoordinateStep": -2.9802322387695312e-08
+      },
+      {
+        "amount": 64,
+        "minCoordinateStep": -2.9802322387695312e-08
+      },
+      {
+        "amount": 200,
+        "minCoordinateStep": -2.9802322387695312e-08
+      },
+      {
+        "amount": 1000,
+        "minCoordinateStep": -2.9802322387695312e-08
+      }
+    ],
+    "controlAndConicMatrixPassed": true,
+    "profile": {
+      "blur_radius": 8.0,
+      "button_blur_radius": 8.0,
+      "refraction_amount": 36.0,
+      "refraction_height_ratio": 0.28,
+      "depth": 2.1,
+      "dispersion": 0.0,
+      "highlight": 0.72,
+      "highlight_width": 9.0,
+      "highlight_falloff": 2.8,
+      "highlight_floor": 0.1,
+      "highlight_inner_att": 0.15,
+      "inner_glow": 0.0,
+      "vibrancy": 1.12,
+      "mask_glass_dim": 0.06,
+      "light_angle": 45.0,
+      "parallax_x": 0.0,
+      "parallax_y": 0.0
+    },
+    "label": "IOS-style",
+    "sourceSha256": "ddd874762e30322615691ab087639c6c94c4b023552d6056e1f3b8290a786204",
+    "backdrops": [
+      "dark",
+      "light",
+      "color"
+    ],
+    "checks": [
+      {
+        "shape": "round",
+        "coverageUnchanged": true,
+        "unpolishedUnchanged": true,
+        "baseFullEqual": true
+      },
+      {
+        "shape": "wide",
+        "coverageUnchanged": true,
+        "unpolishedUnchanged": true,
+        "baseFullEqual": true
+      },
+      {
+        "shape": "card",
+        "coverageUnchanged": true,
+        "unpolishedUnchanged": true,
+        "baseFullEqual": true
+      }
+    ],
+    "shippingAgslRendered": true,
+    "androidGpuTested": false,
+    "productionCpuFilterUsed": false,
+    "note": "Pillow blur is a fixture input only; Android verifies the production filter separately."
+  },
+  "shaderValidation": {
+    "innerVolumeChecks": [
+      {
+        "shape": "round tile",
+        "alphaUnchanged": true,
+        "centerUnchanged": true,
+        "minRgbDelta": -0.1548173427581787,
+        "maxRgbDelta": 0.14942049980163574
+      },
+      {
+        "shape": "wide tile",
+        "alphaUnchanged": true,
+        "centerUnchanged": true,
+        "minRgbDelta": -0.15479308366775513,
+        "maxRgbDelta": 0.14939197897911072
+      },
+      {
+        "shape": "slider",
+        "alphaUnchanged": true,
+        "centerUnchanged": true,
+        "minRgbDelta": -0.15484263002872467,
+        "maxRgbDelta": 0.14943277835845947
+      },
+      {
+        "shape": "media",
+        "alphaUnchanged": true,
+        "centerUnchanged": true,
+        "minRgbDelta": -0.20653897523880005,
+        "maxRgbDelta": 0.12855949997901917
+      }
+    ],
+    "prefilterBypassesSparseGrid": true,
+    "engine": "desktop Skia 144.1",
+    "androidGpuTested": false,
+    "shaderSourceSha256": "ddd874762e30322615691ab087639c6c94c4b023552d6056e1f3b8290a786204",
+    "compiledVariants": [
+      "full",
+      "base",
+      "prior-full",
+      "prior-base",
+      "1.0.5"
+    ],
+    "cases": [
+      {
+        "shape": "round tile",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      },
+      {
+        "shape": "wide tile",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      },
+      {
+        "shape": "slider",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      },
+      {
+        "shape": "media",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      },
+      {
+        "shape": "notification",
+        "nonPolishedMaxDelta": 0.0,
+        "finiteAndPremultiplied": true,
+        "zeroLightOutsideShape": true
+      }
+    ],
+    "rimWidthAt30Percent": {
+      "beforePx": 6,
+      "afterPx": 4
+    },
+    "progressClippingPercentages": [
+      0,
+      1,
+      25,
+      50,
+      99,
+      100
+    ],
+    "blurChecks": [
+      {
+        "variant": "full",
+        "blurRadius": 0,
+        "maxAlphaDelta": 0.0,
+        "meanRgbDeltaFromClear": 0.0
+      },
+      {
+        "variant": "full",
+        "blurRadius": 16,
+        "maxAlphaDelta": 5.960464477539063e-08,
+        "meanRgbDeltaFromClear": 0.01812448352575302
+      },
+      {
+        "variant": "full",
+        "blurRadius": 32,
+        "maxAlphaDelta": 5.960464477539063e-08,
+        "meanRgbDeltaFromClear": 0.02502657286822796
+      },
+      {
+        "variant": "full",
+        "blurRadius": 64,
+        "maxAlphaDelta": 5.960464477539063e-08,
+        "meanRgbDeltaFromClear": 0.05207043141126633
+      },
+      {
+        "variant": "base",
+        "blurRadius": 0,
+        "maxAlphaDelta": 0.0,
+        "meanRgbDeltaFromClear": 0.0
+      },
+      {
+        "variant": "base",
+        "blurRadius": 16,
+        "maxAlphaDelta": 5.960464477539063e-08,
+        "meanRgbDeltaFromClear": 0.01812448352575302
+      },
+      {
+        "variant": "base",
+        "blurRadius": 32,
+        "maxAlphaDelta": 5.960464477539063e-08,
+        "meanRgbDeltaFromClear": 0.02502657286822796
+      },
+      {
+        "variant": "base",
+        "blurRadius": 64,
+        "maxAlphaDelta": 5.960464477539063e-08,
+        "meanRgbDeltaFromClear": 0.05207043141126633
+      }
+    ]
+  },
+  "romContractsRerun": false,
+  "xposedHookExecuted": false,
+  "githubUploadedDuringValidation": false,
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96"
+}

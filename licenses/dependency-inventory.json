@@ -1,5 +1,5 @@
 {
-  "release": "DreamGlass 1.0.7",
+  "release": "DreamGlass 1.0.8",
   "components": [
     {
       "coordinate": "androidx.activity:activity:1.8.0",

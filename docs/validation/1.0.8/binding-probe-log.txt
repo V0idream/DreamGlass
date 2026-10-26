@@ -1,0 +1,2 @@
+--------- beginning of main
+I/DreamGlassQualityProbe( 1913): PASS F16 fractional/alpha; four worker styles; FULL/BASE AGSL; snapshot binding true/false/zero/pending/ready/crop

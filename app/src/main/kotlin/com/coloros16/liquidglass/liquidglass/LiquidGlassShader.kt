@@ -596,6 +596,10 @@ object LiquidGlassShader {
         half4 main(float2 coord) {
             float polish = clamp(uSurfacePolish, 0.0, 1.0);
             float materialBlur = uBlurRadius * mix(1.0, 0.60, polish);
+            // @DG-LENS-START 2026-10-26: compact, monotone edge lens; preserve other scenes.
+            float lensHeight = mix(uRefractionHeight,
+                min(uRefractionHeight, min(uViewport.x, uViewport.y) * 0.24 + 2.0), polish);
+            // @DG-LENS-END
             // [调试] uDebugCoord>0.5 → 决定性实验：coord/500 取小数。
             // 像素坐标(0~1440) → fract(coord/500) 周期渐变（每 500px 红/绿各循环一次，
             // 1440 宽 → 红通道约 3 段 0~1 循环）；归一化 [0,1] → coord/500≈0 → 全黑。
@@ -675,7 +679,7 @@ object LiquidGlassShader {
 
             float4 glass = float4(0.0);
 
-            if (-sdRaw >= uRefractionHeight) {
+            if (-sdRaw >= lensHeight) {
                 // 2a. 内部：清晰透镜（Kyant 折射 shader 早退等价：content.eval(coord) 原样输出）。
                 //     uBlurRadius>0 时走可选轻模糊（采样 1/4 降采样图，5x5 高斯）。
                 if (materialBlur > 0.01) {
@@ -686,6 +690,16 @@ object LiquidGlassShader {
             } else {
                 // 2b. 折射环带：边缘位移最大，向内趋 0（包络 circleMap 与 Kyant 语义不变）
                 float d = circleMap(1.0 - -sd / max(uRefractionHeight, 1.0)) * uRefractionAmount;
+                // @DG-PROFILE-START 2026-10-26: C2 taper, bounded displacement prevents folded text.
+                if (polish > 0.5) {
+                    float lensT = clamp(-sd / max(lensHeight, 1.0), 0.0, 1.0);
+                    float lensT3 = lensT * lensT * lensT;
+                    float lensProfile = 1.0 - lensT3 * (lensT * (lensT * 6.0 - 15.0) + 10.0);
+                    float lensCap = max(lensHeight * 0.36, 0.001);
+                    float lensAmplitude = lensCap * (1.0 - exp(-abs(uRefractionAmount) / lensCap));
+                    d = sign(uRefractionAmount) * lensAmplitude * lensProfile;
+                }
+                // @DG-PROFILE-END
                 // [2026-10-10 spec/97] 方向场改走 gradRefract（返回值幅值 = 方向可信度），
                 // 替代旧的 `sdfGrad + uDepth×球面径向` —— 旧场在宽元素内部退化成「从中心径向」，
                 // 与局部边界法线差 70~80° → 内容被横向拽向中心 → 玻璃内部奇怪扭曲图案。
@@ -832,22 +846,34 @@ object LiquidGlassShader {
             // Keep the highlight inside the same premultiplied alpha as the glass. Adding RGB
             // after clipping without multiplying by alpha produces a hard bright fringe at corners.
             float rim = hl * band * innerAtt * uHighlight;
-            float3 polishedRim = max(float3(glass.a) - glass.rgb, 0.0) * clamp(rim * 0.72, 0.0, 1.0);
-            // 2026-10-25: a rounded glass cross-section, separate from the fine specular line.
-            // Low-energy interior shading and a soft lit shoulder give volume without a hard white border.
-            float volumeWidth = clamp(min(halfSize.x, halfSize.y) * 0.065, 2.5, 8.0);
-            float shoulderX = (dIn - volumeWidth * 0.90) / max(volumeWidth * 0.65, 1.0);
-            float shoulder = exp(-shoulderX * shoulderX * 1.8);
-            float direction = dot(sdfGrad, lightDir);
-            float litFace = smoothstep(-0.25, 0.85, direction);
-            float darkFace = smoothstep(-0.25, 0.85, -direction);
-            float volumeGain = polish * clamp(uDepth / 2.4, 0.0, 1.4) *
-                clamp(uHighlight, 0.0, 1.5) * step(0.01, uHighlightWidth);
-            glass.rgb *= 1.0 - shoulder * (0.045 + 0.09 * darkFace) * volumeGain;
-            glass.rgb += max(float3(glass.a) - glass.rgb, 0.0) * shoulder *
-                (0.035 + 0.10 * litFace) * volumeGain;
-            glass.rgb += mix(float3(rim), polishedRim, polish);
-            if (polish > 0.5) glass.rgb = min(glass.rgb, float3(glass.a));
+            // @DG-COAT-START 2026-10-26: directional dielectric coat, soft inner contact shading.
+            if (polish > 0.5) {
+                float face = -dot(sdfGrad, lightDir);
+                float key = pow(max(face, 0.0), max(uHighlightFalloff * 0.8, 0.5));
+                float fill = pow(max(-face, 0.0), max(uHighlightFalloff, 0.5));
+                float widthScale = sqrt(clamp(uHighlightWidth / 8.0, 0.25, 3.0));
+                float coatWidth = clamp(min(halfSize.x, halfSize.y) * 0.01, 0.65, 1.45) * widthScale;
+                float coatCenter = max(1.65, coatWidth * 0.85);
+                float coatX = (dIn - coatCenter) / max(coatWidth, 0.5);
+                float coatBand = exp(-coatX * coatX * 1.8);
+                float shoulderWidth = clamp(min(halfSize.x, halfSize.y) * 0.055, 2.7, 9.0) * widthScale;
+                float shoulderX = (dIn - shoulderWidth * 0.95) / max(shoulderWidth * 0.62, 1.0);
+                float shoulder = exp(-shoulderX * shoulderX * 1.8);
+                float depthGain = clamp(uDepth / 2.4, 0.0, 1.25);
+                float lightGain = clamp(uHighlight, 0.0, 2.0) * step(0.01, uHighlightWidth) * innerAtt;
+                float backdropLuma = clamp(luma, 0.0, 1.0);
+                float contact = shoulder * (0.025 + 0.12 * (1.0 - key)) *
+                    (0.55 + 0.45 * backdropLuma) * depthGain * lightGain;
+                glass.rgb *= 1.0 - clamp(contact, 0.0, 0.25);
+                float reflection = coatBand * (floorK * 0.16 + 0.62 * key + 0.24 * fill) +
+                    shoulder * (0.015 + 0.11 * key + 0.06 * fill) * depthGain;
+                float reflectance = 1.0 - exp(-reflection * lightGain * 2.0);
+                glass.rgb += max(float3(glass.a) - glass.rgb, 0.0) * reflectance;
+                glass.rgb = clamp(glass.rgb, float3(0.0), float3(glass.a));
+            } else {
+                glass.rgb += float3(rim);
+            }
+            // @DG-COAT-END
 
             // [临时诊断 高光] 逐像素可视化（需 uDebugHighlight>0.5）。
             // R = hl（方向因子）、G = band（带包络）、B = sdfGrad.x 映射到 [0,1]（梯度方向）。
@@ -891,7 +917,7 @@ object LiquidGlassShader {
         val cornerRadius: Float = 28f,   // SDF 圆角半径 px（uCornerRadius；几何/折射/高光用）
         val cornerIsConic: Boolean = false,  // 本体角 CONIC 开关（true=三次贝塞尔 + shader 内 1.5×半径；false=RBox 圆弧）
         val cornerWeight: Float = DEFAULT_MASK_WEIGHT, // 本体 CONIC 角权重（系统 CornerParamsKt (8·w)/(3·w+3) 变换后值；默认 1.3968）
-        val blurRadius: Float = 0f,      // 内部可选轻模糊 px（uBlurRadius；0=清晰透镜=iOS 26 观感；>0 仅作用内部，不糊折射环带）
+        val blurRadius: Float = 0f,      // Material blur px; screenshot paths use the shared dense F16 source, including the edge lens.
         /** 折射区高度 px（uRefractionHeight，自边缘向内）。[doc/spec/95] hook 端与预览端恒按
          *  「元素短边 × 短边比例」算（Prefs.KEY_REFRACTION_HEIGHT_RATIO，默认 0.5 = 短边一半）；
          *  48f 仅作漏传兜底，不参与实际渲染。 */

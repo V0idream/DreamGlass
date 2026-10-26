@@ -23,8 +23,8 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         // Published versions use SemVer; increment this code for every distributed update so
         // Android and the module framework can recognize the new APK. Do not publish timestamp suffixes.
-        versionCode = 1_000_007
-        versionName = "1.0.7"
+        versionCode = 1_000_008
+        versionName = "1.0.8"
     }
 
     signingConfigs {

@@ -1,0 +1,2 @@
+--------- beginning of main
+I/DreamGlassMaterialProbe( 2742): PASS production IOS profile, F16 binding, old/new Android AGSL rendered

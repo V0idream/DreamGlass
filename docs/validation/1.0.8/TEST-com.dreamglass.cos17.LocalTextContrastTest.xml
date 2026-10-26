@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.dreamglass.cos17.LocalTextContrastTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-26T05:58:03.815Z" time="0.007">
+  <properties/>
+  <testcase name="partialCellAndFractionalRegionsHaveStableAverages" classname="com.dreamglass.cos17.LocalTextContrastTest" time="0.002"/>
+  <testcase name="localSamplingFollowsVerticalRegionsAndClipsAtScreenEdges" classname="com.dreamglass.cos17.LocalTextContrastTest" time="0.003"/>
+  <testcase name="buttonBlurScopeDoesNotLeakIntoOtherScenes" classname="com.dreamglass.cos17.LocalTextContrastTest" time="0.001"/>
+  <testcase name="colorChoiceUsesLinearRgbAndPreservesNativeAlpha" classname="com.dreamglass.cos17.LocalTextContrastTest" time="0.0"/>
+  <testcase name="invisibleOrInvalidBackgroundNeverInventsAColor" classname="com.dreamglass.cos17.LocalTextContrastTest" time="0.0"/>
+  <testcase name="adjacentButtonsCanChooseOppositeColorsOnOneFrame" classname="com.dreamglass.cos17.LocalTextContrastTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

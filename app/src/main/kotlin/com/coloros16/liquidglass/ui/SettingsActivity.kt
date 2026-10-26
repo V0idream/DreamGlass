@@ -47,6 +47,7 @@ import com.coloros16.liquidglass.hook.QsSurfacePolicy
 import com.coloros16.liquidglass.hook.ButtonBackdropBlur
 import com.coloros16.liquidglass.hook.ButtonBackdropWorker
 import com.coloros16.liquidglass.config.Prefs
+import com.coloros16.liquidglass.glass.IosGlassPreset
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.log.Lg
@@ -410,7 +411,11 @@ class SettingsActivity : AppCompatActivity() {
         // 顶栏预设：选中预设后下方滑杆改读/改写该预设的参数键，未设的键回落全局值
         val glassPresets = readGlassPresets()
         val presetId = normalizeSelectedPresetId(glassPresets)
-        val presetParams: Map<String, Float>? = glassPresets.find { it.id == presetId }?.params
+        val presetParams: Map<String, Float>? = if (presetId == IosGlassPreset.ID) IosGlassPreset.values
+            else if (presetId != null) IosGlassPreset.resolve(
+                frameworkPrefs()?.getString(Prefs.KEY_BUILTIN_MATERIAL_PRESET, null), true,
+                glassPresets.find { it.id == presetId }?.params)
+            else null
         bindGlassPresetBar(view, glassPresets, presetId)
 
         // [doc/spec/101] 统一界面圆角：开关 + 半径滑杆（8~200px，默认 48）。
@@ -524,7 +529,7 @@ class SettingsActivity : AppCompatActivity() {
             if (persist) writePrefInt(Prefs.KEY_REFRACTION_HEIGHT_MODE, mode)
             preview?.let { it.refractionHeightMode = mode; it.refresh() }
         }
-        val currentMode = (frameworkPrefs()?.let {
+        val currentMode = if (presetId == IosGlassPreset.ID) Prefs.REFRACTION_HEIGHT_MODE_RATIO else (frameworkPrefs()?.let {
             Prefs.readIntCompat(it, Prefs.KEY_REFRACTION_HEIGHT_MODE, Prefs.DEFAULT_REFRACTION_HEIGHT_MODE)
         } ?: Prefs.readIntCompat(xmlPrefs, Prefs.KEY_REFRACTION_HEIGHT_MODE, Prefs.DEFAULT_REFRACTION_HEIGHT_MODE))
         modeChips.removeAllViews()
@@ -537,6 +542,7 @@ class SettingsActivity : AppCompatActivity() {
                 text = getString(labelRes)
                 isCheckable = true
                 isChecked = mode == currentMode
+                isEnabled = presetId != IosGlassPreset.ID
                 setOnClickListener { applyRefractionMode(mode, persist = true) }
             })
         }
@@ -670,6 +676,7 @@ class SettingsActivity : AppCompatActivity() {
             seek = view.findViewById(R.id.seekButtonBlurRadius),
             valueText = view.findViewById(R.id.buttonBlurRadiusValue),
             key = Prefs.KEY_BUTTON_BLUR_RADIUS, default = inheritedButtonBlur,
+            presetParams = presetParams, presetId = presetId,
             fromProgress = { it.toFloat() },
             toProgress = { QsSurfacePolicy.resolveButtonBlur(it, inheritedButtonBlur, true).roundToInt()
                 .coerceIn(0, Prefs.BUTTON_BLUR_RADIUS_MAX) },
@@ -721,6 +728,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun normalizeSelectedPresetId(presets: List<GlassRegistry.Preset>): String? {
         val raw = xmlPrefs.getString(Prefs.KEY_UI_GLASS_PRESET, Prefs.GLASS_PRESET_DEFAULT_ID)
             ?: Prefs.GLASS_PRESET_DEFAULT_ID
+        if (raw == IosGlassPreset.ID) return raw
         if (raw == Prefs.GLASS_PRESET_DEFAULT_ID) return null
         if (presets.any { it.id == raw }) return raw
         xmlPrefs.edit().putString(Prefs.KEY_UI_GLASS_PRESET, Prefs.GLASS_PRESET_DEFAULT_ID).apply()
@@ -753,7 +761,8 @@ class SettingsActivity : AppCompatActivity() {
                 id = "p$seq",
                 name = getString(R.string.glass_preset_name_fmt, seq),
                 classes = emptyList(),
-                params = emptyMap(),
+                params = if (xmlPrefs.getString(Prefs.KEY_UI_GLASS_PRESET, "") == IosGlassPreset.ID)
+                    IosGlassPreset.values.filterKeys { it in GlassRegistry.PARAM_KEYS } else emptyMap(),
             )
             list.add(preset)
             created = preset
@@ -804,6 +813,7 @@ class SettingsActivity : AppCompatActivity() {
 
     /** 写一个预设参数键（滑杆拖动结束时调用）。 */
     private fun writeGlassPresetParam(presetId: String, key: String, value: Float) {
+        if (presetId == IosGlassPreset.ID) return
         editGlassPresets { list ->
             val i = list.indexOfFirst { it.id == presetId }
             if (i >= 0) {
@@ -834,10 +844,23 @@ class SettingsActivity : AppCompatActivity() {
         }
         val defaultChip = chip(getString(R.string.glass_preset_default), true, selectedId == null)
         defaultChip.setOnClickListener {
+            frameworkPrefs()?.edit()?.putString(Prefs.KEY_BUILTIN_MATERIAL_PRESET, Prefs.GLASS_PRESET_DEFAULT_ID)?.apply()
             selectGlassPreset(Prefs.GLASS_PRESET_DEFAULT_ID)
             bindCurrentPage()
         }
         bar.addView(defaultChip)
+        val iosChip = chip(IosGlassPreset.NAME, true, selectedId == IosGlassPreset.ID)
+        iosChip.contentDescription = "IOS风，内置材质预设；默认可恢复原参数，自定义类方案优先"
+        iosChip.setOnClickListener {
+            val framework = frameworkPrefs()
+            framework?.edit()?.putString(Prefs.KEY_BUILTIN_MATERIAL_PRESET, IosGlassPreset.ID)?.apply()
+            selectGlassPreset(IosGlassPreset.ID)
+            bindCurrentPage()
+            Snackbar.make(contentFrame, if (framework != null)
+                "已启用 IOS风；原参数已保留，点默认恢复。自定义类方案及系统按钮模糊设置优先。"
+                else "仅预览 IOS风：框架未连接，未修改系统材质。", Snackbar.LENGTH_LONG).show()
+        }
+        bar.addView(iosChip)
         presets.forEach { preset ->
             val presetChip = chip(preset.name, true, preset.id == selectedId)
             presetChip.setOnClickListener {
@@ -1792,6 +1815,7 @@ class SettingsActivity : AppCompatActivity() {
         val current = presetParams?.get(key)
             ?: frameworkPrefs()?.getFloat(key, default)
             ?: xmlPrefs.getFloat(key, default)
+        seek.isEnabled = presetId != IosGlassPreset.ID
         seek.progress = toProgress(current)
         val initial = fromProgress(seek.progress)
         valueText.text = format(initial)

@@ -37,6 +37,7 @@ object GlassRegistry {
     /** 预设可覆盖的参数键（滑杆与渲染分发共用同一份名单）。 */
     val PARAM_KEYS = listOf(
         Prefs.KEY_BLUR_RADIUS,
+        Prefs.KEY_BUTTON_BLUR_RADIUS,
         Prefs.KEY_REFRACTION_AMOUNT,
         Prefs.KEY_DISPERSION,
         Prefs.KEY_DEPTH,

@@ -32,6 +32,7 @@ assert 'application-debuggable' not in badging
 with zipfile.ZipFile(args.apk) as apk:
     assert apk.testzip() is None
     entries = apk.namelist()
+    assert not any(n.startswith('assets/probes/') for n in entries), 'Debug shader fixture leaked into release'
     assert not any(n.startswith('lib/') for n in entries), 'Unexpected native binary'
     assert not any(n.startswith('assets/licenses/') for n in entries), 'Obsolete legal asset'
     assert not any('sponsor_qr' in n for n in entries), 'Obsolete donation asset'
@@ -48,17 +49,21 @@ with zipfile.ZipFile(args.apk) as apk:
         assert hashlib.sha256(data).hexdigest() == notice['sha256']
     dex = b''.join(apk.read(n) for n in entries if re.fullmatch(r'classes\d*\.dex', n))
     assert b'com/coloros16/liquidglass/update/UpdateChecker;' not in dex
-    assert b'SamplingProbeActivity' not in dex and b'IconContrastProbeActivity' not in dex and b'BlurQualityProbeActivity' not in dex, 'Debug probe leaked into release'
+    assert b'SamplingProbeActivity' not in dex and b'IconContrastProbeActivity' not in dex and b'BlurQualityProbeActivity' not in dex and b'MaterialStudyProbeActivity' not in dex, 'Debug probe leaked into release'
 
 shader_path = 'app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt'
 shader = (root / shader_path).read_text(encoding='utf-8')
 extract = lambda s: re.search(r'val AGSL_SOURCE: String = """(.*?)"""\.trimIndent\(\)', s, re.S).group(1)
 # Restrict optical changes to the F16 direct-input branch and polished inner volume.
+# Revert only the three explicitly marked COS17 optical refinements, then require exact 1.0.7 optics.
 optics=extract(shader)
-optics=re.sub(r'        uniform float uSourcePreblurred;[^\n]*\n','',optics)
-optics=re.sub(r'            if \(uSourcePreblurred > 0.5\) \{.*?\n            \}\n','',optics,flags=re.S)
-optics=re.sub(r'            // 2026-10-25: a rounded glass cross-section.*?(?=            glass.rgb \+= mix)', '', optics,flags=re.S)
-assert optics == extract(git_file(shader_path)), 'Unexpected optical change outside F16 input and inner volume'
+prior=(root/'docs/validation/1.0.8/1.0.7-baseline.agsl').read_text(encoding='utf-8')
+old_coat=prior[prior.index('            float3 polishedRim ='):prior.index('            // [临时诊断 高光]')]
+optics=re.sub(r'            // @DG-LENS-START.*?            // @DG-LENS-END\n','',optics,flags=re.S)
+optics=optics.replace('if (-sdRaw >= lensHeight)','if (-sdRaw >= uRefractionHeight)')
+optics=re.sub(r'                // @DG-PROFILE-START.*?                // @DG-PROFILE-END\n','',optics,flags=re.S)
+optics=re.sub(r'            // @DG-COAT-START.*?            // @DG-COAT-END\n\n',lambda _:old_coat,optics,flags=re.S)
+assert optics == prior, 'Unexpected optical change outside compact lens and directional coat'
 assert 'uMaterialOpacity' not in shader and 'materialOpacity' not in shader
 assert 'Copyright 2025 Kyant' in shader and '2026-10-23' in shader
 changed = command('git', 'diff', '--name-only', baseline, '--', 'app/src/main/kotlin').splitlines()
@@ -77,6 +82,14 @@ assert 'shader, renderParams, sourceShader, lowResShader' in hook
 assert 'val params = binding.params' in hook
 assert 'sourceRect = binding.sourceRect' in hook
 
+# Built-in activation may write its selection flag, but cannot overwrite saved material values.
+settings=(root/'app/src/main/kotlin/com/coloros16/liquidglass/ui/SettingsActivity.kt').read_text(encoding='utf-8')
+ios_action=settings[settings.index('iosChip.setOnClickListener'):settings.index('bar.addView(iosChip)')]
+assert 'putString(Prefs.KEY_BUILTIN_MATERIAL_PRESET, IosGlassPreset.ID)' in ios_action
+assert '.putFloat(' not in ios_action and '.putBoolean(' not in ios_action
+assert 'IosGlassPreset.resolve(m.builtinPreset, usePolishedMaterial(elementId)' in hook
+assert 'pick(Prefs.KEY_BUTTON_BLUR_RADIUS, m.buttonBlurRadius)' in hook
+
 def ids(text):
     return set(re.findall(r'@\+id/([A-Za-z0-9_]+)', text))
 
@@ -89,7 +102,7 @@ for layout in (root / 'app/src/main/res/layout').glob('view_*.xml'):
     layout_count += 1
 
 unit = [ET.parse(f).getroot() for f in (root / 'app/build/test-results/testReleaseUnitTest').glob('TEST-*.xml')]
-assert sum(int(t.get('tests')) for t in unit) == 60
+assert sum(int(t.get('tests')) for t in unit) == 65
 assert sum(int(t.get('failures')) + int(t.get('errors')) for t in unit) == 0
 lint = ET.parse(root / 'app/build/reports/lint-results-release.xml').getroot()
 lint_errors = [n for n in lint if n.get('severity') in ('Error', 'Fatal')]
@@ -100,10 +113,10 @@ report = {
     'apkSha256': hashlib.sha256(args.apk.read_bytes()).hexdigest(),
     'runtimeComponents': len(inventory['components']),
     'retainedNoticeEntries': len(inventory['retainedOriginalNotices']),
-    'unitTestsPassed': 60, 'lintErrors': 0,
+    'unitTestsPassed': 65, 'lintErrors': 0,
     'lintWarnings': sum(n.get('severity') == 'Warning' for n in lint),
     'parameterBindingLayoutsPreserved': layout_count,
-    'opticalBaseline': baseline, 'originalOpticsRetainedExceptF16InputAndInnerVolume': True, 'materialAlphaControlRemoved': True, 'snapshotBindingFirstDrawAndRefreshChecked': True,
+    'opticalBaseline': '1.0.7 fixture', 'parameterBindingBaseline': baseline, 'opticalChangesLimitedToMarkedLensAndCoat': True, 'materialAlphaControlRemoved': True, 'snapshotBindingFirstDrawAndRefreshChecked': True,
     'physicalDeviceAccessed': False, 'colorOsRuntimeTested': False,
 }
 args.output.parent.mkdir(parents=True, exist_ok=True)

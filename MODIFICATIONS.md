@@ -1,10 +1,12 @@
-# DreamGlass 1.0.7 — 修改声明
+# DreamGlass 1.0.8 — 修改声明
 
 修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-26。
 
 本作品基于 AYwlilwYA / ColorOS16-LiquidGlass `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，整体继续按 GNU GPLv3 分发。原作者及第三方组件的版权与许可均保留，详见 LICENSE、NOTICE 和 THIRD-PARTY-NOTICES.md。
 
 ## 修改范围
+
+- 1.0.8（2026-10-26）：新增局部单调透镜轮廓和方向性介质反光，增加可逆的 IOS风 内置参数层，补充生产着色器迭代渲染、光学矩阵及 Android 对照。
 
 - 1.0.7（2026-10-26）：修复背景来源条件取反，统一初次及刷新绑定，增加无粗网格的等待路径和实际绑定回归。
 
@@ -48,8 +50,10 @@
 - `app/libs/libxposed-interface-102.0.0.aar`
 - `app/libs/libxposed-service-102.0.0.aar`
 - `app/src/debug/AndroidManifest.xml`
+- `app/src/debug/assets/probes/baseline-1.0.7.agsl`
 - `app/src/debug/kotlin/com/dreamglass/cos17/BlurQualityProbeActivity.kt`
 - `app/src/debug/kotlin/com/dreamglass/cos17/IconContrastProbeActivity.kt`
+- `app/src/debug/kotlin/com/dreamglass/cos17/MaterialStudyProbeActivity.kt`
 - `app/src/debug/kotlin/com/dreamglass/cos17/SamplingProbeActivity.kt`
 - `app/src/main/AndroidManifest.xml`
 - `app/src/main/assets/legal/Apache-2.0.txt`
@@ -73,6 +77,7 @@
 - `app/src/main/kotlin/com/coloros16/liquidglass/diagnostics/RuntimeStore.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/entry/XposedEntry.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/glass/GlassRegistry.kt`
+- `app/src/main/kotlin/com/coloros16/liquidglass/glass/IosGlassPreset.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurCaptureHook.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt`
 - `app/src/main/kotlin/com/coloros16/liquidglass/hook/ButtonBackdropBlur.kt`
@@ -130,6 +135,7 @@
 - `app/src/test/java/com/dreamglass/cos17/ButtonBlurPolicyTest.java`
 - `app/src/test/java/com/dreamglass/cos17/CaptureApiTest.java`
 - `app/src/test/java/com/dreamglass/cos17/ContentDrawBridgeTest.java`
+- `app/src/test/java/com/dreamglass/cos17/IosGlassPresetTest.java`
 - `app/src/test/java/com/dreamglass/cos17/LocalTextContrastTest.java`
 - `app/src/test/java/com/dreamglass/cos17/QsIconContrastPolicyTest.java`
 - `app/src/test/java/com/dreamglass/cos17/QsSeekbarCompatTest.java`
@@ -297,6 +303,37 @@
 - `docs/validation/1.0.7/quality-probe.png`
 - `docs/validation/1.0.7/signature.txt`
 - `docs/validation/1.0.7/summary.json`
+- `docs/validation/1.0.8/02-ios-preset.png`
+- `docs/validation/1.0.8/04-original-restored.png`
+- `docs/validation/1.0.8/1.0.7-baseline.agsl`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.ButtonBackdropBlurTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.ButtonBlurPolicyTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.CaptureApiTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.ContentDrawBridgeTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.IosGlassPresetTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.LocalTextContrastTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.QsIconContrastPolicyTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.QsSeekbarCompatTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.QsSurfacePolicyTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.SystemUiLifecycleTest.xml`
+- `docs/validation/1.0.8/TEST-com.dreamglass.cos17.VolumeMaskGuardTest.xml`
+- `docs/validation/1.0.8/VISUAL_REVIEW.md`
+- `docs/validation/1.0.8/before-preset-dark-comparison.png`
+- `docs/validation/1.0.8/before-preset-light-comparison.png`
+- `docs/validation/1.0.8/binding-probe-log.txt`
+- `docs/validation/1.0.8/binding-probe.png`
+- `docs/validation/1.0.8/build.txt`
+- `docs/validation/1.0.8/color-comparison.png`
+- `docs/validation/1.0.8/dark-comparison.png`
+- `docs/validation/1.0.8/light-comparison.png`
+- `docs/validation/1.0.8/material-optics-android.png`
+- `docs/validation/1.0.8/material-probe-log.txt`
+- `docs/validation/1.0.8/probe-build.txt`
+- `docs/validation/1.0.8/shader-validation.json`
+- `docs/validation/1.0.8/signature.txt`
+- `docs/validation/1.0.8/slider-clip-fixture.png`
+- `docs/validation/1.0.8/study.json`
+- `docs/validation/1.0.8/summary.json`
 - `docs/validation/apk-badging.txt`
 - `docs/validation/apk-manifest.txt`
 - `docs/validation/apk-signature.txt`
@@ -381,10 +418,12 @@
 - `scripts/qa_compact_material_emulator.py`
 - `scripts/qa_icon_contrast_gpu_emulator.py`
 - `scripts/qa_icon_contrast_ui_emulator.py`
+- `scripts/qa_ios_preset_emulator.py`
 - `scripts/qa_release_emulator.py`
 - `scripts/qa_sampling_gpu_emulator.py`
 - `scripts/qa_system_button_blur_emulator.py`
 - `scripts/render_button_backdrop_fixture.java`
+- `scripts/render_material_study.py`
 - `scripts/validate_surface_shader.py`
 - `settings.gradle.kts`
 - `third_party_sources/README.md`

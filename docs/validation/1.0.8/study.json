@@ -1,0 +1,75 @@
+{
+  "monotoneLensChecks": [
+    {
+      "amount": 0,
+      "minCoordinateStep": 0.0
+    },
+    {
+      "amount": 16,
+      "minCoordinateStep": -2.9802322387695312e-08
+    },
+    {
+      "amount": 64,
+      "minCoordinateStep": -2.9802322387695312e-08
+    },
+    {
+      "amount": 200,
+      "minCoordinateStep": -2.9802322387695312e-08
+    },
+    {
+      "amount": 1000,
+      "minCoordinateStep": -2.9802322387695312e-08
+    }
+  ],
+  "controlAndConicMatrixPassed": true,
+  "profile": {
+    "blur_radius": 8.0,
+    "button_blur_radius": 8.0,
+    "refraction_amount": 36.0,
+    "refraction_height_ratio": 0.28,
+    "depth": 2.1,
+    "dispersion": 0.0,
+    "highlight": 0.72,
+    "highlight_width": 9.0,
+    "highlight_falloff": 2.8,
+    "highlight_floor": 0.1,
+    "highlight_inner_att": 0.15,
+    "inner_glow": 0.0,
+    "vibrancy": 1.12,
+    "mask_glass_dim": 0.06,
+    "light_angle": 45.0,
+    "parallax_x": 0.0,
+    "parallax_y": 0.0
+  },
+  "label": "IOS-style",
+  "sourceSha256": "ddd874762e30322615691ab087639c6c94c4b023552d6056e1f3b8290a786204",
+  "backdrops": [
+    "dark",
+    "light",
+    "color"
+  ],
+  "checks": [
+    {
+      "shape": "round",
+      "coverageUnchanged": true,
+      "unpolishedUnchanged": true,
+      "baseFullEqual": true
+    },
+    {
+      "shape": "wide",
+      "coverageUnchanged": true,
+      "unpolishedUnchanged": true,
+      "baseFullEqual": true
+    },
+    {
+      "shape": "card",
+      "coverageUnchanged": true,
+      "unpolishedUnchanged": true,
+      "baseFullEqual": true
+    }
+  ],
+  "shippingAgslRendered": true,
+  "androidGpuTested": false,
+  "productionCpuFilterUsed": false,
+  "note": "Pillow blur is a fixture input only; Android verifies the production filter separately."
+}
