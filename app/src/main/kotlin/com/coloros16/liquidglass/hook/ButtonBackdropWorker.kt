@@ -11,6 +11,33 @@ import java.nio.ByteOrder
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
+
+/** 2026-10-26: one source-binding path for first draw, refresh and Android regression probes. */
+internal object ButtonBackdropBinding {
+    data class Bound(val bitmap: Bitmap, val sourceRect: RectF,
+        val params: LiquidGlassShader.Params, val pending: Boolean = false)
+
+    fun resolve(worker: ButtonBackdropWorker, source: Bitmap, screen: RectF, sourceRect: RectF,
+                sourceIsSnapshot: Boolean, params: LiquidGlassShader.Params, panelRadius: Float? = null): Bound {
+        if (!sourceIsSnapshot) return Bound(source, sourceRect, params)
+        val sigma = panelRadius ?: ButtonBackdropBlur.materialSigma(params.blurRadius, params.surfacePolish)
+        if (!sigma.isFinite() || sigma <= 0f) return Bound(source, sourceRect,
+            if (panelRadius != null) params.copy(blurRadius = 0f, sourcePreblurred = false) else params)
+        val bitmap = worker.resolve(source, screen, sigma)
+        if (bitmap == null) {
+            // The old wide sparse kernel itself makes a repeated grid. During initial computation
+            // use a compact, subpixel-spaced kernel rather than displaying that artifact for a frame.
+            val fallback = if (panelRadius != null) 1.5f else minOf(params.blurRadius, 1.5f)
+            return Bound(source, sourceRect, params.copy(blurRadius = fallback, sourcePreblurred = false), true)
+        }
+        val sx = bitmap.width.toFloat()/source.width; val sy = bitmap.height.toFloat()/source.height
+        val rect = RectF(sourceRect.left*sx, sourceRect.top*sy, sourceRect.right*sx, sourceRect.bottom*sy)
+        // Preserve the positive blur branch so dispersion does not change when the worker finishes.
+        return Bound(bitmap, rect, params.copy(blurRadius = if (panelRadius != null) 1f else params.blurRadius,
+            sourcePreblurred = true))
+    }
+}
 
 /** Four bounded style slots, one running computation, latest pending capture per style.
  * All pixels/filtering are on a background thread; published F16 bitmaps are never recycled. */

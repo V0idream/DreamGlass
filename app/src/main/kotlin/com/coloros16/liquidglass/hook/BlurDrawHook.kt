@@ -776,8 +776,9 @@ object BlurDrawHook {
     private class RenderSource(
         val source: Bitmap,
         val srcRect: RectF,
+        val screenRect: RectF,
         /** true=整屏快照源（0.5 降采样）；false=全局 onBlurReady 原图（已移除，恒 true） */
-        val isElementSource: Boolean,
+        val isSnapshotSource: Boolean,
     )
 
     /** 整屏快照（@Volatile：worker 线程写入，渲染线程读取；内容变化时重抓，静止不抓） */
@@ -1982,6 +1983,13 @@ object BlurDrawHook {
                 "button system blur unavailable; keep independent material: ${error.javaClass.simpleName}"
             }
         }
+    }
+    private fun bindQualityBackdrop(id: Int, source: Bitmap, screen: RectF, sourceRect: RectF,
+        sourceIsSnapshot: Boolean, params: LiquidGlassShader.Params): ButtonBackdropBinding.Bound {
+        val panelRadius = if (ccBlurOnButtonsEnabled() && isButtonBlurRegion(id) && observedPanelBlurRadius > 0)
+            ButtonBackdropBlur.radius(observedPanelBlurRadius, ccBlurStrength()) else null
+        return ButtonBackdropBinding.resolve(buttonBackdropWorker, source, screen, sourceRect,
+            sourceIsSnapshot, params, panelRadius)
     }
     /** BlurConfig.blurRadius public 字段（模糊力度调整反射写） */
     private var mBlurConfigBlurRadiusField: Field? = null
@@ -10628,7 +10636,7 @@ object BlurDrawHook {
      * @param maskOffsetX / maskOffsetY MetaBall 固有扩张偏移（uMaskOffset，真实大小绘制）
      * @param cornerIsConic / cornerWeight / cornerRadius / cornerConicBlend 本体角 uniform 输入
      * @param params buildParams 材质参数结果（折射/反射/高光/色散/vibrancy 等 Prefs 派生，1s 节流缓存）
-     * @param isElementSource 渲染源类型（整屏快照恒 true；主线程低清分支判断用）
+     * @param isSnapshotSource 渲染源类型（整屏快照恒 true；主线程低清分支判断用）
      * @param hostViewName 宿主 view 名（仅 coord 诊断日志用）
      * @param realRegionOffset realRegion 相对宿主 loc 的形状（真实卡片区域，含 MetaBall 扩张内缩；
      *  主线程实时 loc + 此形状 = 绝对屏幕区域 → 容器变换 → srcRect 折算基准。不依赖 loc，后台算）
@@ -10646,7 +10654,7 @@ object BlurDrawHook {
         val cornerRadius: Float,
         val cornerConicBlend: Float,
         val params: LiquidGlassShader.Params,
-        val isElementSource: Boolean,
+        val isSnapshotSource: Boolean,
         val hostViewName: String,
         val realRegionOffset: RectF,
         /** [spec/35 黑遮罩 / spec/41 作用范围修正] 该元素应叠加的黑遮罩不透明度
@@ -10876,23 +10884,13 @@ object BlurDrawHook {
             var currentBitmap = snapshot?.bitmap
             var renderParams = cg.params
             var sharedButtonBlur = false
-            if (snapshot != null && !cg.isElementSource) {
-                val followPanel = ccBlurOnButtonsEnabled() && isButtonBlurRegion(id) && observedPanelBlurRadius > 0
-                val radius = if (followPanel) ButtonBackdropBlur.radius(observedPanelBlurRadius, ccBlurStrength())
-                    else ButtonBackdropBlur.materialSigma(cg.params.blurRadius, cg.params.surfacePolish)
-                val blurred = if (radius == 0f) snapshot.bitmap else
-                    buttonBackdropWorker.resolve(snapshot.bitmap, RectF(snapshot.region), radius)
-                if (blurred != null) {
-                    val sx = blurred.width.toFloat() / snapshot.bitmap.width
-                    val sy = blurred.height.toFloat() / snapshot.bitmap.height
-                    srcRect = RectF(srcRect.left * sx, srcRect.top * sy, srcRect.right * sx, srcRect.bottom * sy)
-                    currentBitmap = blurred
-                    renderParams = cg.params.copy(
-                        blurRadius = if (followPanel) { if (radius > 0f) 1f else 0f } else cg.params.blurRadius,
-                        sourcePreblurred = radius > 0f,
-                    )
-                    sharedButtonBlur = true
-                }
+            if (snapshot != null) {
+                val binding = bindQualityBackdrop(id, snapshot.bitmap, RectF(snapshot.region), srcRect,
+                    cg.isSnapshotSource, cg.params)
+                srcRect = binding.sourceRect
+                currentBitmap = binding.bitmap
+                renderParams = binding.params
+                sharedButtonBlur = cg.isSnapshotSource
             }
             val sourceBitmapId = if (currentBitmap != null) System.identityHashCode(currentBitmap) else 0
             val viewport = cg.viewport
@@ -10947,7 +10945,7 @@ object BlurDrawHook {
             val lowResShader: Shader?
             val lowResSrcRect: RectF
             if (sourceBitmapChanged) {
-                if ((sharedButtonBlur || cg.isElementSource) && currentBitmap != null) {
+                if ((sharedButtonBlur || cg.isSnapshotSource) && currentBitmap != null) {
                     lowResShader = sourceShader
                     lowResSrcRect = srcRect
                 } else if (currentBitmap != null) {
@@ -11175,7 +11173,7 @@ object BlurDrawHook {
                 cornerRadius = cornerRadius,
                 cornerConicBlend = cornerConicBlend,
                 params = params,
-                isElementSource = true,  // 整屏快照源恒 true（doc/spec/07 + 2026-08-13 组合方案）
+                isSnapshotSource = true,  // 整屏快照源恒 true（doc/spec/07 + 2026-08-13 组合方案）
                 hostViewName = entry.hostViewName,
                 // [doc/spec/32] realRegion 相对 loc 的形状（含 MetaBall 扩张内缩）；srcRect 折算基准，
                 // 主线程 loc + 形状 = 绝对屏幕区域 → 容器变换 → srcRect 实时折算
@@ -11358,7 +11356,7 @@ object BlurDrawHook {
                     "coord: render drawable=${drawable.javaClass.simpleName} id=${region.id} " +
                         "view=${region.hostViewName} bounds=$bounds region=${region.screenRegion} " +
                         "srcRect=${region.srcRect} source=${source.width}x${source.height} " +
-                        "elementSource=${renderSource.isElementSource} viewport=$viewport"
+                        "elementSource=${renderSource.isSnapshotSource} viewport=$viewport"
                 )
             }
             // [任务 D/问题 10] 圆角半径来源只在变化/首次打（替代硬编码 28）
@@ -11367,15 +11365,19 @@ object BlurDrawHook {
                 Lg.i(TAG, "coord: cornerRadius=${region.cornerRadius} source=${region.cornerRadiusSource} (id=${region.id})")
             }
         }
-        val sourceShader = LiquidGlassShader.createSourceBitmapShader(source)
+        val rawParams = buildParams(viewport.width(), viewport.height(), region.cornerRadius,
+            effectiveCornerIsConic, region.cornerWeight, elementId = id)
+        val binding = bindQualityBackdrop(id, source, renderSource.screenRect, srcRect,
+            renderSource.isSnapshotSource, rawParams)
+        val sourceShader = LiquidGlassShader.createSourceBitmapShader(binding.bitmap)
         // uSourceLowRes：整屏快照（已 0.5 降采样）直接作 lowRes（uSourceLowResRect = uSourceRect = 元素区域折算
         // 坐标，二者一致）；全局 1/4 降采样分支已废弃（恒不走）。
         // 失败 → null，setUniforms 回退全分辨率源（等效旧行为），液态玻璃渲染不中断
         val lowResShader: Shader?
         val lowResSrcRect: RectF
-        if (renderSource.isElementSource) {
+        if (renderSource.isSnapshotSource) {
             lowResShader = sourceShader
-            lowResSrcRect = srcRect
+            lowResSrcRect = binding.sourceRect
         } else {
             val lowResShaderResult = buildLowResShader(source, srcRect)
             lowResShader = lowResShaderResult?.shader
@@ -11389,7 +11391,7 @@ object BlurDrawHook {
         // uViewport 必须与 shader coord 空间一致（main 里 halfSize=uViewport×0.5），用元素自身尺寸
         // [任务 D] uCornerRadius = RegionEntry 真实圆角（反射 BlurConfig / 启发式），替代硬编码 28；
         // [spec/18 修正] CONIC 本体（通知卡/custom 卡/seekbar）→ uCornerIsConic/uCornerWeight
-        val params = buildParams(viewport.width(), viewport.height(), region.cornerRadius, effectiveCornerIsConic, region.cornerWeight, elementId = id)
+        val params = binding.params
         // uDebugCoord 实验开关：coord 决定性实验用。0=玻璃正常渲染；1=直接输出红/绿周期调试网格（不走玻璃管线）。
         // 正常关闭，需复测 coord 空间时临时开 1f。uDebugCoord 分支保留在 LiquidGlassShader.kt 供后续实验。
         // [2026-10-14 诊断] 打印最终传入 setUniforms 的 maskRect
@@ -11400,7 +11402,7 @@ object BlurDrawHook {
         }
         LiquidGlassShader.setUniforms(
             shader, params, sourceShader, lowResShader,
-            sourceRect = region.srcRect,
+            sourceRect = binding.sourceRect,
             lowResSourceRect = lowResSrcRect,
             debugCoord = 0f,
             maskRect = region.maskRect,
@@ -11421,9 +11423,9 @@ object BlurDrawHook {
         // 记录已应用状态（R1：后续每帧 refresh 据此判断是否重设 uniform）
         appliedUniformsMap[region.id] = AppliedKey(
             frame = 0L,  // [2026-08-13] 无全局帧概念（BlurService 端全移除）；源变化靠 sourceBitmapId
-            sourceBitmapId = System.identityHashCode(source),
+            sourceBitmapId = System.identityHashCode(binding.bitmap),
             viewport = viewport,
-            srcRect = region.srcRect,
+            srcRect = binding.sourceRect,
             maskRect = region.maskRect,
             cornerIsConic = effectiveCornerIsConic, cornerWeight = region.cornerWeight, cornerRadius = region.cornerRadius,
             cornerConicBlend = cornerConicBlend,
@@ -11464,7 +11466,7 @@ object BlurDrawHook {
                 (screenRegion.bottom - snap.region.top) * scaleY,
             )
             // MetaBall 扩张/动画中 region 可能含屏外负偏移 → srcRect 可能越界；AGSL BitmapShader CLAMP 兜底
-            return RenderSource(snap.bitmap, srcRect, isElementSource = true)
+            return RenderSource(snap.bitmap, srcRect, RectF(snap.region), isSnapshotSource = true)
         }
         return null
     }

@@ -66,6 +66,17 @@ allowed_hooks = {'BlurDrawHook.kt', 'QsSurfaceHook.kt', 'LocalTextContrast.kt',
                  'ButtonBackdropBlur.kt', 'ButtonBackdropWorker.kt', 'QsIconContrastHook.kt', 'QsIconContrastPolicy.kt'}
 assert all('/hook/' not in f or Path(f).name in allowed_hooks for f in changed)
 
+# 1.0.7: the old flag was misleadingly named isElementSource, and negating it bypassed
+# every real snapshot. Check both production call sites as well as the Android binding probe.
+hook=(root/'app/src/main/kotlin/com/coloros16/liquidglass/hook/BlurDrawHook.kt').read_text(encoding='utf-8')
+assert 'isElementSource' not in hook
+assert 'return RenderSource(snap.bitmap, srcRect, RectF(snap.region), isSnapshotSource = true)' in hook
+assert 'bindQualityBackdrop(id, snapshot.bitmap, RectF(snapshot.region), srcRect,\n                    cg.isSnapshotSource, cg.params)' in hook
+assert 'bindQualityBackdrop(id, source, renderSource.screenRect, srcRect,\n            renderSource.isSnapshotSource, rawParams)' in hook
+assert 'shader, renderParams, sourceShader, lowResShader' in hook
+assert 'val params = binding.params' in hook
+assert 'sourceRect = binding.sourceRect' in hook
+
 def ids(text):
     return set(re.findall(r'@\+id/([A-Za-z0-9_]+)', text))
 
@@ -92,7 +103,7 @@ report = {
     'unitTestsPassed': 60, 'lintErrors': 0,
     'lintWarnings': sum(n.get('severity') == 'Warning' for n in lint),
     'parameterBindingLayoutsPreserved': layout_count,
-    'opticalBaseline': baseline, 'originalOpticsRetainedExceptF16InputAndInnerVolume': True, 'materialAlphaControlRemoved': True,
+    'opticalBaseline': baseline, 'originalOpticsRetainedExceptF16InputAndInnerVolume': True, 'materialAlphaControlRemoved': True, 'snapshotBindingFirstDrawAndRefreshChecked': True,
     'physicalDeviceAccessed': False, 'colorOsRuntimeTested': False,
 }
 args.output.parent.mkdir(parents=True, exist_ok=True)

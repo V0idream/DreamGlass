@@ -1,4 +1,4 @@
-# 构建 DreamGlass 1.0.6
+# 构建 DreamGlass 1.0.7
 
 源码包包含完整应用源码、Gradle wrapper、本地 LibXposed AAR 和许可文档，不需要私有仓库凭据或原作者的签名密钥。
 

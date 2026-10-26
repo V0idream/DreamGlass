@@ -1,10 +1,12 @@
-# DreamGlass 1.0.6 — 修改声明
+# DreamGlass 1.0.7 — 修改声明
 
-修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-25。
+修改者：DreamGlass contributors；发布维护者：V0idream。相关修改日期：2026-10-22 至 2026-10-26。
 
 本作品基于 AYwlilwYA / ColorOS16-LiquidGlass `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，整体继续按 GNU GPLv3 分发。原作者及第三方组件的版权与许可均保留，详见 LICENSE、NOTICE 和 THIRD-PARTY-NOTICES.md。
 
 ## 修改范围
+
+- 1.0.7（2026-10-26）：修复背景来源条件取反，统一初次及刷新绑定，增加无粗网格的等待路径和实际绑定回归。
 
 - 1.0.6（2026-10-25）：新增全材质后台密集预模糊、双精度累加与 F16 输出；细高光内侧增加柔和方向性明暗以增强边缘体积，保留独立音量保护。
 
@@ -30,7 +32,7 @@
 
 ## 对比上游基线的修改文件
 
-相关修改日期为 2026-10-22 至 2026-10-25；第三方源码归档保留原始内容。
+相关修改日期为 2026-10-22 至 2026-10-26；第三方源码归档保留原始内容。
 
 - `.gitattributes`
 - `.gitignore`
@@ -252,6 +254,7 @@
 - `docs/validation/1.0.5/probe-build.txt`
 - `docs/validation/1.0.5/release-build.txt`
 - `docs/validation/1.0.5/summary.json`
+- `docs/validation/1.0.6/CORRECTION.md`
 - `docs/validation/1.0.6/TEST-com.dreamglass.cos17.ButtonBackdropBlurTest.xml`
 - `docs/validation/1.0.6/TEST-com.dreamglass.cos17.ButtonBlurPolicyTest.xml`
 - `docs/validation/1.0.6/TEST-com.dreamglass.cos17.CaptureApiTest.xml`
@@ -274,6 +277,26 @@
 - `docs/validation/1.0.6/signature.txt`
 - `docs/validation/1.0.6/summary.json`
 - `docs/validation/1.0.6/surface-comparison.png`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.ButtonBackdropBlurTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.ButtonBlurPolicyTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.CaptureApiTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.ContentDrawBridgeTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.LocalTextContrastTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.QsIconContrastPolicyTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.QsSeekbarCompatTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.QsSurfacePolicyTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.SystemUiLifecycleTest.xml`
+- `docs/validation/1.0.7/TEST-com.dreamglass.cos17.VolumeMaskGuardTest.xml`
+- `docs/validation/1.0.7/blur-0.png`
+- `docs/validation/1.0.7/blur-32.png`
+- `docs/validation/1.0.7/blur-64.png`
+- `docs/validation/1.0.7/build.txt`
+- `docs/validation/1.0.7/inner-volume-comparison.png`
+- `docs/validation/1.0.7/package-build.txt`
+- `docs/validation/1.0.7/probe-log.txt`
+- `docs/validation/1.0.7/quality-probe.png`
+- `docs/validation/1.0.7/signature.txt`
+- `docs/validation/1.0.7/summary.json`
 - `docs/validation/apk-badging.txt`
 - `docs/validation/apk-manifest.txt`
 - `docs/validation/apk-signature.txt`
