@@ -53,6 +53,6 @@
   "romContractsRerun": false,
   "xposedHookExecuted": false,
   "debugProbesExcludedFromRelease": true,
-  "githubUploaded": false,
-  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96"
+  "certificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "githubUploadedDuringValidation": false
 }

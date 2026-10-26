@@ -1,6 +1,6 @@
 # DreamGlass 1.0.7 验证记录
 
-日期：2026-10-26。包名 com.dreamglass.cos17，versionCode 1000007，沿用原签名。按用户要求暂不上传 GitHub。
+日期：2026-10-26。包名 com.dreamglass.cos17，versionCode 1000007，沿用原签名。此记录对应本地验证；发布状态以 GitHub Release 为准。
 
 ## 原因与修复
 
