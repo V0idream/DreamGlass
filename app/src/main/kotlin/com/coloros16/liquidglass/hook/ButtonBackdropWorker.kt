@@ -8,9 +8,6 @@ import android.os.SystemClock
 import android.util.Half
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 
 /** 2026-10-26: one source-binding path for first draw, refresh and Android regression probes. */
@@ -44,65 +41,104 @@ internal object ButtonBackdropBinding {
 internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val failed:(Throwable)->Unit) {
     private data class Geometry(val width:Int,val height:Int,val left:Float,val top:Float,val screenWidth:Float,val screenHeight:Float)
     private data class Style(val geometry:Geometry,val radius:Float)
-    private data class Key(val sourceId:Int,val generation:Int,val style:Style)
-    private data class Request(val key:Key,val source:Bitmap)
+    private data class Key(val source:Bitmap,val generation:Int,val style:Style)
+    private data class Request(val key:Key,val source:Bitmap,val epoch:Long)
     private val lock=Any()
-    private val executor=ThreadPoolExecutor(1,1,20,TimeUnit.SECONDS,LinkedBlockingQueue<Runnable>(1),
-        { task -> Thread(task,"DreamGlass-f16-blur").apply { isDaemon=true } }).apply { allowCoreThreadTimeOut(true) }
+    private val executor=RuntimeWorkPolicy.executor("DreamGlass-f16-blur")
     private val requested=LinkedHashMap<Style,Key>(4,.75f,true)
     private val pending=LinkedHashMap<Style,Request>()
     private val ready=HashMap<Style,Bitmap>()
     private var geometry:Geometry?=null
     private var running=false
+    @Volatile private var epoch=0L
+    private var lastComputeAtMs=0L
     @Volatile private var retryAtMs=0L
 
     fun resolve(source:Bitmap,screen:RectF,radius:Float):Bitmap? {
         if(source.isRecycled || screen.width()<=0 || screen.height()<=0 || !radius.isFinite() || radius<=0)return null
         if(SystemClock.uptimeMillis()<retryAtMs)return null
         val geo=Geometry(source.width,source.height,screen.left,screen.top,screen.width(),screen.height())
-        val style=Style(geo,radius);val key=Key(System.identityHashCode(source),source.generationId,style)
+        val style=Style(geo,radius);val key=Key(source,source.generationId,style)
         synchronized(lock) {
-            if(geometry!=geo) { geometry=geo;requested.clear();pending.clear();ready.clear() }
+            if(geometry!=geo) { geometry=geo;epoch++;requested.clear();pending.clear();ready.clear() }
             if(requested[style]!=key) {
                 if(!requested.containsKey(style) && requested.size>=4) {
                     val oldest=requested.keys.first();requested.remove(oldest);pending.remove(oldest);ready.remove(oldest)
                 }
-                requested[style]=key;pending[style]=Request(key,source)
+                requested[style]=key;pending[style]=Request(key,source,epoch)
                 if(!running) {
                     running=true
-                    try { executor.execute(::drain) } catch(t:Throwable) { running=false;requested.clear();pending.clear();throw t }
+                    try { executor.execute(::drain) } catch(t:Throwable) {
+                        running=false;requested.clear();pending.clear()
+                        retryAtMs=SystemClock.uptimeMillis()+RuntimeWorkPolicy.failureDelayMs(t)
+                        RuntimeWorkPolicy.guarded({}) { failed(t) }
+                    }
                 }
             }
             return ready[style]
         }
     }
 
+    /** Drop references only: published bitmaps may still be used by recorded RenderNodes. */
+    fun clear() = synchronized(lock) {
+        epoch++;geometry=null;requested.clear();pending.clear();ready.clear()
+    }
+
     private fun drain() {
-        try { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) } catch(_:Throwable) { }
-        while(true) {
-            val request=synchronized(lock) {
-                val next=pending.entries.firstOrNull()
-                if(next==null) { running=false;return }
-                pending.remove(next.key);next.value
-            }
-            try {
-                val bitmap=compute(request)
-                val publish=synchronized(lock) {
-                    val style=request.key.style
-                    if(geometry==style.geometry && requested.containsKey(style)) { ready[style]=bitmap;true } else false
+        RuntimeWorkPolicy.guarded({}) { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
+        // Keep the last good image while coalescing new frames. Cap expensive dense filtering at
+        // ten jobs/second for the whole worker, not ten per button. First request is immediate.
+        try {
+            while(true) {
+                val wait=RuntimeWorkPolicy.BLUR_INTERVAL_MS-(SystemClock.uptimeMillis()-lastComputeAtMs)
+                if(wait>0)Thread.sleep(wait)
+                val request=synchronized(lock) {
+                    val next=pending.entries.firstOrNull() ?: return
+                    pending.remove(next.key);next.value
                 }
-                if(publish)invalidate()
-            } catch(t:Throwable) {
-                retryAtMs=SystemClock.uptimeMillis()+1000L
-                synchronized(lock) { requested.clear();pending.clear() }
-                failed(t)
+                if(request.epoch!=epoch)continue
+                lastComputeAtMs=SystemClock.uptimeMillis()
+                try {
+                    val bitmap=compute(request)
+                    val publish=synchronized(lock) {
+                        val style=request.key.style
+                        if(request.epoch==epoch && geometry==style.geometry && requested.containsKey(style)) {
+                            ready[style]=bitmap;true
+                        } else false
+                    }
+                    if(publish) RuntimeWorkPolicy.guarded(failed, invalidate)
+                    else bitmap.recycle() // Never published, therefore no shader can own it.
+                } catch(_: java.util.concurrent.CancellationException) {
+                    // Screen-off/geometry change: abandon intermediate pixels, no retry or log.
+                } catch(t:Throwable) {
+                    retryAtMs=SystemClock.uptimeMillis()+RuntimeWorkPolicy.failureDelayMs(t)
+                    clear()
+                    RuntimeWorkPolicy.guarded({}) { failed(t) }
+                }
+            }
+        } catch(t:Throwable) {
+            retryAtMs=SystemClock.uptimeMillis()+RuntimeWorkPolicy.failureDelayMs(t)
+            clear()
+            RuntimeWorkPolicy.guarded({}) { failed(t) }
+        } finally {
+            synchronized(lock) {
+                running=false
+                // resolve() may enqueue between the empty poll and this finally.
+                if(pending.isNotEmpty()) {
+                    running=true
+                    try { executor.execute(::drain) } catch(t:Throwable) {
+                        running=false;clear()
+                        retryAtMs=SystemClock.uptimeMillis()+RuntimeWorkPolicy.failureDelayMs(t)
+                        RuntimeWorkPolicy.guarded({}) { failed(t) }
+                    }
+                }
             }
         }
     }
 
     private fun compute(request:Request):Bitmap {
         val source=request.source;val style=request.key.style;val geo=style.geometry
-        var small=if(source.config==Bitmap.Config.HARDWARE)source.copy(Bitmap.Config.ARGB_8888,false) else source
+        var small=if(source.config==Bitmap.Config.HARDWARE)(source.copy(Bitmap.Config.ARGB_8888,false) ?: error("Hardware snapshot copy unavailable")) else source
         try {
             val size=ButtonBackdropBlur.workingSize(source.width,source.height,geo.screenWidth,geo.screenHeight,style.radius)
             while(small.width/2>=size[0] && small.height/2>=size[1] && (small.width>size[0] || small.height>size[1])) {
@@ -116,7 +152,7 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
             val pixels=IntArray(small.width*small.height)
             small.getPixels(pixels,0,small.width,0,0,small.width,small.height)
             val sigma=style.radius*(small.width/geo.screenWidth+small.height/geo.screenHeight)*.5f
-            return FloatBackdropBitmap.create(ButtonBackdropBlur.applyPremultiplied(pixels,small.width,small.height,sigma),small.width,small.height)
+            return FloatBackdropBitmap.create(ButtonBackdropBlur.applyPremultiplied(pixels,small.width,small.height,sigma) { request.epoch!=epoch },small.width,small.height)
         } finally { if(small!==source)small.recycle() }
     }
 }
@@ -129,6 +165,7 @@ internal object FloatBackdropBitmap {
     fun create(argb:FloatArray,width:Int,height:Int):Bitmap {
         require(argb.size==width*height*4)
         val bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.RGBA_F16,true,ColorSpace.get(ColorSpace.Named.SRGB))
+        try {
         val buffer=ByteBuffer.allocate(bitmap.byteCount).order(ByteOrder.nativeOrder())
         for(y in 0 until height) {
             buffer.position(y*bitmap.rowBytes)
@@ -140,5 +177,6 @@ internal object FloatBackdropBitmap {
         }
         buffer.rewind();bitmap.copyPixelsFromBuffer(buffer)
         return bitmap
+        } catch(t:Throwable) { bitmap.recycle();throw t }
     }
 }

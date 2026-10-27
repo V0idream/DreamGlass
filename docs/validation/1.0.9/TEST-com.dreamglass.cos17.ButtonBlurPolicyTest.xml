@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.dreamglass.cos17.ButtonBlurPolicyTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-27T05:44:47.890Z" hostname="VOIDREAM" time="0.003">
+  <properties/>
+  <testcase name="absentOrInvalidSettingKeepsExistingMaterialBlur" classname="com.dreamglass.cos17.ButtonBlurPolicyTest" time="0.0"/>
+  <testcase name="sliderChangesBlurRadiusAndClampsOnlyItsUpperBound" classname="com.dreamglass.cos17.ButtonBlurPolicyTest" time="0.0"/>
+  <testcase name="nonButtonsKeepTheirOwnBlurIncludingZero" classname="com.dreamglass.cos17.ButtonBlurPolicyTest" time="0.0"/>
+  <testcase name="fractionalValuesArePixelRadiiNotAlphaFractions" classname="com.dreamglass.cos17.ButtonBlurPolicyTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

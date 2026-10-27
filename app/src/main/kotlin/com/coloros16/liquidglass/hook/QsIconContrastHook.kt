@@ -108,16 +108,18 @@ class QsIconContrastRenderer(
     }
 
     private fun watch() {
-        if (scheduled || !panelActive()) return
+        if (scheduled || !panelActive() || (!enabled() && !lastEnabled)) return
         scheduled = true
         handler.postDelayed(object : Runnable {
             override fun run() {
                 scheduled = false
-                if (!panelActive() || tracked.keys.none { it.isAttachedToWindow && it.isShown }) return
-                val active = enabled(); val frame = frameToken()
-                if (active != lastEnabled || (active && frame !== lastFrame)) invalidateTracked()
-                lastEnabled = active; lastFrame = frame
-                scheduled = true; handler.postDelayed(this, 500L)
+                RuntimeWorkPolicy.guarded({}) {
+                    if (!panelActive() || tracked.keys.none { it.isAttachedToWindow && it.isShown }) return@guarded
+                    val active = enabled(); val frame = frameToken()
+                    if (active != lastEnabled || (active && frame !== lastFrame)) invalidateTracked()
+                    lastEnabled = active; lastFrame = frame
+                    if (active) { scheduled = true; handler.postDelayed(this, 500L) }
+                }
             }
         }, 500L)
     }

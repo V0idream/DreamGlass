@@ -5,5 +5,6 @@
         <activity android:name="com.dreamglass.cos17.IconContrastProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.BlurQualityProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.MaterialStudyProbeActivity" android:exported="true" />
+        <activity android:name="com.dreamglass.cos17.StabilityProbeActivity" android:exported="true" />
     </application>
 </manifest>

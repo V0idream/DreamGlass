@@ -249,14 +249,6 @@ object BlurDrawHook {
     private const val HEADS_UP_BURST_FRAME_INTERVAL_MS = 45L
     /** heads-up 连抓早期 sfc 未就绪（heads-up 窗口 attach 滞后）时重试间隔毫秒。 */
     private const val HEADS_UP_BURST_RETRY_MS = 60L
-    /** [doc/spec/105 P1-4] 主线程同步首帧去重窗口（ms）。连抓 5~6 帧（6×45=270ms）本就跑在专用连抓
-     *  worker 上，主线程只剩**一次**同步 captureDisplay（20-50ms）；本窗口把「同一时刻多个触发点」
-     *  （下拉 onExpansionStarted + 数张 heads-up 新卡各自 previous==null）压成**只同步抓一次**，
-     *  其余降级入队 worker —— 即「主线程只留必要的一次」。 */
-    private const val MAIN_SYNC_FIRST_FRAME_WINDOW_MS = 300L
-    /** [doc/spec/105 P1-4] 上次真正做了主线程同步首帧的时刻（uptimeMillis；0 = 还没做过） */
-    @Volatile
-    private var lastMainSyncFirstFrameAt = 0L
     /** [2026-08-13 用户要求「通知持续期间必须一直抓屏」] heads-up 活跃期间**不间断**抓屏间隔毫秒。
      *  通知是瞬态场景（持续数秒），持续抓屏可接受；间隔 50ms ≈ 20Hz（captureDisplay 同步 Binder 自身
      *  20-50ms 耗时叠加，实际 ~10-14Hz），覆盖通知内容/入场动画每一帧变化。worker 线程执行（主线程仅首帧
@@ -982,6 +974,10 @@ object BlurDrawHook {
                     textForceRefreshScheduled = false
                     return
                 }
+                if (!screenInteractive || (!panelExpansionActive && !isHeadsUpHostActive())) {
+                    textForceRefreshScheduled = false
+                    return
+                }
                 val interval = textForceRefreshIntervalMs()
                 if (interval <= 0) {
                     // 0 = 关闭周期刷新（仅事件触发）
@@ -1024,6 +1020,7 @@ object BlurDrawHook {
      *  registerHostView / heads-up 活跃变化（triggerHeadsUpAppearanceCapture）。 */
     @Synchronized
     private fun ensureTextForceRefreshLoop() {
+        if (!screenInteractive || (!panelExpansionActive && !isHeadsUpHostActive())) return
         if (textForceRefreshScheduled) return
         val interval = textForceRefreshIntervalMs()
         if (interval <= 0) return  // 周期刷新关闭（0），仅事件触发
@@ -1381,6 +1378,18 @@ object BlurDrawHook {
             return
         }
         try {
+            screenInteractive = (ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isInteractive ?: true
+            ctx.registerComponentCallbacks(object : android.content.ComponentCallbacks2 {
+                override fun onConfigurationChanged(config: android.content.res.Configuration) = Unit
+                override fun onLowMemory() { safeModuleTask {
+                    captureRetryAtMs = SystemClock.uptimeMillis() + 5_000L
+                    if (buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
+                } }
+                override fun onTrimMemory(level: Int) { safeModuleTask {
+                    if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW &&
+                        buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
+                } }
+            })
             val filter = android.content.IntentFilter().apply {
                 addAction(android.content.Intent.ACTION_SCREEN_ON)
                 addAction(android.content.Intent.ACTION_SCREEN_OFF)
@@ -1392,6 +1401,24 @@ object BlurDrawHook {
                         val action = intent?.action ?: return
                         // 缓存置过期 → 下次 isKeyguardLockedNow 强制实测（不直接写死状态值）
                         cachedKeyguardLockedAt = 0L
+                        if (action == android.content.Intent.ACTION_SCREEN_OFF) {
+                            screenInteractive = false
+                            captureEpoch++
+                            synchronized(this@BlurDrawHook) {
+                                elementCaptureQueue.clear(); pendingCaptureIds.clear()
+                            }
+                            if (buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
+                            mainHandler().removeCallbacks(retryInvalidateRunnable)
+                            retryLoopPosted = false
+                            mainHandler().removeCallbacks(periodicCaptureRunnable)
+                            periodicCapturePosted = false
+                            mainHandler().removeCallbacks(textForceRefreshRunnable)
+                            textForceRefreshScheduled = false
+                        } else {
+                            screenInteractive = true
+                            ensureTextForceRefreshLoop()
+                            kickPeriodicCapture()
+                        }
                         if (moduleLogEnabled) Lg.d(TAG, "lg-batt: keyguard cache invalidated by broadcast $action")
                     } catch (t: Throwable) {
                         Lg.e(TAG, "lg-batt: keyguard broadcast onReceive error", t)
@@ -1979,15 +2006,34 @@ object BlurDrawHook {
     @Volatile private var observedPanelBlurRadius = 0
     @Volatile private var cachedCcBlurOnButtons = Prefs.DEFAULT_CC_BLUR_ON_BUTTONS
     @Volatile private var cachedCcBlurOnButtonsTimeMs = 0L
-    private val buttonBackdropWorker by lazy {
+    private val buttonBackdropWorkerDelegate = lazy {
         ButtonBackdropWorker(::postInvalidateHosts) { error ->
             logThrottled("button-system-blur-failed", Log.WARN) {
                 "button system blur unavailable; keep independent material: ${error.javaClass.simpleName}"
             }
         }
     }
+    private val buttonBackdropWorker by buttonBackdropWorkerDelegate
+    @Volatile private var screenInteractive = true
+    @Volatile private var captureRetryAtMs = 0L
+    @Volatile private var captureEpoch = 0L
+    private var lastCaptureStartMs = 0L
+    private val captureExecutor = RuntimeWorkPolicy.executor("DreamGlass-capture")
+    private val contrastExecutor = RuntimeWorkPolicy.executor("DreamGlass-contrast")
+
+    private fun safeModuleTask(action: () -> Unit) = RuntimeWorkPolicy.guarded(
+        { error -> Lg.e(TAG, "module asynchronous task failed; retain native fallback", error) }, action)
+
+    private fun safeRunnable(action: () -> Unit) = Runnable { safeModuleTask(action) }
+
+    private fun safeThread(action: () -> Unit): Thread = Thread({
+        safeModuleTask { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
+        safeModuleTask(action)
+    }, "DreamGlass-scene").apply { isDaemon = true }
+
     private fun bindQualityBackdrop(id: Int, source: Bitmap, screen: RectF, sourceRect: RectF,
         sourceIsSnapshot: Boolean, params: LiquidGlassShader.Params): ButtonBackdropBinding.Bound {
+        if (!screenInteractive) return ButtonBackdropBinding.Bound(source, sourceRect, params)
         val panelRadius = if (ccBlurOnButtonsEnabled() && isButtonBlurRegion(id) && observedPanelBlurRadius > 0)
             ButtonBackdropBlur.radius(observedPanelBlurRadius, ccBlurStrength()) else null
         return ButtonBackdropBinding.resolve(buttonBackdropWorker, source, screen, sourceRect,
@@ -7110,9 +7156,9 @@ object BlurDrawHook {
             Lg.i(TAG, "seedling-cardview: continuous capture worker start (rate ${panelCaptureHz()}Hz)")
         }
         try {
-            Thread {
+            safeThread {
                 try {
-                    while (true) {
+                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
                         // 卡片收起/窗口销毁（detach/隐藏）→ 停止（零后台耗电）
                         if (!isCardBackgroundHostActive()) {
                             cardBackgroundActiveHost = null
@@ -7867,12 +7913,12 @@ object BlurDrawHook {
             Lg.i(TAG, "simple-banner: continuous capture worker start (rate ${hz}Hz, force=$force)")
         }
         try {
-            Thread {
+            safeThread {
                 try {
                     if (moduleLogEnabled) {
                         Lg.i(TAG, "simple-banner: continuous worker thread alive")
                     }
-                    while (true) {
+                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
                         try {
                             // [2026-08-15 自愈] host 被新横幅实例接管 → 本 worker 退出（新 worker 接管刷新，
                             // 防双 worker 并发；running 由 finally 复位）
@@ -8459,7 +8505,7 @@ object BlurDrawHook {
         if (now - lastForceRefreshTextColorMs < FORCE_REFRESH_TEXT_COLOR_MIN_INTERVAL_MS) return
         lastForceRefreshTextColorMs = now
         try {
-            mainHandler().post { forceRefreshAllTextColors() }
+            mainHandler().post { safeModuleTask { if (screenInteractive) forceRefreshAllTextColors() } }
         } catch (t: Throwable) {
             Lg.e(TAG, "text-contrast forceRefresh post failed", t)
         }
@@ -9062,27 +9108,25 @@ object BlurDrawHook {
     }
 
     /** [doc/spec/105 P0-1] 延迟补跑：清脏标记 → 全表 invalidate（窗口内新触发会重新排一次） */
-    private val hostInvalidateDrain = Runnable {
+    private val hostInvalidateDrain = safeRunnable {
         hostInvalidateLastAt = SystemClock.uptimeMillis()
         hostInvalidatePending = false
-        doInvalidateRegisteredHostViews()
+        safeModuleTask { doInvalidateRegisteredHostViews() }
     }
 
     /** [doc/spec/105 P0-1] 真正的全表失效（原 [invalidateRegisteredHostViews] 函数体，语义未变）。 */
-    @Synchronized
     private fun doInvalidateRegisteredHostViews() {
-        val it = registeredHostViews.values.iterator()
-        while (it.hasNext()) {
-            val v = it.next().ref.get()
-            if (v == null) {
-                it.remove()
-                continue
+        val hosts = synchronized(this) {
+            val iterator = registeredHostViews.values.iterator()
+            val live = ArrayList<View>()
+            while (iterator.hasNext()) {
+                val view = iterator.next().ref.get()
+                if (view == null) iterator.remove() else live.add(view)
             }
-            try {
-                v.invalidate()
-            } catch (t: Throwable) {
-                Lg.e(TAG, "taskG: invalidate host view failed", t)
-            }
+            live
+        }
+        for (view in hosts) safeModuleTask {
+            if (view.isAttachedToWindow && view.isShown) view.invalidate()
         }
     }
 
@@ -9145,7 +9189,7 @@ object BlurDrawHook {
      *  [doc/spec/49 2026-08-13] 拖动结束补算 QS 亮度 + 文字反色：拖动期 worker 跳过了
      *  updateQsBrightness 全图扫描（见 runElementCaptureWorker），此处复位时用最新 screenSnapshot
      *  补算一次（worker 线程跑全图扫描，不阻塞主线程）。 */
-    private val motionResetRunnable = Runnable {
+    private val motionResetRunnable = safeRunnable {
         isMotionActive = false
         // [doc/spec/49] 拖动结束补算（读最新快照 @Volatile；全图扫描放 worker 线程）
         // [doc/spec/108 M4] 改走 runTextContrastScanAsync：原来在这里裸起 Thread，与 textScan worker
@@ -9189,9 +9233,9 @@ object BlurDrawHook {
      * 调度：渲染侧 buildLiquidShader 失败置 glassRetryPending 后调 [scheduleGlassRetry]（幂等）。
      * 停跑：执行时 pending 已清（渲染成功 / 别处已重试）→ 不再续排，零空转。
      */
-    private val retryInvalidateRunnable = Runnable {
+    private val retryInvalidateRunnable = safeRunnable {
         retryLoopPosted = false
-        if (!glassRetryPending) return@Runnable
+        if (!glassRetryPending || !screenInteractive) return@safeRunnable
         glassRetryPending = false
         lastRetryInvalidateAt = SystemClock.uptimeMillis()
         retryIntervalMs = (retryIntervalMs * 2).coerceAtMost(4000L)
@@ -9202,6 +9246,7 @@ object BlurDrawHook {
     /** 调度一次回退重试（幂等：已排则不重复排；主线程执行 invalidate）。
      *  渲染线程可调——[mainHandler] 是主 Looper 的 Handler，postDelayed 线程安全。 */
     private fun scheduleGlassRetry() {
+        if (!screenInteractive) return
         if (retryLoopPosted) return
         retryLoopPosted = true
         try {
@@ -9226,7 +9271,7 @@ object BlurDrawHook {
      * captureDisplay 在 worker 线程（不阻塞主线程/渲染线程），pending 去重防重复入队。
      * 停止条件：宿主全灭（registeredHostViews 无存活引用）→ 不续跑；模式=静态 → 同上。
      */
-    private val periodicCaptureRunnable = Runnable {
+    private val periodicCaptureRunnable = safeRunnable {
         periodicCapturePosted = false
         var forceCaptureScene = false
         try {
@@ -9282,6 +9327,10 @@ object BlurDrawHook {
 
     /** 启动/续跑周期性抓屏（主线程调用；模式=静态 / 宿主全灭 → 不续跑）。改动 ≤1s 生效（每周期重读 Prefs）。 */
     private fun kickPeriodicCapture(highRate: Boolean = false) {
+        if (!screenInteractive || !Prefs.glassEnabled(api)) return
+        // Attached QS views outlive the visible shade. References alone must not keep waking it.
+        if (!panelExpansionActive && !isHeadsUpHostActive() &&
+            !isCardBackgroundHostActive() && !isSimpleBannerHostActive()) return
         // 省电开启 → 不启动周期抓屏（省电下玻璃已关，抓屏纯耗电）
         if (isPowerSaveGlassOff()) return
         if (!isPeriodicCaptureEnabled()) return
@@ -9340,18 +9389,15 @@ object BlurDrawHook {
         return v
     }
 
-    /** 持续抓屏 tick 间隔毫秒：运动时满速 [panelCaptureHz]（默认 60Hz）、静止时减半（30Hz）
+    /** 即时模式沿用配置速率（静止减半）；变化模式运动最多 30Hz、静止最多 12Hz。
+     * 持续抓屏 tick 间隔：
      *  ——用 [isMotionActive] 运动标志判定（[markMotion] 由面板动画 / 内容变化 / 元素移动（QS 翻页 /
      *  setExpansionHeight / 通知卡滑动）置位，复位延迟 300ms）。
      *  间隔 = 1000/有效Hz ms，clamp 4~1000ms（防过快打爆 SF / 过慢背景滞后）。下拉面板与通知横幅共用
      *  同一套速率（[startPanelContinuousCapture] / [startHeadsUpContinuousCapture]）。 */
-    private fun continuousCaptureIntervalMs(): Long {
-        val hz = panelCaptureHz()
-        // 运动时满速（panelCaptureHz 默认 60Hz）、静止时减半 30Hz——isMotionActive 为 @Volatile 运动标志
-        val effectiveHz = if (isMotionActive) hz else hz / 2
-        val clamped = effectiveHz.coerceIn(1, Prefs.PANEL_CAPTURE_HZ_MAX)
-        return (1000.0 / clamped).toLong().coerceIn(4L, 1000L)
-    }
+    private fun continuousCaptureIntervalMs(): Long = RuntimeWorkPolicy.captureIntervalMs(
+        panelCaptureHz(), isMotionActive, captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE)
+
 
     /** 抓屏降采样比例（KEY_BG_CAPTURE_SCALE，clamp 0.25~1.0，默认 0.5f）
      *  [2026-08-13 captureDisplay 开始延迟优化] 远程 Prefs 时间节流缓存（≥CAPTURE_PREFS_CACHE_MS 才重读，
@@ -12259,100 +12305,22 @@ object BlurDrawHook {
             burstStop = { false },
             logTag = "panel-first",
             pauseDuringPanelExpansion = false,
-            mainThreadSyncFirstFrame = true,
         )
     }
 
-    /**
-     * [doc/spec/50 + doc/spec/51 用户补充·统一逻辑 + 2026-08-14 spec/56 + 2026-08-15 恢复 worker +
-     * 2026-08-15 用户要求主线程立即截屏] **首帧立即触发抓屏 + 连抓 5~6 帧**。下拉首帧
-     * （[triggerBackgroundCaptureOnMainThread]）与通知首帧（[triggerHeadsUpAppearanceCapture]）共用本方法：
-     * **[2026-08-15] 首帧主线程同步截屏**（[mainThreadSyncFirstFrame]=true 时在调用点主线程直接执行
-     * [captureSnapshotImmediate]：resolveShadeSfcOrFallback → captureScreenSnapshot → screenSnapshot = bg
-     * + postInvalidateHosts，**同步 captureDisplay 20-50ms 立即替换渲染缓冲区，什么都不等**）
-     * + 连抓 worker 后台快速补帧（帧间隔 45ms）→ 覆盖首帧后的入场/展开动画窗口 ~300ms。
-     * [mainThreadSyncFirstFrame]=false（默认）时触发 = 入队 worker 立即抓（异步，主线程零阻塞）。
-     *
-     * 用户硬约束：「刚下拉/横幅通知弹出必须立马抓，宁可拉高负载不拖」+「首帧多抓几帧 5~6 帧」+
-     * 「通知横幅在出现的时候立马截一张屏，什么都不等」（2026-08-15）。
-     *
-     * **2026-08-13 回退主线程同步（2026-08-14 spec/56 反转 → 2026-08-15 恢复 worker → 2026-08-15 用户要求
-     * 首帧主线程同步）**：曾因对照实验回退为 worker 异步（主线程零阻塞）；spec/56 曾改主线程直接抓屏（worker
-     * 卡死根因）；2026-08-15 worker 队列恢复（根因 A/B 已修复）。现按用户要求**首帧单次主线程同步**（20-50ms
-     * 可接受），后续帧（连抓/持续/内容变化）全部入队 worker 异步——首帧立即替换缓冲区，持续后台零阻塞。
-     *
-     * **[2026-08-13 通知抓屏单通道收敛 → spec/56 取消 → 2026-08-15 恢复]** 连抓/持续 worker 作为节拍器周期性
-     * [scheduleElementCaptures] 入队主 worker（SNAPSHOT_ID 同一队列，pending 去重 + 单 worker 串行 = 天然
-     * 单通道，captureDisplay 仅主 worker 一路执行），spec/51 单通道收敛语义恢复。主线程同步首帧不入队
-     * （无 pending 冲突），连抓第一 tick 入队被 pending 去重吸收 / worker 串行 = 不双路并发。
-     *
-     * 失败回退：首帧失败（sfc 解析 / capture）走 [captureSnapshotImmediate] 内 [scheduleCaptureRetry] 快速
-     * 重试（重新入队 worker，force=true 不被冷却拦）→ 回退 worker 持续抓屏，不阻塞；通知场景另有
-     * [startHeadsUpContinuousCapture] 持续 worker 兜底。
-     *
-     * @param burstStop 连抓停止条件：通知=通知已消失（[isHeadsUpHostActive] false）提前停；
-     *  下拉=恒 false（连抓跑完即止，短时有限突发）。
-     * @param logTag 日志前缀（panel-first=下拉首帧 / heads-up=通知首帧）。
-     * @param mainThreadSyncFirstFrame true=首帧在调用点（主线程）同步 [captureSnapshotImmediate] 立即替换
-     *  缓冲区（什么都不等）；false=触发入队 worker 异步抓首帧。
-     */
+    /** All first frames use the same serial background capture queue. A slow Binder/display
+     * capture must never block SystemUI's main Looper or compete with an in-flight worker.
+     * Keep the last good snapshot until a new one arrives; existing burst frames recover startup. */
     private fun triggerFirstFrameCaptureWithBurst(
         burstStop: () -> Boolean,
         logTag: String,
         pauseDuringPanelExpansion: Boolean,
-        mainThreadSyncFirstFrame: Boolean = false,
     ) {
-        // 静态模式 → 首帧同步与连抓都不执行（零抓屏，快照冻结为现有值）
-        if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
+        if (!screenInteractive || captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
         markContentChanged()
-        if (mainThreadSyncFirstFrame) {
-            // [doc/spec/105 P1-4] 主线程同步首帧限频：**窗口内只同步抓一次**，其余触发点降级入队
-            // worker（连抓 5~6 帧本就在专用连抓 worker，见 scheduleHeadsUpBurstWorker → Thread → 只入队）。
-            // 多触发点撞车的典型场景：下拉首帧（onExpansionStarted）与同时刻出现的多张 heads-up 新卡
-            //（recordNotificationCardRegion previous==null 每卡各触发一次）——每个都要在主线程同步
-            // captureDisplay 20-50ms，叠起来就是「首帧连抓风暴」。
-            // **取舍（必须真机复测）**：被降级的那次首帧背景**可能晚 1-2 帧**（worker 抓完
-            // postInvalidateHosts 才上屏）；换来的是主线程不再连续扛多次 20-50ms 同步 Binder。
-            val now = SystemClock.uptimeMillis()
-            if (now - lastMainSyncFirstFrameAt < MAIN_SYNC_FIRST_FRAME_WINDOW_MS) {
-                diagFirstLog("main-thread-dedup", " logTag=$logTag gap=${now - lastMainSyncFirstFrameAt}ms")
-                logThrottled("lg-first-main-dedup", Log.INFO) {
-                    "lg-first: sync first frame deduped in ${MAIN_SYNC_FIRST_FRAME_WINDOW_MS}ms window, " +
-                        "enqueue worker instead (logTag=$logTag, spec/105)"
-                }
-                triggerBackgroundCapture()
-            } else {
-                lastMainSyncFirstFrameAt = now
-                // [spec/58 追加 2026-08-15 诊断日志] 主线程同步首帧链路起点（lg-first）：进入本分支即主线程
-                // 同步开始（对比 lg-hook 的 onExpansionStarted/setExpansionHeight 触发点看 hook → 首帧抓屏延迟）
-                diagFirstLog("main-thread-start", " logTag=$logTag")
-                // [2026-08-15 用户要求·下拉/通知出现瞬间主线程立即截屏，什么都不等] 首帧**主线程同步**执行
-                // [captureSnapshotImmediate]（resolveShadeSfcOrFallback → captureScreenSnapshot →
-                // screenSnapshot = bg + postInvalidateHosts，**直接替换渲染缓冲区，不等后台 worker**）。
-                // 调用线程 = 本方法调用点（mountPanelExpansion 首帧分支 / recordNotificationCardRegion heads-up
-                // 新卡分支，均主线程）→ 同步 captureDisplay 单次 20-50ms（sfc 已缓存）首帧一次可接受；
-                // 失败（sfc 解析 / capture）走 [captureSnapshotImmediate] 内 [scheduleCaptureRetry]（主线程
-                // postDelayed 60ms/320ms 快速重试 → 重新入队 worker，force=true 不被失败冷却硬拦）快速回退
-                // worker 持续抓屏，不阻塞。
-                // **防双路**：主线程同步截屏不入队（pending 无 SNAPSHOT_ID），后续连抓/持续 worker tick 入队
-                // 被 [pendingCaptureIds] 去重吸收 + 单 worker 串行 = 同刻至多一路 captureDisplay（spec/51
-                // 单通道收敛语义保持）。
-                captureSnapshotImmediate("$logTag-main-thread")
-            }
-        } else {
-            // [2026-08-15 恢复 worker 默认路径] 触发 = 入队 worker 立即抓（异步，主线程零阻塞；
-            // captureDisplay 由 worker 线程同步执行 [captureSnapshotImmediate]）。
-            triggerBackgroundCapture()
-        }
-        // 连抓 5~6 帧（用户要求保留）：专用连抓 worker 后台快速补帧（首帧已由主线程同步抓取 / 或触发路径
-        // 入队，连抓全部帧覆盖后续入场/展开动画窗口），主线程零阻塞。
-        // pauseDuringPanelExpansion：通知场景 true（下拉展开期间暂停，避免与下拉抓屏竞争 captureDisplay）；
-        // 下拉场景 false（下拉自身连抓照跑，覆盖入场动画）。
+        triggerBackgroundCapture()
         scheduleHeadsUpBurstWorker(
-            HEADS_UP_BURST_TOTAL_FRAMES,
-            burstStop,
-            logTag,
-            pauseDuringPanelExpansion,
+            HEADS_UP_BURST_TOTAL_FRAMES, burstStop, logTag, pauseDuringPanelExpansion,
         )
     }
 
@@ -12394,7 +12362,6 @@ object BlurDrawHook {
             burstStop = { !isHeadsUpHostActive() },
             logTag = "heads-up",
             pauseDuringPanelExpansion = true,
-            mainThreadSyncFirstFrame = true,
         )
         // [2026-08-14 横幅主动源·恢复持续抓屏] 横幅不走 onBlurReady（反编译铁证：heads-up 默认走
         // BackgroundBlurDrawable/被 excludeRules 拦，posteffect drawable 不注册 → onBlurReady 不触发），
@@ -12439,9 +12406,9 @@ object BlurDrawHook {
         if (headsUpBurstRunning) return
         headsUpBurstRunning = true
         try {
-            Thread {
+            safeThread {
                 try {
-                    while (true) {
+                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
                         // [2026-08-13 延迟调查·竞争暂停] 通知场景（pauseDuringPanelExpansion=true）且面板
                         // 下拉展开中（panelExpansionActive）→ 暂停连抓，避免与下拉抓屏并发锤 captureDisplay
                         // （SF 串行 → 主抓屏被排队拖后 50-150ms）。短等后重查（不消耗剩余帧数），
@@ -12525,9 +12492,9 @@ object BlurDrawHook {
         }
         headsUpContinuousRunning = true
         try {
-            Thread {
+            safeThread {
                 try {
-                    while (true) {
+                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
                         // 通知消失（detach/回 shade）→ 停止（零后台耗电）
                         if (!isHeadsUpHostActive()) {
                             val h = headsUpActiveHost?.get()
@@ -12605,9 +12572,9 @@ object BlurDrawHook {
         }
         panelContinuousRunning = true
         try {
-            Thread {
+            safeThread {
                 try {
-                    while (true) {
+                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
                         // 面板收起（setExpansionHeight<=0）→ 停止（零后台耗电）
                         if (!panelExpansionActive) {
                             Lg.i(TAG, "bg-element: panel collapsed, continuous capture stopped")
@@ -12661,6 +12628,7 @@ object BlurDrawHook {
      *  变化抓屏不再节流（旧键 KEY_BG_CAPTURE_MIN_INTERVAL_MS 停用，内容变化一律立即入队）。
      *  静态模式不入队（零抓屏，快照冻结为现有值）。 */
     private fun scheduleElementCaptures() {
+        if (!screenInteractive || !Prefs.glassEnabled(api) || isPowerSaveGlassOff()) return
         if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
         // 入队 → kick 起 worker 消费（异步，主线程零阻塞）。无论 enqueue 是否实际
         // 入队都 kick（pending 去重命中 = 队列已有任务待消费或 worker 正在抓，kick 内部 running>0 / 队列空
@@ -12715,6 +12683,7 @@ object BlurDrawHook {
      *    [runTextContrastScanAsync]（不阻塞抓屏线程/主线程/渲染；拖动期 isMotionActive 跳过，spec/49 C 保留）。
      */
     private fun captureSnapshotImmediate(source: String, regionMode: Boolean = false) {
+        if (!screenInteractive || !Prefs.glassEnabled(api) || SystemClock.uptimeMillis() < captureRetryAtMs) return
         // [spec/85 省电模式] 省电开启 → 真正的 captureDisplay 也不执行（省电下玻璃已关，零抓屏）
         if (isPowerSaveGlassOff()) {
             logThrottled("power-save-skip-capture", Log.INFO) {
@@ -12722,6 +12691,7 @@ object BlurDrawHook {
             }
             return
         }
+        val epochAtStart = captureEpoch
         // 区域模式：先算活跃瞬态 region 并集；拿不到就清区域快照并退出（整屏快照保持原样）
         val regionBBox = if (regionMode) {
             val bbox = transientRegionBBox()
@@ -12759,6 +12729,7 @@ object BlurDrawHook {
             captureScreenSnapshot(shade)
         }
         if (bg != null) {
+            if (!screenInteractive || epochAtStart != captureEpoch) { bg.bitmap.recycle(); return }
             if (regionBBox != null) {
                 // 区域快照用独立指纹比对：内容未变丢弃本帧，不驱动重绘
                 val regionFp = snapshotContentFingerprint(bg.bitmap)
@@ -12766,6 +12737,7 @@ object BlurDrawHook {
                     logThrottled("region-snapshot-unchanged", Log.DEBUG) {
                         "bg-element: region snapshot unchanged, frame dropped"
                     }
+                    bg.bitmap.recycle()
                     return
                 }
                 lastRegionSnapshotFingerprint = regionFp
@@ -12795,8 +12767,10 @@ object BlurDrawHook {
                 logThrottled("snapshot-unchanged", Log.DEBUG) {
                     "bg-element: snapshot unchanged, frame dropped (no invalidate)"
                 }
+                bg.bitmap.recycle()
                 return
             }
+            if (!screenInteractive) { bg.bitmap.recycle(); return }
             lastSnapshotFingerprint = fp
             screenSnapshot = bg
             RuntimeDiagnostics.mark("source", "成功取得系统背景缓冲")
@@ -12862,19 +12836,22 @@ object BlurDrawHook {
         // [doc/spec/108 M4] CAS 单飞：check-then-set 在「worker + motionReset 补算」两路并发时会双双通过
         if (!textScanRunning.compareAndSet(false, true)) return
         try {
-            Thread {
+            contrastExecutor.execute { safeModuleTask {
+                safeModuleTask { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
                 try {
                     updateQsBrightness(bg)
-                    mainHandler().post {
-                        if (textContrastEnabled) resampleAllTextContrast()
-                        qsIconContrastRenderer.invalidateTracked()
-                    }
+                    mainHandler().post { safeModuleTask {
+                        if (screenInteractive) {
+                            if (textContrastEnabled) resampleAllTextContrast()
+                            qsIconContrastRenderer.invalidateTracked()
+                        }
+                    } }
                 } catch (t: Throwable) {
                     Lg.e(TAG, "bg-element: text contrast scan failed", t)
                 } finally {
                     textScanRunning.set(false)
                 }
-            }.start()
+            } }
         } catch (t: Throwable) {
             textScanRunning.set(false)
             Lg.e(TAG, "bg-element: spawn text contrast scan thread failed", t)
@@ -12884,7 +12861,9 @@ object BlurDrawHook {
     /** [2026-08-15 恢复 worker] 入队待抓（pending 去重：同 id 已在队列/处理中则跳过，防重复入队积压）。
      *  worker 出队时移除；失败重试走 [scheduleCaptureRetry] 重新入队。@return 是否实际入队
      *  （false = 已在队列/处理中——此时队列必有任务待消费或 worker 正在抓，无需重复入队）。 */
+    @Synchronized
     private fun enqueueElementCapture(id: Int): Boolean {
+        if (!screenInteractive || SystemClock.uptimeMillis() < captureRetryAtMs) return false
         if (pendingCaptureIds.add(id)) {
             elementCaptureQueue.add(id)
             return true
@@ -12914,7 +12893,10 @@ object BlurDrawHook {
             elementCaptureWorkerRunning++
             diagWorkerLog("worker-spawn", " running=$elementCaptureWorkerRunning queue=${elementCaptureQueue.size} pending=$pendingCaptureIds")
             try {
-                Thread { runElementCaptureWorker() }.start()
+                captureExecutor.execute {
+                    safeModuleTask { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
+                    safeModuleTask { runElementCaptureWorker() }
+                }
             } catch (t: Throwable) {
                 elementCaptureWorkerRunning--
                 Lg.e(TAG, "bg-element: spawn worker failed", t)
@@ -12944,13 +12926,23 @@ object BlurDrawHook {
                 // 见此 SNAPSHOT_ID 即不重复入队（避免双路 captureDisplay）
                 captureInFlightIds.add(id)
                 try {
-                    captureSnapshotImmediate("worker", regionMode = id == REGION_SNAPSHOT_ID)
+                    // All event/timer channels share this admission limit, so duplicate event
+                    // bursts cannot bypass the change-mode budget. No pixels are downsampled here.
+                    val wait = continuousCaptureIntervalMs() - (SystemClock.uptimeMillis() - lastCaptureStartMs)
+                    if (wait > 0L) Thread.sleep(wait)
+                    if (screenInteractive && captureMode() != Prefs.BG_CAPTURE_MODE_STATIC) {
+                        lastCaptureStartMs = SystemClock.uptimeMillis()
+                        captureSnapshotImmediate("worker", regionMode = id == REGION_SNAPSHOT_ID)
+                    }
                 } finally {
                     captureInFlightIds.remove(id)
                 }
             }
         } catch (t: Throwable) {
-            Lg.e(TAG, "bg-element: worker error", t)
+            captureRetryAtMs = SystemClock.uptimeMillis() + RuntimeWorkPolicy.failureDelayMs(t)
+            synchronized(this) { elementCaptureQueue.clear(); pendingCaptureIds.clear() }
+            if (t is OutOfMemoryError && buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
+            Lg.e(TAG, "bg-element: worker error (backoff enabled)", t)
         } finally {
             synchronized(this) {
                 if (elementCaptureWorkerRunning > 0) elementCaptureWorkerRunning--
@@ -12972,7 +12964,10 @@ object BlurDrawHook {
                     elementCaptureWorkerRunning++
                     diagWorkerLog("worker-respawn", " queue=${elementCaptureQueue.size} running=$elementCaptureWorkerRunning")
                     try {
-                        Thread { runElementCaptureWorker() }.start()
+                        captureExecutor.execute {
+                    safeModuleTask { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
+                    safeModuleTask { runElementCaptureWorker() }
+                }
                     } catch (t: Throwable) {
                         elementCaptureWorkerRunning--
                         Lg.e(TAG, "bg-element: respawn worker failed", t)
@@ -13133,12 +13128,15 @@ object BlurDrawHook {
     }
 
     /** [worker → 主线程] 新元素背景就绪且存在回退标记时，主线程 invalidate 宿主强制重录重试玻璃。 */
+    private val hostPostPending = java.util.concurrent.atomic.AtomicBoolean(false)
     private fun postInvalidateHosts() {
-        try {
-            mainHandler().post { invalidateRegisteredHostViews() }
-        } catch (t: Throwable) {
-            Lg.e(TAG, "bg-element: postInvalidateHosts failed", t)
-        }
+        if (!screenInteractive || !hostPostPending.compareAndSet(false, true)) return
+        safeModuleTask {
+            if (!mainHandler().post {
+                hostPostPending.set(false)
+                safeModuleTask { if (screenInteractive) invalidateRegisteredHostViews() }
+            }) hostPostPending.set(false)
+        }.also { if (!it) hostPostPending.set(false) }
     }
 
     /**
@@ -13664,7 +13662,9 @@ object BlurDrawHook {
                 }
             }
         } catch (t: Throwable) {
-            Lg.e(TAG, "bg-element: IWindowManager.captureDisplay failed", t)
+            captureRetryAtMs = SystemClock.uptimeMillis() + RuntimeWorkPolicy.failureDelayMs(t)
+            if (t is OutOfMemoryError && buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
+            Lg.e(TAG, "bg-element: IWindowManager.captureDisplay failed (backoff enabled)", t)
             null
         }
     }

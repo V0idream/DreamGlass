@@ -67,13 +67,13 @@
     <string name="settings_unified_corner_px_desc">统一使用的圆角大小。较小的圆角会放大到该值；圆形和药丸形控件不变。</string>
     <string name="settings_capture_params_section">背景刷新</string>
     <string name="settings_capture_mode">模式</string>
-    <string name="settings_capture_mode_desc">即时抓屏按固定速率持续抓屏；变化抓屏在内容变化时立即抓屏，无变化时按最大抓屏间隔兜底；静态不抓屏，背景保持当前画面。</string>
+    <string name="settings_capture_mode_desc">即时抓屏使用配置速率；变化抓屏合并内容更新，运动最高30Hz、静止最高12Hz，无变化时按最大间隔兜底。面板不可见或熄屏时停止周期任务；静态保持当前画面。</string>
     <string name="settings_capture_mode_immediate">即时抓屏</string>
     <string name="settings_capture_mode_on_change">变化抓屏</string>
     <string name="settings_capture_mode_static">静态</string>
     <string name="settings_panel_capture_hz">即时抓屏速率</string>
     <string name="settings_panel_capture_hz_value">%1$d Hz</string>
-    <string name="settings_panel_capture_hz_desc">通知横幅、流体云卡与小横幅等瞬态场景的抓屏速率。越高越跟手，也越耗电。</string>
+    <string name="settings_panel_capture_hz_desc">即时模式的运动抓屏上限，静止时减半；变化模式额外限制为运动30Hz、静止12Hz。后台模糊合并最新帧，保持现有采样精度。越高越耗电。</string>
     <string name="settings_capture_scale">背景清晰度</string>
     <string name="settings_capture_scale_value">%1$.2fx</string>
     <string name="settings_capture_scale_desc">背景采样清晰度。0.5 更省电，1.0 更清晰。</string>

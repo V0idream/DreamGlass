@@ -34,8 +34,10 @@ object ButtonBackdropBlur {
         }
     }
 
-    fun applyPremultiplied(pixels: IntArray, width: Int, height: Int, sigma: Float): FloatArray {
+    @JvmOverloads
+    fun applyPremultiplied(pixels: IntArray, width: Int, height: Int, sigma: Float, cancelled: () -> Boolean = { false }): FloatArray {
         require(width > 0 && height > 0 && pixels.size == width * height)
+        if(cancelled())throw java.util.concurrent.CancellationException()
         var source=FloatArray(pixels.size*4)
         for(i in pixels.indices) {
             val p=pixels[i];val a=(p ushr 24).toFloat();val j=i*4
@@ -50,6 +52,7 @@ object ButtonBackdropBlur {
             (2.0*((r+1).toDouble()*(r+1)-variance))).coerceIn(0.0,1.0)
         var target=FloatArray(source.size)
         repeat(PASSES) {
+            if(cancelled())throw java.util.concurrent.CancellationException()
             box(source,target,width,height,r,edge,true)
             val swap=source;source=target;target=swap
             box(source,target,width,height,r,edge,false)

@@ -1,0 +1,3 @@
+--------- beginning of main
+10-27 05:41:25.505  1892  1912 I DreamGlassStabilityProbe: PASS callback+reporter exceptions contained; 120 frame/geometry churn; four styles recover; clear cancels; published bitmap retained; F16
+10-27 05:46:06.512  1953  1973 I DreamGlassStabilityProbe: PASS callback+reporter exceptions contained; 120 frame/geometry churn; four styles recover; clear cancels; published bitmap retained; F16

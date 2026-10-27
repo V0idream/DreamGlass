@@ -1,0 +1,15 @@
+{
+  "serial": "emulator-5580",
+  "physicalDeviceAccessed": false,
+  "colorOsHookTested": false,
+  "iosPresetPresent": true,
+  "selectedPreviewRadius": 8,
+  "builtinSlidersReadOnly": true,
+  "localPreviewSelectionReopened": true,
+  "originalUiValuesRestored": true,
+  "navigationBackPassed": true,
+  "frameworkPreferencePersistenceTested": false,
+  "onlyPreviewWithoutFramework": true,
+  "originalButtonBlurDisplay": "13 px",
+  "appCrashDetected": false
+}

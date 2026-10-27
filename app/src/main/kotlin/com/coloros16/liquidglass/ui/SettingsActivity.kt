@@ -1022,7 +1022,7 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // 即时抓屏速率：30~120Hz（默认 60），瞬态场景在任何模式下都按它抓
+        // 即时抓屏速率：30~120Hz（默认 60），即时模式沿用此上限；变化模式另有 30/12Hz 节流
         bindIntSeekBarStep(
             seek = view.findViewById(R.id.seekPanelCaptureHz), valueText = view.findViewById(R.id.panelCaptureHzValue),
             key = Prefs.KEY_PANEL_CAPTURE_HZ, default = Prefs.DEFAULT_PANEL_CAPTURE_HZ,
