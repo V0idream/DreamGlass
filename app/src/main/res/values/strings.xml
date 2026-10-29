@@ -339,4 +339,6 @@
     <string name="settings_notification_dissolve_desc">默认关闭。滑动删除与清空通知时，将卡片化为细颗粒飘散；不影响解锁或面板收起。需要 Android 13+ 硬件加速，省电模式和关闭系统动画时自动跳过。</string>
     <string name="settings_notification_dissolve_speed">飘散速度</string>
     <string name="settings_notification_dissolve_speed_value">%1$.2f×（越高越快）</string>
+    <string name="settings_assistant_screen_glass">负一屏材质边缘</string>
+    <string name="settings_assistant_screen_glass_desc">保留负一屏原生背景，添加按组件设置的高光与圆角。需在框架中启用负一屏作用域；默认关闭。</string>
 </resources>

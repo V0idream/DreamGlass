@@ -25,6 +25,7 @@ import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
+import com.coloros16.liquidglass.liquidglass.LowResTier
 import com.coloros16.liquidglass.liquidglass.ShaderInstancePool
 import com.coloros16.liquidglass.log.Lg
 import io.github.libxposed.api.XposedInterface
@@ -285,6 +286,8 @@ object LauncherHook {
         val refractionHeight: Float = 0f,
         /** 材质参数指纹（含预设覆盖值）：任一材质键变化都要重设 uniform，否则被早退分支吃掉。 */
         val materialHash: Int = 0,
+        /** 实际绑定的 uSourceLowRes 档位（miss 回退记实际档 4；档位变 → 全量重绑）。 */
+        val lowResDiv: Int = 4,
     )
 
     private class LiquidShaderBuild(val shader: RuntimeShader)
@@ -553,6 +556,7 @@ object LauncherHook {
         } catch (t: Throwable) {
             false
         }
+        LowResTier.logEnabled = moduleLogEnabled
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             Lg.w(TAG, "LauncherHook skipped: SDK=${Build.VERSION.SDK_INT} < Q")
             return
@@ -1913,6 +1917,7 @@ object LauncherHook {
         val cropY = wallpaperOffsetY.coerceIn(0f, 1f) * maxScroll.y
         val region = RectF(base.left - cropX, base.top - cropY, base.right - cropX, base.bottom - cropY)
         if (region == snap.region) return
+        LowResTier.prebuild(snap.bitmap)
         screenSnapshot = ElementBackground(
             snap.bitmap, region, snap.wallpaperZoomAtCapture, snap.screenRect,
             isWallpaperStrip = true, stripBaseRect = base, stripMaxScroll = maxScroll,
@@ -2272,9 +2277,13 @@ object LauncherHook {
         if (shaderCache.size > 128) { shaderCache.clear(); shaderOwnerSet.clear() }
         val params = buildParams(bounds.width().toFloat(), bounds.height().toFloat(), entry.cornerRadius, elementId = id)
         val sourceShader = LiquidGlassShader.createSourceBitmapShader(source)
+        // σ 分档三档源（texel≈σ 根除点阵）：命中绑档位 shader + 折算 lowResSrcRect，
+        // miss 回退现状源并记实际档 4
+        val wantDiv = LowResTier.tierOf(0.807f * params.blurRadius)
+        val tier = LowResTier.tierShaderOf(source, srcRect, wantDiv)
         LiquidGlassShader.setUniforms(
-            shader, params, sourceShader, sourceShader,
-            sourceRect = srcRect, lowResSourceRect = srcRect,
+            shader, params, sourceShader, tier?.shader ?: sourceShader,
+            sourceRect = srcRect, lowResSourceRect = tier?.lowResSrcRect ?: srcRect,
         )
         appliedUniformsMap[id] = AppliedKey(
             System.identityHashCode(source),
@@ -2287,6 +2296,7 @@ object LauncherHook {
                 api,
             ),
             materialHash = params.hashCode(),
+            lowResDiv = if (tier != null) wantDiv else 4,
         )
         if (appliedUniformsMap.size > 128) appliedUniformsMap.clear()
         return LiquidShaderBuild(shader)
@@ -2312,27 +2322,36 @@ object LauncherHook {
         )
         val params = buildParams(bounds.width().toFloat(), bounds.height().toFloat(), entry.cornerRadius, elementId = id)
         val materialHash = params.hashCode()
+        val wantDiv = LowResTier.tierOf(0.807f * params.blurRadius)
+        // 档位变（含 miss 回退后下帧重试）→ 禁早退，走全量重绑
+        val lowResTierChanged = applied != null && applied.lowResDiv != wantDiv
         if (applied != null && applied.sourceBitmapId == sourceBitmapId &&
             applied.viewport == viewport && applied.srcRect == srcRect &&
             applied.cornerRadius == entry.cornerRadius &&
             applied.refractionHeight == refractionHeight &&
-            applied.materialHash == materialHash
+            applied.materialHash == materialHash && !lowResTierChanged
         ) {
             return true
         }
-            if (applied == null || applied.sourceBitmapId != sourceBitmapId) {
+            var boundDiv = applied?.lowResDiv ?: 4
+            if (applied == null || applied.sourceBitmapId != sourceBitmapId || lowResTierChanged) {
+                // 源或档位变：重建 source shader 并按 σ 档重绑 lowRes（miss → 回退现状源记实际档 4）
+                val tier = LowResTier.tierShaderOf(renderSource.source, srcRect, wantDiv)
                 val sourceShader = LiquidGlassShader.createSourceBitmapShader(renderSource.source)
                 LiquidGlassShader.setUniforms(
-                    shader, params, sourceShader, sourceShader,
-                    sourceRect = srcRect, lowResSourceRect = srcRect,
+                    shader, params, sourceShader, tier?.shader ?: sourceShader,
+                    sourceRect = srcRect, lowResSourceRect = tier?.lowResSrcRect ?: srcRect,
                 )
+                boundDiv = if (tier != null) wantDiv else 4
             } else {
+                // 源与档位均未变：shader 保留上次绑定，lowRes rect 按【已绑档位】折算（miss → 现状 rect）
                 LiquidGlassShader.setUniforms(
                     shader, params, null, null,
-                    sourceRect = srcRect, lowResSourceRect = srcRect,
+                    sourceRect = srcRect,
+                    lowResSourceRect = LowResTier.divRectOf(renderSource.source, srcRect, boundDiv) ?: srcRect,
                 )
             }
-            appliedUniformsMap[id] = AppliedKey(sourceBitmapId, viewport, srcRect, entry.cornerRadius, refractionHeight, materialHash)
+            appliedUniformsMap[id] = AppliedKey(sourceBitmapId, viewport, srcRect, entry.cornerRadius, refractionHeight, materialHash, boundDiv)
             if (appliedUniformsMap.size > 128) appliedUniformsMap.clear()
             return true
         } catch (t: Throwable) {
@@ -2534,6 +2553,7 @@ object LauncherHook {
                         prev.region == bg.region &&
                         prev.wallpaperZoomAtCapture == bg.wallpaperZoomAtCapture &&
                         sameBitmapContent(prev.bitmap, bg.bitmap)
+                    LowResTier.prebuild(bg.bitmap)
                     screenSnapshot = bg
                     RuntimeDiagnostics.mark("source", "成功取得桌面背景缓冲")
                     elementCaptureRetries[id] = 0

@@ -9,7 +9,7 @@ import com.coloros16.liquidglass.log.Lg
 /** Writable only in the module process, exposed to authenticated hosts through LogProvider. */
 object RuntimeStore {
     val HOSTS=setOf("com.android.systemui","com.android.launcher","com.coloros.gallery3d",
-        "com.coloros.calculator","com.coloros.smartsidebar")
+        "com.coloros.calculator","com.coloros.smartsidebar","com.coloros.assistantscreen")
     val URI: Uri = Uri.parse("content://com.dreamglass.cos17.lgfile")
     const val STATE = "runtime-state"
     const val LOG = "runtime-log"

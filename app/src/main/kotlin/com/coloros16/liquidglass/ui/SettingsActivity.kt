@@ -1359,7 +1359,7 @@ class SettingsActivity : AppCompatActivity() {
         bindGlassSwitch(view, R.id.switchCardGlass, Prefs.KEY_CARD_GLASS_ENABLE, Prefs.DEFAULT_CARD_GLASS_ENABLE)
     }
 
-    /** 其他组件：音量条 + 相册 / 计算器 / 智能侧边栏的组件级玻璃开关。 */
+    /** 其他组件：音量条 + 相册 / 计算器 / 智能侧边栏 / 速览的组件级玻璃开关。 */
     private fun bindComponents(view: View) {
         val supportsVolume=try { CosCompatibility.supportsLegacyVolumeOverrides(
             packageManager.getPackageInfo("com.android.systemui",0).versionName) } catch(_:Throwable) { false }
@@ -1372,6 +1372,7 @@ class SettingsActivity : AppCompatActivity() {
         bindGlassSwitch(view, R.id.switchGalleryGlass, Prefs.KEY_GALLERY_GLASS, Prefs.DEFAULT_GALLERY_GLASS)
         bindGlassSwitch(view, R.id.switchCalculatorGlass, Prefs.KEY_CALCULATOR_GLASS, Prefs.DEFAULT_CALCULATOR_GLASS)
         bindGlassSwitch(view, R.id.switchSmartSidebarGlass, Prefs.KEY_SMART_SIDEBAR_GLASS, Prefs.DEFAULT_SMART_SIDEBAR_GLASS)
+        bindGlassSwitch(view, R.id.switchAssistantScreenGlass, Prefs.KEY_ASSISTANT_SCREEN_GLASS, Prefs.DEFAULT_ASSISTANT_SCREEN_GLASS)
     }
 
     /** 组件级玻璃开关绑定（写 Prefs + 按权威值刷新；hook 端 TTL 500ms 重读，改动即时生效）。 */

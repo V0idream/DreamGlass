@@ -34,5 +34,8 @@
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_smart_sidebar_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
 
         
-        </com.coloros16.liquidglass.ui.ParameterCard></LinearLayout>
+        </com.coloros16.liquidglass.ui.ParameterCard><com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+<Switch android:id="@+id/switchAssistantScreenGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_assistant_screen_glass" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_assistant_screen_glass_desc" android:textColor="@color/dream_muted" android:textSize="13sp" />
+</com.coloros16.liquidglass.ui.ParameterCard></LinearLayout>
 </ScrollView>

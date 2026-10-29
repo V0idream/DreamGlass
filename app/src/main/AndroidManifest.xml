@@ -26,6 +26,7 @@
         <package android:name="com.coloros.gallery3d" />
         <package android:name="com.coloros.calculator" />
         <package android:name="com.coloros.smartsidebar" />
+        <package android:name="com.coloros.assistantscreen" />
     </queries>
 
     <application
