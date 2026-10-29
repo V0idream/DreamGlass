@@ -121,7 +121,7 @@ for layout in (root / 'app/src/main/res/layout').glob('view_*.xml'):
     layout_count += 1
 
 unit = [ET.parse(f).getroot() for f in (build_dir / 'test-results/testReleaseUnitTest').glob('TEST-*.xml')]
-assert sum(int(t.get('tests')) for t in unit) == 93
+assert sum(int(t.get('tests')) for t in unit) == 94
 assert sum(int(t.get('failures')) + int(t.get('errors')) for t in unit) == 0
 lint = ET.parse(build_dir / 'reports/lint-results-release.xml').getroot()
 lint_errors = [n for n in lint if n.get('severity') in ('Error', 'Fatal')]
@@ -142,11 +142,11 @@ report = {
     'apkSha256': hashlib.sha256(args.apk.read_bytes()).hexdigest(),
     'runtimeComponents': len(inventory['components']),
     'retainedNoticeEntries': len(inventory['retainedOriginalNotices']),
-    'unitTestsPassed': 93, 'lintErrors': 0,
+    'unitTestsPassed': 94, 'lintErrors': 0,
     'lintWarnings': sum(n.get('severity') == 'Warning' for n in lint),
     'parameterBindingLayoutsPreserved': layout_count,
     'opticalBaseline': '1.0.7 fixture', 'parameterBindingBaseline': baseline, 'opticalChangesLimitedToMarkedLensAndCoat': True, 'materialAlphaControlRemoved': True, 'snapshotBindingFirstDrawAndRefreshChecked': True,
-    'upstreamBase': '5beac919c8eb45c1984f0e24565193339553336d',
+    'upstreamBase': '1bb018615af3261d3e9de0165169a0e75917d2fe',
     'particlePullRequest': 'https://github.com/AYwlilwYA/ColorOS16-LiquidGlass/pull/2',
     'hardwareBackendPackageChecked': True, 'keyguardGlyphAndBackdropPackaged': True, 'hostScopes': sorted(scopes),
     'physicalDeviceAccessed': False, 'colorOsRuntimeTested': False,

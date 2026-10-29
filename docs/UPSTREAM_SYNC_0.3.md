@@ -34,3 +34,11 @@
 | 5beac91 | LowResTier共享多源缓存与真/4档、桌面两条绑定/发布预建、SystemUI绘制分支接入；已预模糊HARDWARE/F16图跳过重复采样链 |
 
 合并父提交可通过Git审查；未复活生产探针、同步主线程抓屏或COS16专用音量覆盖。
+
+
+### 补充至 1bb018615af3261d3e9de0165169a0e75917d2fe
+
+- cbd2982：长按菜单承载窗排除、可逆背景、克隆通知卡伴球桥。COS17本地清单确认COUIPopupListWindow.show(View,boolean)、dismiss与forceDismiss均存在。
+- 1bb0186：PressFeedback白名单槽与清除按钮捕获/开关。COS17 17.3.12的PressFeedbackButton与OplusClearAllPanelView存在，但命名PressFeedbackHandler及drawPressedColor方法缺失；不猜测混淆后的绘制函数。该旧入口在17/未知版本禁用，保留原生按钮。代码与来源完整保留。
+
+这不是对新增厂商功能的真机验收。锁屏新接入独立于上述旧处理器。

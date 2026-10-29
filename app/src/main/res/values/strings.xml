@@ -245,8 +245,13 @@
     <string name="settings_calculator_glass_desc">为计算器窗口添加边缘效果，保留原生模糊。需启用计算器作用域。</string>
     <string name="settings_smart_sidebar_glass">侧边栏材质边缘</string>
     <string name="settings_smart_sidebar_glass_desc">为智能侧边栏面板添加边缘效果，保留原生模糊。需启用侧边栏作用域。</string>
+    <string name="settings_notification_popup_glass">通知长按菜单玻璃</string>
+    <string name="settings_notification_popup_glass_desc">给长按通知后弹出的操作菜单卡加液态玻璃背景。开启后立即生效，无需重启系统界面。</string>
+    <string name="loc_notification_popup_menu">长按通知弹出的操作菜单卡</string>
     <string name="settings_gallery_shader_probe">相册采样范围探针（实验）</string>
     <string name="settings_gallery_shader_probe_desc">临时替换相册背景模糊做诊断：元素边缘出现红色环＝模糊取到了元素外面的背景（可以做真折射），绿色环＝只取到元素内的内容。开启后相册背景会变清晰并带一圈色环，关掉即恢复原模糊。</string>
+    <string name="settings_clear_all_btn_glass">最近任务清除按钮</string>
+    <string name="settings_clear_all_btn_glass_desc">把最近任务页底部的「清除全部」按钮变成液态玻璃。开启后立即生效，无需重启桌面。</string>
 
     <!-- 组件位置描述（类清单/管理对话框里「在哪里的」一句话） -->
     <string name="loc_blur_drawable">通知中心与控制中心的多类卡片共用背景</string>
@@ -278,6 +283,7 @@
     <string name="loc_smart_sidebar">智能侧边栏的主面板</string>
     <string name="loc_vertical_seekbar">竖向滑条（音量条等）</string>
     <string name="loc_horizontal_seekbar">横向滑条</string>
+    <string name="loc_clear_all_button">最近任务页底部的清除全部按钮</string>
 
     <!-- iOS 动态倾斜 / 透视（doc/spec/65，2026-09-16，实验性） -->
     
@@ -343,4 +349,5 @@
     <string name="settings_assistant_screen_glass_desc">保留负一屏原生背景，添加按组件设置的高光与圆角。需在框架中启用负一屏作用域；默认关闭。</string>
     <string name="cat_keyguard">锁屏玻璃</string>
     <string name="cat_keyguard_desc">时钟、日期、卡片与底部快捷按钮</string>
+    <string name="settings_clear_all_btn_unavailable">当前桌面版本暂不支持此接入方式，保持原生清除按钮。</string>
 </resources>

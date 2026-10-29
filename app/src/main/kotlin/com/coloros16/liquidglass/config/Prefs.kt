@@ -410,6 +410,14 @@ object Prefs {
     /** 桌面卡片玻璃默认值（false = 不干预，保持系统原样磨砂） */
     const val DEFAULT_CARD_GLASS_ENABLE = false
 
+    // ---------- 最近任务清除按钮液态玻璃化 ----------
+    /** 最近任务页底部「清除全部」按钮液态玻璃。默认 **false**。该按钮是 launcher 进程内
+     *  View 级平色 Paint 填充（不走系统模糊管线），开启后由本模块接管渲染。改动即时生效
+     *  （hook 端 TTL 500ms 重读 Prefs，无需重启桌面）。 */
+    const val KEY_CLEAR_ALL_BTN_GLASS = "clear_all_btn_glass_enable"
+    /** 最近任务清除按钮玻璃默认值（false = 不干预，保持系统原样平色胶囊） */
+    const val DEFAULT_CLEAR_ALL_BTN_GLASS = false
+
     // ---------- 音量条液态玻璃化（doc/spec/09） ----------
     /** 音量条（垂直滑条）液态玻璃。默认 **false**。音量条背景走 framework 窗口模糊
      *  （BackgroundBlurDrawable，draw 空实现），现有 drawable 替换链打不中，需按 spec/09
@@ -433,6 +441,13 @@ object Prefs {
     const val KEY_VOLUME_PANEL_BACKDROP = "volume_panel_backdrop_enable"
     /** 音量面板去白底默认值（false = 保持系统原样含发白底色） */
     const val DEFAULT_VOLUME_PANEL_BACKDROP = false
+
+    // ---------- 通知长按菜单玻璃化（doc/spec/135） ----------
+    /** 通知长按菜单卡液态玻璃。默认 **false**；关 = 系统原样纯色菜单卡。
+     *  改动即时生效（TTL 500ms 重读）。 */
+    const val KEY_NOTIFICATION_POPUP_GLASS = "notification_popup_glass_enable"
+    /** 通知长按菜单玻璃默认值（false = 不干预，保持系统原样） */
+    const val DEFAULT_NOTIFICATION_POPUP_GLASS = false
 
     // ---------- 第三方 App 玻璃化（相册/计算器/智能侧边栏） ----------
     /** 相册玻璃化：拦截 App 内的视图背景模糊（RenderEffect / 窗口模糊 drawable）改画液态玻璃。

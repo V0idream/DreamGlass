@@ -4,6 +4,12 @@ import com.coloros16.liquidglass.hook.CosCompatibility;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class BackgroundCadenceTest {
+ @Test public void legacyClearButtonNeverUsesAbsentCos17Handler() {
+  assertTrue(CosCompatibility.INSTANCE.supportsLegacyPressFeedback("16.0.01"));
+  assertFalse(CosCompatibility.INSTANCE.supportsLegacyPressFeedback("17.3.12"));
+  assertFalse(CosCompatibility.INSTANCE.supportsLegacyPressFeedback(null));
+ }
+
  @Test public void backgroundMotionBoostsWithoutGesture() {
   BackgroundCadence c=new BackgroundCadence();c.observe(1000,true);
   assertEquals(33,c.intervalMs(1100,60,false,false));
