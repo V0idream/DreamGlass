@@ -208,7 +208,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         entry.addView(text("隐藏后仍可通过 LSPosed 的模块设置打开 DreamGlass。", 12f, muted))
         val groups = listOf(
             "系统外观" to listOf(Triple("master", "渲染开关", "管理模块入口与玻璃效果"), Triple("material", "材质参数", "折射、鲜艳度与边缘高光"), Triple("text", "文字与可读性", "颜色跟随与对比度"), Triple("mask", "背景压暗", "平衡通透感与文字可读性")),
-            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹、搜索栏和小组件"), Triple("corner", "独立圆角", "按组件单独设置形状"), Triple("components", "其他应用与组件", "相册、计算器和智能侧边栏"), Triple("seedling", "流体云卡片", "展开卡片的材质与形状"), Triple("tilt", "空间效果", "通知倾斜与透视"), Triple("anim", "桌面动画", "打开、关闭与打断参数")),
+            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹、搜索栏和小组件"), Triple("corner", "独立圆角", "按组件单独设置形状"), Triple("components", "其他应用与组件", "相册、计算器和智能侧边栏"), Triple("seedling", "流体云卡片", "展开卡片的材质与形状"), Triple("keyguard", "锁屏玻璃", "时钟、日期、卡片与底部快捷按钮"), Triple("tilt", "空间效果", "通知倾斜与透视"), Triple("anim", "桌面动画", "打开、关闭与打断参数")),
             "维护与数据" to listOf(Triple("background", "采样与性能", "背景刷新、质量及省电策略"), Triple("log", "运行日志", "查看和导出排查记录"), Triple("config", "配置备份", "导入、导出与恢复参数"))
         )
         for ((title, rows) in groups) {
@@ -307,7 +307,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             val o = JSONObject(raw); val s = o.getJSONObject("stages")
             val stamp = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(o.getLong("at")))
             val fields = listOf("loaded" to "入口", "configured" to "配置", "mounted" to "Hook", "invoked" to "调用", "source" to "背景", "render" to "绘制", "extensions" to "扩展") +
-                if (pkg == "com.android.systemui") listOf("startup" to "初始化", "content_render" to "内容绘制", "notification_glass" to "通知玻璃路径", "notification_blur" to "通知回退记录", "qs_glass" to "按钮玻璃路径", "qs_blur" to "按钮回退记录", "qs_seekbar_hook" to "进度接口", "qs_seekbar_active" to "进度对象", "qs_seekbar_tint" to "进度填充", "qs_tile_mask" to "按钮遮罩", "qs_slider_hook" to "滑杆轮廓接口", "qs_slider_clip" to "滑杆填充裁剪", "qs_icon_hook" to "图标底层接口", "qs_icon_background" to "横向图标底层", "volume_native_hook" to "独立音量归属接口", "volume_native" to "独立音量原生保护", "volume_window" to "音量窗口隔离", "blur_hardware" to "硬件背景", "blur_cpu" to "高精度背景") else emptyList()
+                if (pkg == "com.android.systemui") listOf("startup" to "初始化", "content_render" to "内容绘制", "notification_glass" to "通知玻璃路径", "notification_blur" to "通知回退记录", "qs_glass" to "按钮玻璃路径", "qs_blur" to "按钮回退记录", "qs_seekbar_hook" to "进度接口", "qs_seekbar_active" to "进度对象", "qs_seekbar_tint" to "进度填充", "qs_tile_mask" to "按钮遮罩", "qs_slider_hook" to "滑杆轮廓接口", "qs_slider_clip" to "滑杆填充裁剪", "qs_icon_hook" to "图标底层接口", "qs_icon_background" to "横向图标底层", "volume_native_hook" to "独立音量归属接口", "volume_native" to "独立音量原生保护", "volume_window" to "音量窗口隔离", "keyguard_hook" to "锁屏入口", "keyguard_detected" to "锁屏对象", "keyguard_source" to "锁屏背景", "keyguard_material" to "锁屏材质", "blur_hardware" to "硬件背景", "blur_cpu" to "高精度背景") else emptyList()
             "宿主模块版本：${o.optString("version", "未知")}\n上次记录 $stamp  ·  PID ${o.optInt("pid")}\n" + fields.joinToString("\n") { (k, n) -> "$n：${s.optString(k, "尚未收到")}" } + "\n历史记录不代表此刻仍在运行。"
         }
     } catch (_: Throwable) { "诊断通道暂不可读，请刷新框架连接。" }

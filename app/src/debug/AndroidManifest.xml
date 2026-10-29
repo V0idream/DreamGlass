@@ -7,5 +7,5 @@
         <activity android:name="com.dreamglass.cos17.MaterialStudyProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.StabilityProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.HardwareBlurProbeActivity" android:exported="true" />
-    <activity android:name="com.coloros16.liquidglass.particles.ParticleProbeActivity" android:exported="true" /></application>
+    <activity android:name="com.coloros16.liquidglass.particles.ParticleProbeActivity" android:exported="true" /><activity android:name="com.dreamglass.cos17.KeyguardGlassProbeActivity" android:exported="true" /></application>
 </manifest>

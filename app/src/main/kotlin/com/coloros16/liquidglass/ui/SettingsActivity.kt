@@ -49,6 +49,7 @@ import com.coloros16.liquidglass.hook.ButtonBackdropWorker
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.glass.IosGlassPreset
 import com.coloros16.liquidglass.hook.ParticleDissolveHook
+import com.coloros16.liquidglass.hook.KeyguardGlassHook
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.log.Lg
@@ -137,7 +138,7 @@ class SettingsActivity : AppCompatActivity() {
         Category("text", R.string.cat_text, R.string.cat_text_desc, R.layout.view_cat_text),
         Category("mask", R.string.cat_mask, R.string.cat_mask_desc, R.layout.view_cat_mask),
         Category("seedling", R.string.cat_seedling, R.string.cat_seedling_desc, R.layout.view_cat_seedling),
-        // [spec/81 2026-09-17] 锁屏时钟分类页已删除（hook 未命中数字 View，功能整体停用，无存活控件）
+        Category("keyguard", R.string.cat_keyguard, R.string.cat_keyguard_desc, R.layout.view_cat_keyguard),
         // [spec/64] 桌面动画参数（三组开关 + 三级参数页）
         Category("anim", R.string.cat_anim, R.string.cat_anim_desc, R.layout.view_cat_anim),
         // [spec/65] iOS 动态倾斜/透视（实验性，默认关）
@@ -383,6 +384,7 @@ class SettingsActivity : AppCompatActivity() {
             "text" -> bindText(view)
             "mask" -> bindMask(view)
             "seedling" -> bindSeedling(view)
+            "keyguard" -> bindKeyguard(view)
             "anim" -> bindAnim(view)
             "tilt" -> bindTilt(view)
             "desktop" -> bindDesktop(view)
@@ -1537,6 +1539,17 @@ class SettingsActivity : AppCompatActivity() {
     // ------------------------------------------------------------ [spec/65] iOS 动态倾斜/透视（实验性） ------------------------------------------------------------
 
     /** 倾斜与透视二级页：开关 + 倾斜强度 + 透视扭曲程度。改动需重启桌面进程生效。 */
+    private fun bindKeyguard(view:View) {
+        bindGlassSwitch(view,R.id.switchKeyguardGlass,KeyguardGlassHook.KEY_ENABLE,false)
+        bindGlassSwitch(view,R.id.switchKeyguardText,KeyguardGlassHook.KEY_TEXT,true)
+        bindGlassSwitch(view,R.id.switchKeyguardCards,KeyguardGlassHook.KEY_CARDS,true)
+        bindGlassSwitch(view,R.id.switchKeyguardShortcuts,KeyguardGlassHook.KEY_SHORTCUTS,true)
+        bindIntSeekBarStep(view.findViewById(R.id.seekKeyguardStrength),view.findViewById(R.id.keyguardStrengthValue),
+            KeyguardGlassHook.KEY_STRENGTH,100,200,1,0,format={"$it%"})
+        bindFloatSeekBar(view.findViewById(R.id.seekKeyguardBlur),view.findViewById(R.id.keyguardBlurValue),
+            Prefs.KEY_LOCKSCREEN_CLOCK_BLUR,6f,fromProgress={it.toFloat()},toProgress={it.toInt().coerceIn(0,24)},format={"${it.toInt()} px"})
+    }
+
     private fun bindTilt(view: View) {
         bindGlassSwitch(view, R.id.switchNotificationDissolve, ParticleDissolveHook.KEY_ENABLED, false)
         bindIntSeekBarStep(

@@ -341,4 +341,6 @@
     <string name="settings_notification_dissolve_speed_value">%1$.2f×（越高越快）</string>
     <string name="settings_assistant_screen_glass">负一屏材质边缘</string>
     <string name="settings_assistant_screen_glass_desc">保留负一屏原生背景，添加按组件设置的高光与圆角。需在框架中启用负一屏作用域；默认关闭。</string>
+    <string name="cat_keyguard">锁屏玻璃</string>
+    <string name="cat_keyguard_desc">时钟、日期、卡片与底部快捷按钮</string>
 </resources>

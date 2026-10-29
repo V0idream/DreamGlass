@@ -51,8 +51,8 @@ with zipfile.ZipFile(args.apk) as apk:
         assert hashlib.sha256(data).hexdigest() == notice['sha256']
     dex = b''.join(apk.read(n) for n in entries if re.fullmatch(r'classes\d*\.dex', n))
     assert b'com/coloros16/liquidglass/update/UpdateChecker;' not in dex
-    assert b'ParticleDissolveHook' in dex and b'HardwareBackdropBlur' in dex
-    assert b'SamplingProbeActivity' not in dex and b'IconContrastProbeActivity' not in dex and b'BlurQualityProbeActivity' not in dex and b'MaterialStudyProbeActivity' not in dex and b'StabilityProbeActivity' not in dex and b'HardwareBlurProbeActivity' not in dex and b'AppGlassProbeShader' not in dex and b'ProbeVolumeView' not in dex and b'ParticleProbeActivity' not in dex, 'Debug probe leaked into release'
+    assert b'ParticleDissolveHook' in dex and b'HardwareBackdropBlur' in dex and b'KeyguardGlassHook' in dex
+    assert b'SamplingProbeActivity' not in dex and b'IconContrastProbeActivity' not in dex and b'BlurQualityProbeActivity' not in dex and b'MaterialStudyProbeActivity' not in dex and b'StabilityProbeActivity' not in dex and b'HardwareBlurProbeActivity' not in dex and b'AppGlassProbeShader' not in dex and b'ProbeVolumeView' not in dex and b'ParticleProbeActivity' not in dex and b'KeyguardGlassProbeActivity' not in dex, 'Debug probe leaked into release'
 
 shader_path = 'app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt'
 shader = (root / shader_path).read_text(encoding='utf-8')
@@ -73,7 +73,7 @@ changed = command('git', 'diff', '--name-only', baseline, '--', 'app/src/main/ko
 allowed_hooks = {'BlurDrawHook.kt', 'QsSurfaceHook.kt', 'LocalTextContrast.kt',
                  'ButtonBackdropBlur.kt', 'ButtonBackdropWorker.kt', 'QsIconContrastHook.kt', 'QsIconContrastPolicy.kt', 'RuntimeWorkPolicy.kt', 'AppGlassDecorDrawable.kt', 'AppGlassHook.kt',
                  'HostVersion.kt', 'LauncherHook.kt', 'VolumeMaskGuard.kt', 'HardwareBackdropBlur.kt',
-                 'BackgroundCadence.kt', 'CosCompatibility.kt', 'PerClassCache.kt', 'SnapshotFingerprint.kt', 'ParticleDissolveHook.kt'}
+                 'BackgroundCadence.kt', 'CosCompatibility.kt', 'PerClassCache.kt', 'SnapshotFingerprint.kt', 'ParticleDissolveHook.kt', 'KeyguardGlassHook.kt', 'KeyguardGlassAttachment.kt', 'KeyguardGlassMaterial.kt', 'KeyguardGlassPolicy.kt'}
 assert all('/hook/' not in f or Path(f).name in allowed_hooks for f in changed)
 
 # 1.0.7: the old flag was misleadingly named isElementSource, and negating it bypassed
@@ -111,7 +111,7 @@ for layout in (root / 'app/src/main/res/layout').glob('view_*.xml'):
     if layout.name == 'view_cat_about.xml':
         continue
     relative = layout.relative_to(root).as_posix()
-    if layout.name in {'view_cat_corner_radius.xml', 'view_cat_components.xml'}:
+    if layout.name in {'view_cat_corner_radius.xml', 'view_cat_components.xml', 'view_cat_keyguard.xml'}:
         assert ids(layout.read_text(encoding='utf-8')), relative
     elif layout.name == 'view_cat_log.xml':
         # Upstream 0.3 replaces the retired FileLog controls with explicit logcat capture.
@@ -121,7 +121,7 @@ for layout in (root / 'app/src/main/res/layout').glob('view_*.xml'):
     layout_count += 1
 
 unit = [ET.parse(f).getroot() for f in (build_dir / 'test-results/testReleaseUnitTest').glob('TEST-*.xml')]
-assert sum(int(t.get('tests')) for t in unit) == 84
+assert sum(int(t.get('tests')) for t in unit) == 93
 assert sum(int(t.get('failures')) + int(t.get('errors')) for t in unit) == 0
 lint = ET.parse(build_dir / 'reports/lint-results-release.xml').getroot()
 lint_errors = [n for n in lint if n.get('severity') in ('Error', 'Fatal')]
@@ -129,7 +129,7 @@ assert not lint_errors
 
 # 1.1.0: exact host scopes, no automatic internet updater, no COS16 volume draw overrides on COS17.
 scopes=[line.strip() for line in (root/'app/src/main/resources/META-INF/xposed/scope.list').read_text(encoding='utf-8').splitlines() if line.strip() and not line.lstrip().startswith('#')]
-assert set(scopes)=={'com.android.systemui','com.android.launcher','com.coloros.gallery3d','com.coloros.calculator','com.coloros.smartsidebar'}
+assert set(scopes)=={'com.android.systemui','com.android.launcher','com.coloros.gallery3d','com.coloros.calculator','com.coloros.smartsidebar','com.coloros.assistantscreen'}
 manifest=(root/'app/src/main/AndroidManifest.xml').read_text(encoding='utf-8')
 assert 'android.permission.INTERNET' not in manifest
 assert 'legacyVolumeSupported()' in hook and 'VolumeMaskGuard.windowRoots()' in hook
@@ -142,13 +142,13 @@ report = {
     'apkSha256': hashlib.sha256(args.apk.read_bytes()).hexdigest(),
     'runtimeComponents': len(inventory['components']),
     'retainedNoticeEntries': len(inventory['retainedOriginalNotices']),
-    'unitTestsPassed': 84, 'lintErrors': 0,
+    'unitTestsPassed': 93, 'lintErrors': 0,
     'lintWarnings': sum(n.get('severity') == 'Warning' for n in lint),
     'parameterBindingLayoutsPreserved': layout_count,
     'opticalBaseline': '1.0.7 fixture', 'parameterBindingBaseline': baseline, 'opticalChangesLimitedToMarkedLensAndCoat': True, 'materialAlphaControlRemoved': True, 'snapshotBindingFirstDrawAndRefreshChecked': True,
-    'upstreamBase': '10d40ce4ac1543f97e5ebbb7bbdd2f8ef6b45030',
+    'upstreamBase': '5beac919c8eb45c1984f0e24565193339553336d',
     'particlePullRequest': 'https://github.com/AYwlilwYA/ColorOS16-LiquidGlass/pull/2',
-    'hardwareBackendPackageChecked': True, 'hostScopes': sorted(scopes),
+    'hardwareBackendPackageChecked': True, 'keyguardGlyphAndBackdropPackaged': True, 'hostScopes': sorted(scopes),
     'physicalDeviceAccessed': False, 'colorOsRuntimeTested': False,
 }
 args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -1,9 +1,9 @@
-# DreamGlass 1.1.0 — 修改声明
+# DreamGlass 1.1.1 — 修改声明
 
 修改者：DreamGlass contributors；维护者：V0idream。修改日期：2026-10-22 至 2026-10-29。
 
 本作品基于 AYwlilwYA / ColorOS16-LiquidGlass，原始基础 `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`，
-已合并至 `10d40ce4ac1543f97e5ebbb7bbdd2f8ef6b45030`。整体按 GNU GPLv3 分发，原作者与第三方版权、
+已合并至 `5beac919c8eb45c1984f0e24565193339553336d`。整体按 GNU GPLv3 分发，原作者与第三方版权、
 许可均保留。此次合并保留双方提交历史，兼容取舍见 docs/UPSTREAM_SYNC_0.3.md。
 
 ## 主要修改
@@ -26,3 +26,10 @@
 部分光学算法来自 Copyright 2025 Kyant / AndroidLiquidGlass（Apache-2.0），原许可头保留。
 Android Developers/AOSP硬件位图示例顺序用于HardwareBackdropBlur和ParticleDissolveHook，已补来源与修改日期。
 参考视频、手机截图、用户配置、签名私钥和本机构建路径不属于发行源码。
+
+## 1.1.1 锁屏与同步增量
+
+新增GPU字形遮罩、可逆背景替换与静态锁屏壁纸提供器，覆盖时钟/日期、组件卡片和底部快捷按钮；
+保留系统原字体/子视图/点击以及深度遮挡所在的原视图层级。未复制主题插件或用户截图素材。
+实际RenderEffect快照/坐标、开关恢复与GPU像素响应均纳入合成场景测试；厂商主题命中仍需真机。
+最新同步 a8d3f84、4360a02、5beac91，包括负一屏。详见 docs/KEYGUARD_GLASS.md。

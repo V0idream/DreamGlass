@@ -15,7 +15,7 @@ import com.coloros16.liquidglass.hook.Cos17Contract
 import com.coloros16.liquidglass.hook.LauncherAnimHook
 import com.coloros16.liquidglass.hook.LauncherHook
 import com.coloros16.liquidglass.hook.LauncherTiltHook
-import com.coloros16.liquidglass.hook.LockScreenClockHook
+import com.coloros16.liquidglass.hook.KeyguardGlassHook
 import com.coloros16.liquidglass.hook.SceneFilter
 import com.coloros16.liquidglass.log.Lg
 import io.github.libxposed.api.XposedModule
@@ -246,9 +246,7 @@ class XposedEntry : XposedModule() {
         // Hook A（BlurService 端原图注入）已随 [2026-08-13 用户决定] 全移除——系统模糊管线原样，
         // 玻璃源 = SystemUI 端每元素背景源（BlurDrawHook 内 captureDisplay）。
         BlurDrawHook.install(this, classLoader)
-        // [spec/81 2026-09-17 停用] 锁屏时钟玻璃化：真机品红二分实证 `View.draw` hook 未命中
-        // 时钟数字 View（数字仍是系统原样），接管本身没发生 → 保持停用，设置页入口已移除。
-        // LockScreenClockHook.install(this, classLoader)
+        KeyguardGlassHook.install(this, classLoader)
         SceneFilter.install(this, classLoader)
         // [spec/82] ⛔ 曾有 display-root 通道探针挂在这里，**已删除** —— 见 DisplayRootChannel 头部说明：
         // 它在屏幕暗/AOD 时会连续 120 秒每 5 秒抓一次整屏，与 UI 合成抢 SF，

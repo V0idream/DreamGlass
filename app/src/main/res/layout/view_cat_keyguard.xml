@@ -1,0 +1,23 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+<com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+<Switch android:id="@+id/switchKeyguardGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="启用锁屏玻璃（实验性）" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="首次开启后需手动重启 SystemUI，再回到锁屏。使用静态锁屏壁纸作为玻璃背景；系统不提供原图或使用不支持的动态壁纸时保留原生外观。不修改指纹、密码键盘或熄屏显示。" android:textColor="@color/dream_muted" android:textSize="13sp" />
+</com.coloros16.liquidglass.ui.ParameterCard>
+<com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+<Switch android:id="@+id/switchKeyguardText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="大时钟与日期" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="保留系统字形、排版、动画和壁纸遮挡关系，用 GPU 为文字加入透光与细边缘。" android:textColor="@color/dream_muted" android:textSize="13sp" />
+<Switch android:id="@+id/switchKeyguardCards" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="锁屏卡片背景" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="步数、设备、天气、闹钟等组件背景玻璃化，保留内容与点击行为。识别取决于系统和主题提供的实际视图。" android:textColor="@color/dream_muted" android:textSize="13sp" />
+<Switch android:id="@+id/switchKeyguardShortcuts" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="手电筒与相机按钮背景" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+</com.coloros16.liquidglass.ui.ParameterCard>
+<com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="边缘立体感" android:textColor="@color/dream_ink" android:textSize="15sp" />
+<SeekBar android:id="@+id/seekKeyguardStrength" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="200" />
+<TextView android:id="@+id/keyguardStrengthValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/dream_muted" />
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="背景柔化" android:textColor="@color/dream_ink" android:textSize="15sp" android:layout_marginTop="16dp" />
+<SeekBar android:id="@+id/seekKeyguardBlur" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="24" />
+<TextView android:id="@+id/keyguardBlurValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/dream_muted" />
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="只在壁纸或参数变化时重新准备 GPU 背景，不持续抓屏。分组和材质变更后重新显示锁屏即可更新。" android:textColor="@color/dream_muted" android:textSize="13sp" />
+</com.coloros16.liquidglass.ui.ParameterCard>
+</LinearLayout></ScrollView>

@@ -1,10 +1,10 @@
 # DreamGlass — 第三方代码、来源与许可
 
-本地构建日期：2026-10-29；对应版本：1.1.0。DreamGlass 是独立产品名称，For ColorOS 17 仅说明适配范围。
+本地构建日期：2026-10-29；对应版本：1.1.1。DreamGlass 是独立产品名称，For ColorOS 17 仅说明适配范围。
 
 ## 1. 整体许可与派生基础
 
-本软件基于 AYwlilwYA / ColorOS16-LiquidGlass 的代码持续开发，并非完全从零编写。上游地址：https://github.com/AYwlilwYA/ColorOS16-LiquidGlass ，原始基线提交 `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`（0.2.1）；本版同步至 `10d40ce4ac1543f97e5ebbb7bbdd2f8ef6b45030`（0.3.0及后续修复）。原项目界面中的作者署名为 AlanYan，原有版权继续归原作者和贡献者。
+本软件基于 AYwlilwYA / ColorOS16-LiquidGlass 的代码持续开发，并非完全从零编写。上游地址：https://github.com/AYwlilwYA/ColorOS16-LiquidGlass ，原始基线提交 `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`（0.2.1）；本版同步至 `5beac919c8eb45c1984f0e24565193339553336d`（0.3.0及后续修复）。原项目界面中的作者署名为 AlanYan，原有版权继续归原作者和贡献者。
 
 DreamGlass 作为整体按 GNU General Public License version 3 发布，全文见 LICENSE；本声明不移除第三方代码自身的版权或许可条件。新界面、品牌、适配代码和产品流程不改变 GPLv3 派生作品的许可义务。软件无任何担保；接收者有权在 GPLv3 下使用、研究、修改和再分发。
 
