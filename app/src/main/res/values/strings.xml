@@ -335,4 +335,8 @@
     <string name="settings_button_blur">按钮背景模糊</string>
     <string name="settings_button_blur_value">%1$d px</string>
     <string name="settings_button_blur_desc">只调节按钮背后的模糊：0 清晰，数值越大越柔和。按钮不淡出，文字和图标保持清晰。</string>
+    <string name="settings_notification_dissolve">删除通知时粒子飘散</string>
+    <string name="settings_notification_dissolve_desc">默认关闭。滑动删除与清空通知时，将卡片化为细颗粒飘散；不影响解锁或面板收起。需要 Android 13+ 硬件加速，省电模式和关闭系统动画时自动跳过。</string>
+    <string name="settings_notification_dissolve_speed">飘散速度</string>
+    <string name="settings_notification_dissolve_speed_value">%1$.2f×（越高越快）</string>
 </resources>

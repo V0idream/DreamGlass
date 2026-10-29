@@ -1,0 +1,2 @@
+--------- beginning of main
+I/DreamGlassStabilityProbe( 3773): PASS callback+reporter exceptions contained; 120 frame/geometry churn; four styles recover; clear cancels; published bitmap retained; F16

@@ -1,0 +1,6 @@
+{
+  "hardware": "--------- beginning of main\r\nI/DreamGlassHardwareProbe( 3663): PASS {\"cpuWallMs\":165.450091,\"hardwareWallMs\":50.329637,\"cpuWorkerCpuMs\":154.70466566666667,\"hardwareWorkerCpuMs\":0.3751176666666667,\"cpuProcessCpuMs\":160.66666666666666,\"hardwareProcessCpuMs\":46,\"pixels\":294912,\"samples\":3,\"hardwareConfig\":true,\"translucencyPassed\":true,\"publishedBufferRetained\":true,\"checkerResidual\":1,\"genericVolumeWindowOwnership\":true,\"productionBackendToggleBinding\":true,\"physicalPowerMeasured\":false}",
+  "quality": "--------- beginning of main\r\nI/DreamGlassQualityProbe( 3716): PASS F16 fractional/alpha; four worker styles; FULL/BASE AGSL; snapshot binding true/false/zero/pending/ready/crop",
+  "stability": "--------- beginning of main\r\nI/DreamGlassStabilityProbe( 3773): PASS callback+reporter exceptions contained; 120 frame/geometry churn; four styles recover; clear cancels; published bitmap retained; F16",
+  "particles": "--------- beginning of main\r\nI/ParticleProbe( 3827): PASS {\"scaledSnapshotCoordinates\":true,\"coverage\":\"[64325, 46085, 11981, 0]\",\"escapedPixels\":1894,\"shaderCompiled\":true,\"zeroProgressIdentity\":true,\"endTransparent\":true,\"detachReleasesOverlay\":true,\"hardwareSnapshot\":true,\"cancelReleasesOverlay\":true,\"completionReleasesOverlay\":true,\"physicalDeviceTested\":false}"
+}

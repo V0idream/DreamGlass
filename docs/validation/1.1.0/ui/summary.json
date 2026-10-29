@@ -1,0 +1,17 @@
+{
+  "physicalDeviceAccessed": false,
+  "rootRequested": false,
+  "pages": [
+    "desktop",
+    "corner",
+    "components",
+    "logs",
+    "background"
+  ],
+  "navigationBackPassed": true,
+  "testChecklistRemoved": true,
+  "probeControlsRemoved": true,
+  "cos17UnknownVolumeControlsDisabled": true,
+  "engineChoicePresent": true,
+  "appCrashDetected": false
+}

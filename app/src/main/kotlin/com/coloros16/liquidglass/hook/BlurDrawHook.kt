@@ -2480,6 +2480,7 @@ object BlurDrawHook {
     private val lastLoggedCornerRadius = ConcurrentHashMap<Int, Float>()
 
     fun install(api: XposedInterface, classLoader: ClassLoader) {
+        ParticleDissolveHook.install(api, classLoader)
         this.api = api
         hostClassLoader = classLoader
         GlassRegistry.attach { this.api?.let { a -> Prefs.read(a) } }
@@ -7271,8 +7272,6 @@ object BlurDrawHook {
                             burstStop = { false },
                             logTag = "volume-expand",
                             pauseDuringPanelExpansion = false,
-                            mainThreadSyncFirstFrame = true,
-                            bypassMainSyncDedup = true,
                         )
                     } catch (t: Throwable) {
                         Lg.e(TAG, "volume-expand: first-frame capture error", t)

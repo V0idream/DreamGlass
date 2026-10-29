@@ -1,0 +1,137 @@
+{
+  "innerVolumeChecks": [
+    {
+      "shape": "round tile",
+      "alphaUnchanged": true,
+      "centerUnchanged": true,
+      "minRgbDelta": -0.1548173427581787,
+      "maxRgbDelta": 0.14942049980163574
+    },
+    {
+      "shape": "wide tile",
+      "alphaUnchanged": true,
+      "centerUnchanged": true,
+      "minRgbDelta": -0.15479308366775513,
+      "maxRgbDelta": 0.14939197897911072
+    },
+    {
+      "shape": "slider",
+      "alphaUnchanged": true,
+      "centerUnchanged": true,
+      "minRgbDelta": -0.15484263002872467,
+      "maxRgbDelta": 0.14943277835845947
+    },
+    {
+      "shape": "media",
+      "alphaUnchanged": true,
+      "centerUnchanged": true,
+      "minRgbDelta": -0.20653897523880005,
+      "maxRgbDelta": 0.12855949997901917
+    }
+  ],
+  "prefilterBypassesSparseGrid": true,
+  "engine": "desktop Skia 144.1",
+  "androidGpuTested": false,
+  "shaderSourceSha256": "c7d19c2df1953cfffc6cccd812f9e8768b426867561cb765f0458b99fa1ec291",
+  "compiledVariants": [
+    "full",
+    "base",
+    "prior-full",
+    "prior-base",
+    "1.0.5"
+  ],
+  "cases": [
+    {
+      "shape": "round tile",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "wide tile",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "slider",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "media",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    },
+    {
+      "shape": "notification",
+      "nonPolishedMaxDelta": 0.0,
+      "finiteAndPremultiplied": true,
+      "zeroLightOutsideShape": true
+    }
+  ],
+  "rimWidthAt30Percent": {
+    "beforePx": 6,
+    "afterPx": 4
+  },
+  "progressClippingPercentages": [
+    0,
+    1,
+    25,
+    50,
+    99,
+    100
+  ],
+  "blurChecks": [
+    {
+      "variant": "full",
+      "blurRadius": 0,
+      "maxAlphaDelta": 0.0,
+      "meanRgbDeltaFromClear": 0.0
+    },
+    {
+      "variant": "full",
+      "blurRadius": 16,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.01812448352575302
+    },
+    {
+      "variant": "full",
+      "blurRadius": 32,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.02502657286822796
+    },
+    {
+      "variant": "full",
+      "blurRadius": 64,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.05207043141126633
+    },
+    {
+      "variant": "base",
+      "blurRadius": 0,
+      "maxAlphaDelta": 0.0,
+      "meanRgbDeltaFromClear": 0.0
+    },
+    {
+      "variant": "base",
+      "blurRadius": 16,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.01812448352575302
+    },
+    {
+      "variant": "base",
+      "blurRadius": 32,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.02502657286822796
+    },
+    {
+      "variant": "base",
+      "blurRadius": 64,
+      "maxAlphaDelta": 5.960464477539063e-08,
+      "meanRgbDeltaFromClear": 0.05207043141126633
+    }
+  ]
+}

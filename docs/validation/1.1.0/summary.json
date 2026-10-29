@@ -1,0 +1,32 @@
+{
+  "product": "DreamGlass",
+  "supportedRelease": "For ColorOS 17",
+  "version": "1.1.0",
+  "versionCode": 1001000,
+  "package": "com.dreamglass.cos17",
+  "debuggable": false,
+  "apkSha256": "ead007293baa69f8aca90cc05de94aea2510aa3e6e192a919ea43c7069a92e5d",
+  "runtimeComponents": 57,
+  "retainedNoticeEntries": 12,
+  "unitTestsPassed": 84,
+  "lintErrors": 0,
+  "lintWarnings": 257,
+  "parameterBindingLayoutsPreserved": 17,
+  "opticalBaseline": "1.0.7 fixture",
+  "parameterBindingBaseline": "25c47e7",
+  "opticalChangesLimitedToMarkedLensAndCoat": true,
+  "materialAlphaControlRemoved": true,
+  "snapshotBindingFirstDrawAndRefreshChecked": true,
+  "upstreamBase": "10d40ce4ac1543f97e5ebbb7bbdd2f8ef6b45030",
+  "particlePullRequest": "https://github.com/AYwlilwYA/ColorOS16-LiquidGlass/pull/2",
+  "hardwareBackendPackageChecked": true,
+  "hostScopes": [
+    "com.android.launcher",
+    "com.android.systemui",
+    "com.coloros.calculator",
+    "com.coloros.gallery3d",
+    "com.coloros.smartsidebar"
+  ],
+  "physicalDeviceAccessed": false,
+  "colorOsRuntimeTested": false
+}

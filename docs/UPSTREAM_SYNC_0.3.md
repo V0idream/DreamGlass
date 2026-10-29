@@ -1,0 +1,25 @@
+# 上游0.3.0与COS17合并记录
+
+上游：https://github.com/AYwlilwYA/ColorOS16-LiquidGlass
+
+合并提交：e3fa039、b673884、10d40ce；最新完整SHA：10d40ce4ac1543f97e5ebbb7bbdd2f8ef6b45030。
+两次真实Git merge保留上游父提交，所有25个上游变更路径均经合入/冲突审查。
+
+| 上游更新 | DreamGlass处理 |
+| --- | --- |
+| /4、/8、/16多尺度输入与按模糊半径选档 | 接入原始纹理腿；已有硬件/F16预处理输入不重复建立CPU缩放链、不再稀疏模糊 |
+| 按类圆角、语义设备卡/滑杆与预设登记 | 合入；保留IOS风参数层、COS17滑杆剪裁/图标保护 |
+| 桌面搜索背景、页码、小组件/卡片与组件预设 | 合入Launcher入口与独立选项；默认不开启新增作用域能力 |
+| Gallery、Calculator、Sidebar入口/范围/组件 | 合入五宿主白名单；保留原生背景，按类圆角/高光使用轻量边缘装饰 |
+| AppGlassProbeShader、相册采样测试入口 | 移入debug，移除正式UI绑定与替换分支 |
+| 新音量滑杆、展开面板、去白底、more按钮 | 仅COS16版本明确匹配时可启用旧覆盖；COS17/未知保留原生窗口 |
+| 音量同步首帧绕过300ms窗 | COS17采用统一后台抓屏，不恢复主线程同步Binder；实际音量窗口根从抓屏排除 |
+| 移除进度顶边双倍高光/图标暗垫 | 合入，保留原生填充和COS17轮廓约束 |
+| 通知卡cardClass每帧重绑、登记定向淘汰null、每id审计1Hz | 合入；保留后台调度及可逆预设 |
+| FileLog删除、logcat采集与单一日志门控 | 旧FileLog退役，context移至Lg；认证LogProvider继续用于状态/类清单，不复活旧文件日志 |
+| 新参数页面/布局/字符串 | 绑定合入DreamGlass样式，导航/品牌/离线来源页保留 |
+| ClassValue类缓存 | Android14才有，换为弱键PerClassCache以支持本项目Android13 |
+| 原Activity/版本/Manifest | 保留DreamGlass包名、1.1.0/1001000、无INTERNET及无自动升级；添加必要包可见性 |
+
+粒子效果单文件实现同时向上游贡献。**上游PR使用作者最新GPU模糊，不带入本项目的CPU/F16路径。**
+普通模拟器不提供厂商API，不能证明新增Launcher/三个应用或真实删除入口已在COS17运行；本次没有操作实体手机。

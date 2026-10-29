@@ -1,6 +1,23 @@
 <?xml version='1.0' encoding='utf-8'?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+<com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+        <Switch android:id="@+id/switchNotificationDissolve" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/settings_notification_dissolve" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/settings_notification_dissolve_desc"
+            android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="@string/settings_notification_dissolve_speed" android:textColor="@color/dream_ink" android:textSize="14sp" />
+        <SeekBar android:id="@+id/seekNotificationDissolveSpeed" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:max="265" android:progress="65" />
+        <TextView android:id="@+id/notificationDissolveSpeedValue" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="20dp"
+            android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+
+</com.coloros16.liquidglass.ui.ParameterCard>
+
         <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
             <Switch android:id="@+id/switchAnimTilt" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_anim_tilt_enabled" android:fontFamily="sans-serif-medium" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" android:layout_marginTop="0dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_anim_tilt_enabled_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
