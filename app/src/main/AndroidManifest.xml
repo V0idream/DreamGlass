@@ -19,10 +19,13 @@
 
     <!-- DreamGlass 不联网；参考项目的自动升级入口不再调用。 -->
 
-    <!-- 日志通道要识别 SystemUI / 桌面这两个调用方（包可见性声明） -->
+    <!-- 包可见性声明（hook 安装分发与设置页读取宿主信息用） -->
     <queries>
         <package android:name="com.android.systemui" />
         <package android:name="com.android.launcher" />
+        <package android:name="com.coloros.gallery3d" />
+        <package android:name="com.coloros.calculator" />
+        <package android:name="com.coloros.smartsidebar" />
     </queries>
 
     <application
@@ -55,7 +58,17 @@
             android:exported="false">
         </activity>
 
-        <!-- 日志文件写入通道：hook 进程把日志写进模块数据目录（LogProvider 内部校验调用方） -->
+        <!-- 日志文件分享通道：设置页分享抓取文件（captures/）走 content uri -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <provider
             android:name=".log.LogProvider"
             android:authorities="${applicationId}.lgfile"
@@ -71,7 +84,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-
     </application>
 
 </manifest>

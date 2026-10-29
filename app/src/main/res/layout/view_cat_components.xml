@@ -1,0 +1,38 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:scrollbars="none">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+
+        
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchVolumeSeekBarGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_volume_seekbar_glass" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_volume_seekbar_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+        
+        </com.coloros16.liquidglass.ui.ParameterCard><com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchVolumePanelClean" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_volume_panel_clean" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_volume_panel_clean_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+        
+        </com.coloros16.liquidglass.ui.ParameterCard><com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchVolumePanelBackdrop" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_volume_panel_backdrop" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_volume_panel_backdrop_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+        
+        </com.coloros16.liquidglass.ui.ParameterCard><com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchGalleryGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_gallery_glass" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_gallery_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+        
+        </com.coloros16.liquidglass.ui.ParameterCard><com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchCalculatorGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_calculator_glass" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_calculator_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+        
+        </com.coloros16.liquidglass.ui.ParameterCard><com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchSmartSidebarGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_smart_sidebar_glass" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_smart_sidebar_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+        
+        </com.coloros16.liquidglass.ui.ParameterCard></LinearLayout>
+</ScrollView>

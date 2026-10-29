@@ -69,7 +69,7 @@ tap('默认');time.sleep(.4)
 assert find(id='buttonBlurRadiusValue').get('text')==original_value
 assert find(id='seekButtonBlurRadius').get('enabled')=='true'
 shot('04-original-restored')
-call('shell','input','keyevent','4');time.sleep(.4);find(text='偏好与工具')
+call('shell','input','keyevent','4');time.sleep(.4);find(text='设置')
 errors=call('logcat','-d','-v','brief','AndroidRuntime:E','*:S').decode(errors='replace')
 assert 'Process: com.dreamglass.cos17' not in errors,errors[:1200]
 result={'serial':'emulator-5580','physicalDeviceAccessed':False,'colorOsHookTested':False,

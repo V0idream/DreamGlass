@@ -24,6 +24,7 @@ import android.graphics.Color
 import android.graphics.RectF
 import android.graphics.RuntimeShader
 import android.graphics.Shader
+import android.os.Build
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -502,6 +503,7 @@ object LiquidGlassShader {
             // 低分辨率 srcRect（等价于「在 1/4 图上取 coord/4 处采样」），tapStep 在低分辨率
             // 图内等效缩小 4 倍（视口 5px / 低分辨率图 1.25px），配合双线性插值——消除
             // 全分辨率欠采样（图标细节周期 2~10px << 原 tapStep 14px）产生的网格/莫尔纹伪影；
+
             // 低分辨率图模糊计算量也远小于全分辨率。最远 tap 在 ±spread(=uBlurRadius) 视口 px。
             // [doc/spec/68 模糊质感修复] 5×5 → **7×7**（σ_idx 1.5 → 2.25；tapStep spread/2 → spread/3）：
             // 原 5×5 在 σ_idx=1.5 时只覆盖 ±2 tap = ±1.33σ，**核边缘权重仍有 0.41**（远未衰减到 0）
@@ -1251,9 +1253,11 @@ object LiquidGlassShader {
      */
     fun createSourceBitmapShader(bitmap: Bitmap): BitmapShader =
         BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-            // RuntimeShader children default to NEAREST, regardless of Paint.isFilterBitmap.
-            // Interpolate explicitly so magnified backdrop pixels do not become square blocks.
-            setFilterMode(BitmapShader.FILTER_MODE_LINEAR)
+            // RuntimeShader 子 shader 默认最近邻采样，位图被放大时出现方块马赛克
+            if (Build.VERSION.SDK_INT >= 31) {
+                setFilterMode(BitmapShader.FILTER_MODE_LINEAR)
+            }
+
         }
 
     /**

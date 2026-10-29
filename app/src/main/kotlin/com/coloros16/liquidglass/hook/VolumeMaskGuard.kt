@@ -7,6 +7,12 @@ import java.util.WeakHashMap
 
 /** Keep the independent volume window's mask and content on their native rendering path. */
 object VolumeMaskGuard {
+    private val windows=Collections.synchronizedMap(WeakHashMap<View,Boolean>())
+    fun noteWindow(host:View):Boolean {
+        if(!isVolumeClass(host.javaClass.name))return false
+        return windows.put(host.rootView,true)==null
+    }
+    fun windowRoots():List<View> = synchronized(windows) { windows.keys.toList() }
     private val decisions = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
     private val nativeContents = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
 
@@ -22,6 +28,7 @@ object VolumeMaskGuard {
         name.startsWith("com.android.systemui.volume.")
 
     fun isVolumeHost(host: View?): Boolean {
+        if(host!=null && windows.containsKey(host.rootView))return true
         var cursor = host
         repeat(10) {
             val view = cursor ?: return false

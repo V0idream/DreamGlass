@@ -87,7 +87,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             background = bg(DreamUi.raised, 9); setPadding(dp(10), dp(5), dp(10), dp(5))
         })
         head.addView(brand)
-        head.addView(text(listOf("工作台", "材质工作室", "运行状态", "偏好与工具")[selected], 25f, ink, true).apply { setPadding(0, dp(17), 0, dp(2)) })
+        head.addView(text(listOf("概览", "材质工作室", "运行状态", "设置")[selected], 20f, ink, true).apply { setPadding(0, dp(10), 0, dp(2)) })
         frameworkLabel = text("正在读取框架状态…", 12f, muted)
         head.addView(frameworkLabel)
         val scroll = ScrollView(this).apply { isFillViewport = true }
@@ -96,7 +96,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         scroll.addView(body)
         when (selected) { 0 -> overview(); 1 -> material(); 2 -> diagnostics(); else -> settings() }
         val nav = LinearLayout(this).apply { setPadding(dp(12), dp(7), dp(12), dp(7)) }
-        listOf("工作台", "材质", "状态", "设置").forEachIndexed { i, name ->
+        listOf("主页", "材质", "状态", "设置").forEachIndexed { i, name ->
             nav.addView(TextView(this).apply {
                 gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); textSize = 13f; isClickable = true; isFocusable = true; setPadding(0, dp(14), 0, dp(14))
                 text = name; minHeight = dp(48)
@@ -114,8 +114,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         hero.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xff1b3b42.toInt(), 0xff132a35.toInt())).apply { cornerRadius = dp(26).toFloat() }
         hero.addView(text("FOR COLOROS 17", 11f, accent, true))
         hero.addView(text("让系统界面，轻一点", 22f, ink, true))
-        attachPreview(hero)
-        hero.addView(text("实时材质预览 · 参数调整在材质工作室完成", 11f, muted))
+        hero.addView(text("细腻的光影，安静地融入每一天。", 13f, muted))
         val control = card()
         master = Switch(this).apply {
             text = "启用 DreamGlass"; textSize = 18f; setTextColor(ink); minHeight = dp(48)
@@ -133,13 +132,13 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             }
         }
         control.addView(master)
-        control.addView(text("总开关在目标进程启动时读取。首次启用后，先测试桌面，再测试 SystemUI。", 12f, muted))
+        control.addView(text("启用后重启所选作用域，即可应用新的系统材质。", 12f, muted))
         val features = card()
         features.addView(text("界面与交互", 17f, ink, true))
         action(features, "通知与控制中心  ›", true) { advanced("master") }
         action(features, "桌面文件夹与 Dock  ›", true) { advanced("desktop") }
         action(features, "动画与空间感  ›", true) { advanced("tilt") }
-        features.addView(text("桌面 17.3.12 的旧版弹簧与 Zuyqa 倾斜入口不适用；通知卡倾斜保留实验设置。", 12f, muted))
+        action(features, "组件与圆角  ›", true) { advanced("corner") }
         action(features, "全部设置  ›", true) { selected = 3; showPage() }
         val safe = card()
         safe.addView(text("回到系统原有质感", 17f, ink, true))
@@ -209,18 +208,37 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         entry.addView(text("隐藏后仍可通过 LSPosed 的模块设置打开 DreamGlass。", 12f, muted))
         val groups = listOf(
             "系统外观" to listOf(Triple("master", "渲染开关", "管理模块入口与玻璃效果"), Triple("material", "材质参数", "折射、鲜艳度与边缘高光"), Triple("text", "文字与可读性", "颜色跟随与对比度"), Triple("mask", "背景压暗", "平衡通透感与文字可读性")),
-            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹和底部程序坞"), Triple("seedling", "流体云卡片", "展开卡片的材质与形状"), Triple("tilt", "空间效果", "通知倾斜与透视"), Triple("anim", "桌面动画", "打开、关闭与打断参数")),
+            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹、搜索栏和小组件"), Triple("corner", "独立圆角", "按组件单独设置形状"), Triple("components", "其他应用与组件", "相册、计算器和智能侧边栏"), Triple("seedling", "流体云卡片", "展开卡片的材质与形状"), Triple("tilt", "空间效果", "通知倾斜与透视"), Triple("anim", "桌面动画", "打开、关闭与打断参数")),
             "维护与数据" to listOf(Triple("background", "采样与性能", "背景刷新、质量及省电策略"), Triple("log", "运行日志", "查看和导出排查记录"), Triple("config", "配置备份", "导入、导出与恢复参数"))
         )
         for ((title, rows) in groups) {
             val c = card(); c.addView(text(title, 11f, accent, true))
             for ((id, label, detail) in rows) DreamUi.row(c, label, detail) { advanced(id) }
         }
+        performanceControls()
         rootControls()
         val about = card()
         DreamUi.row(about, "关于 DreamGlass", "${BuildConfig.VERSION_NAME} · 开源许可与项目来源") {
             startActivity(Intent(this, LicenseActivity::class.java))
         }
+    }
+
+    private fun performanceControls() {
+        val c=card()
+        c.addView(text("渲染方式",18f,ink,true))
+        c.addView(text("硬件优先减少 CPU 计算；高精度保留更细色阶，但耗电较高。",12f,muted))
+        val p=remote()
+        val group=RadioGroup(this)
+        val current=p?.getInt(Prefs.KEY_BLUR_ENGINE,Prefs.DEFAULT_BLUR_ENGINE) ?: Prefs.DEFAULT_BLUR_ENGINE
+        for((value,label) in listOf(0 to "硬件优先 · 日常推荐",1 to "高精度 · CPU F16")) {
+            group.addView(RadioButton(this).apply { id=View.generateViewId();text=label;setTextColor(ink);tag=value;isChecked=current==value;isEnabled=p!=null })
+        }
+        group.setOnCheckedChangeListener { g,id ->
+            val value=g.findViewById<RadioButton>(id)?.tag as? Int ?: return@setOnCheckedChangeListener
+            write { it.putInt(Prefs.KEY_BLUR_ENGINE,value) }
+        }
+        c.addView(group)
+        action(c,"背景刷新与模糊强度  ›",true) { advanced("background") }
     }
 
     private fun rootControls() {
@@ -259,17 +277,20 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
     private fun diagnostics() {
         val d = card()
         d.addView(text("目标进程记录", 21f, ink, true))
-        d.addView(text("这里显示目标进程上次回传的实际阶段。首次绘制记录只证明绘制调用完成，视觉与稳定性仍需真机检查。", 13f, muted))
+        d.addView(text("查看最近接收的作用域状态与运行记录。", 13f, muted))
         action(d, "刷新运行记录", true) { showPage() }
         for ((pkg, label) in listOf("com.android.launcher" to "系统桌面", "com.android.systemui" to "SystemUI")) {
             val c = card(); c.addView(text(label, 18f, ink, true)); c.addView(text(pkg, 11f, muted))
             val report = readReport(pkg)
-            c.addView(text(report, 13f, muted))
+            val details=text(report,13f,muted).apply { visibility=View.GONE }
+            val parsed=try { JSONObject(RuntimeStore.local(this).getString(RuntimeDiagnostics.PREFIX+pkg,"{}").orEmpty()) } catch(_:Throwable) { JSONObject() }
+            c.addView(text(if(parsed.has("stages")) "已收到进程记录 · 模块 ${parsed.optString("version", "未知")}" else "等待目标进程回传",13f,accent))
+            action(c,"查看详细阶段",true) { details.visibility=if(details.visibility==View.GONE)View.VISIBLE else View.GONE }
+            c.addView(details)
         }
-        rootControls()
         val tools = card()
-        tools.addView(text("验证与恢复", 18f, ink, true))
-        tools.addView(text("1. 安装后先打开设置检查框架通道。\n2. 在 LSPosed 启用桌面作用域，保存总开关，手动重启桌面后检查文件夹。\n3. 确认可用后，再启用 SystemUI 并手动重启。\n4. 如遇异常，通过 LSPosed 禁用本模块并重启；不要清除桌面数据。", 13f, muted))
+        tools.addView(text("支持与恢复", 18f, ink, true))
+        tools.addView(text("记录用于排查连接和渲染问题。若需停用，可关闭模块并重启作用域，无需清除系统桌面数据。",13f,muted))
         action(tools, "复制诊断摘要", true) {
             val report = "DreamGlass ${BuildConfig.VERSION_NAME}\n${frameworkLabel.text}\n" + listOf("com.android.launcher", "com.android.systemui").joinToString("\n") { "$it\n${readReport(it)}" }
             (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DreamGlass", report))
@@ -286,7 +307,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             val o = JSONObject(raw); val s = o.getJSONObject("stages")
             val stamp = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(o.getLong("at")))
             val fields = listOf("loaded" to "入口", "configured" to "配置", "mounted" to "Hook", "invoked" to "调用", "source" to "背景", "render" to "绘制", "extensions" to "扩展") +
-                if (pkg == "com.android.systemui") listOf("startup" to "初始化", "content_render" to "内容绘制", "notification_glass" to "通知玻璃路径", "notification_blur" to "通知回退记录", "qs_glass" to "按钮玻璃路径", "qs_blur" to "按钮回退记录", "qs_seekbar_hook" to "进度接口", "qs_seekbar_active" to "进度对象", "qs_seekbar_tint" to "进度填充", "qs_tile_mask" to "按钮遮罩", "qs_slider_hook" to "滑杆轮廓接口", "qs_slider_clip" to "滑杆填充裁剪", "qs_icon_hook" to "图标底层接口", "qs_icon_background" to "横向图标底层", "volume_native_hook" to "独立音量归属接口", "volume_native" to "独立音量原生保护") else emptyList()
+                if (pkg == "com.android.systemui") listOf("startup" to "初始化", "content_render" to "内容绘制", "notification_glass" to "通知玻璃路径", "notification_blur" to "通知回退记录", "qs_glass" to "按钮玻璃路径", "qs_blur" to "按钮回退记录", "qs_seekbar_hook" to "进度接口", "qs_seekbar_active" to "进度对象", "qs_seekbar_tint" to "进度填充", "qs_tile_mask" to "按钮遮罩", "qs_slider_hook" to "滑杆轮廓接口", "qs_slider_clip" to "滑杆填充裁剪", "qs_icon_hook" to "图标底层接口", "qs_icon_background" to "横向图标底层", "volume_native_hook" to "独立音量归属接口", "volume_native" to "独立音量原生保护", "volume_window" to "音量窗口隔离", "blur_hardware" to "硬件背景", "blur_cpu" to "高精度背景") else emptyList()
             "宿主模块版本：${o.optString("version", "未知")}\n上次记录 $stamp  ·  PID ${o.optInt("pid")}\n" + fields.joinToString("\n") { (k, n) -> "$n：${s.optString(k, "尚未收到")}" } + "\n历史记录不代表此刻仍在运行。"
         }
     } catch (_: Throwable) { "诊断通道暂不可读，请刷新框架连接。" }

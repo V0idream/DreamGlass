@@ -44,6 +44,9 @@ object Prefs {
     /** 探测到的玻璃类缓存（JSON 数组，元素含 cls/lastSeenMs，供设置页列出可选类）。 */
     const val KEY_GLASS_CLASSES = "glass_classes"
 
+    /** 按类圆角覆盖表（JSON 对象，类全名 → 圆角半径 px；缺失 = 该类跟随实测圆角）。 */
+    const val KEY_CORNER_OVERRIDES = "glass_corner_overrides"
+
     /** 预设序号：新建预设时自增写回，保证预设 id 不与历史 id 复用。 */
     const val KEY_GLASS_PRESET_SEQ = "glass_preset_seq"
 
@@ -389,6 +392,72 @@ object Prefs {
     const val KEY_DOCK_GLASS_ENABLE = "dock_glass_enable"
     /** 桌面 Dock 栏玻璃默认值（false = 不干预，Dock 保持系统原样透明） */
     const val DEFAULT_DOCK_GLASS_ENABLE = false
+
+    // ---------- 桌面「问小布」入口液态玻璃化（doc/spec/76） ----------
+    /** 桌面底部「✨问小布」入口（= `OplusPageIndicator` 的 BREENO 态）液态玻璃背景。
+     *  默认 **false**（与模块「默认全关」原则一致）。该控件与页面小圆点是同一个 View 的两个互斥
+     *  state，系统已自建 LayerBlurDrawable，开启后由本模块接管渲染。改动即时生效
+     *  （hook 端 TTL 500ms 重读 Prefs，无需重启 Launcher）。 */
+    const val KEY_PAGE_INDICATOR_GLASS = "page_indicator_glass_enable"
+    /** 问小布入口玻璃默认值（false = 不干预，保持系统原样磨砂） */
+    const val DEFAULT_PAGE_INDICATOR_GLASS = false
+
+    // ---------- 桌面卡片/小组件液态玻璃化（doc/spec/78） ----------
+    /** 桌面卡片 / 分组卡片 / 小组件背景液态玻璃。默认 **false**。这些元素的背景模糊由
+     *  `CardBackgroundBlurManager.createBlurBackground()` 统一产生，开启后由本模块接管渲染。
+     *  改动即时生效（hook 端 TTL 500ms 重读 Prefs，无需重启 Launcher）。 */
+    const val KEY_CARD_GLASS_ENABLE = "card_glass_enable"
+    /** 桌面卡片玻璃默认值（false = 不干预，保持系统原样磨砂） */
+    const val DEFAULT_CARD_GLASS_ENABLE = false
+
+    // ---------- 音量条液态玻璃化（doc/spec/09） ----------
+    /** 音量条（垂直滑条）液态玻璃。默认 **false**。音量条背景走 framework 窗口模糊
+     *  （BackgroundBlurDrawable，draw 空实现），现有 drawable 替换链打不中，需按 spec/09
+     *  的 hook 点在 `COUIVerticalSeekBar.draw` 上盖玻璃。改动即时生效（TTL 500ms 重读）。 */
+    // 0 = accelerated balanced output; 1 = original dense CPU/F16 precision.
+    const val KEY_BLUR_ENGINE = "dreamglass_blur_engine"
+    const val DEFAULT_BLUR_ENGINE = 0
+
+    const val KEY_VOLUME_SEEKBAR_GLASS = "volume_seekbar_glass_enable"
+    /** 音量条玻璃默认值（false = 不干预，保持系统原样） */
+    const val DEFAULT_VOLUME_SEEKBAR_GLASS = false
+
+    /** 进度条亮白填充：四滑杆白进度改近不透明亮磨砂填充（带顶边高光）。默认 **false**。
+     *  与音量条玻璃、面板去白底开关相互独立。改动即时生效（TTL 500ms 重读）。 */
+    const val KEY_VOLUME_PANEL_CLEAN = "volume_panel_clean_enable"
+    /** 进度条亮白填充默认值（false = 保持系统原样进度色） */
+    const val DEFAULT_VOLUME_PANEL_CLEAN = false
+
+    /** 音量面板去白底：展开面板大背景（后面那层模糊）改纯模糊（去白/去调色），模糊保留。
+     *  默认 **false**；关 = 系统原样（下一次展开自动恢复）。改动即时生效（TTL 500ms 重读）。 */
+    const val KEY_VOLUME_PANEL_BACKDROP = "volume_panel_backdrop_enable"
+    /** 音量面板去白底默认值（false = 保持系统原样含发白底色） */
+    const val DEFAULT_VOLUME_PANEL_BACKDROP = false
+
+    // ---------- 第三方 App 玻璃化（相册/计算器/智能侧边栏） ----------
+    /** 相册玻璃化：拦截 App 内的视图背景模糊（RenderEffect / 窗口模糊 drawable）改画液态玻璃。
+     *  默认 **false**；开启后需要进程内背景源（抓屏）通道可用，抓不到时保持系统原样模糊。
+     *  改动即时生效（TTL 500ms 重读）。 */
+    const val KEY_GALLERY_GLASS = "gallery_glass_enable"
+    /** 相册玻璃化默认值（false = 不干预） */
+    const val DEFAULT_GALLERY_GLASS = false
+
+    /** 计算器玻璃化（对话框/弹出菜单背景）。默认 **false**，语义同 [KEY_GALLERY_GLASS]。 */
+    const val KEY_CALCULATOR_GLASS = "calculator_glass_enable"
+    /** 计算器玻璃化默认值（false = 不干预） */
+    const val DEFAULT_CALCULATOR_GLASS = false
+
+    /** 智能侧边栏玻璃化（侧边栏卡片/面板背景）。默认 **false**，语义同 [KEY_GALLERY_GLASS]。 */
+    const val KEY_SMART_SIDEBAR_GLASS = "smart_sidebar_glass_enable"
+    /** 智能侧边栏玻璃化默认值（false = 不干预） */
+    const val DEFAULT_SMART_SIDEBAR_GLASS = false
+
+    /** 相册背景采样范围探针（实验）：把 A 族视图背景 RenderEffect 临时替换为越界采样染色探针，
+     * 肉眼判定 shader input 是否含节点外像素（折射环带可行性）。默认 **false**；
+     * 开启时相册原模糊观感被探针覆盖（主体透传=清晰背景 + 边缘色环）。改动即时生效（TTL 500ms 重读）。 */
+    const val KEY_GALLERY_SHADER_PROBE = "gallery_shader_probe_enable"
+    /** 相册背景采样范围探针默认值（false = 不干预） */
+    const val DEFAULT_GALLERY_SHADER_PROBE = false
 
     // ---------- 弹出通知（heads-up）文字跟随整体颜色（doc/spec/47，2026-08-13） ----------
     /** heads-up 通知文字跟随整体颜色独立开关：true=开启（默认）；false=不放开（heads-up 文字回退
@@ -1103,4 +1172,5 @@ object Prefs {
             android.util.Log.w("Prefs", "writeLogDiag failed: $t")
         }
     }
+
 }

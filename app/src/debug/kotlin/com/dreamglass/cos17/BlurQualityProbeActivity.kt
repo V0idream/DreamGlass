@@ -19,8 +19,8 @@ class BlurQualityProbeActivity : Activity() {
                 for(y in 0 until height)for(x in 0 until width)
                     setPixel(x,y,if((x/6+y/6)%2==0)Color.WHITE else Color.BLACK)
             }
-            val worker=ButtonBackdropWorker({postInvalidateOnAnimation()},{throw AssertionError(it)})
-            val routeWorker=ButtonBackdropWorker({postInvalidateOnAnimation()},{throw AssertionError(it)})
+            val worker=ButtonBackdropWorker({postInvalidateOnAnimation()},{throw AssertionError(it)}, {1})
+            val routeWorker=ButtonBackdropWorker({postInvalidateOnAnimation()},{throw AssertionError(it)}, {1})
             val routeParams=LiquidGlassShader.Params(viewportWidth=320f,viewportHeight=320f,
                 cornerRadius=160f,blurRadius=64f,surfacePolish=true)
             var passed=false

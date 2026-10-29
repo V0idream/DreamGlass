@@ -51,6 +51,9 @@ import com.coloros16.liquidglass.glass.IosGlassPreset
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.log.Lg
+import com.coloros16.liquidglass.log.LogCapture
+import com.coloros16.liquidglass.hook.CosCompatibility
+
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -128,6 +131,7 @@ class SettingsActivity : AppCompatActivity() {
     private val categories = listOf(
         Category("master", R.string.cat_master, R.string.cat_master_desc, R.layout.view_cat_master),
         Category("material", R.string.cat_material, R.string.cat_material_desc, R.layout.view_cat_material),
+        Category("corner", R.string.cat_corner, R.string.cat_corner_desc, R.layout.view_cat_corner_radius),
         Category("background", R.string.cat_background, R.string.cat_background_desc, R.layout.view_cat_background),
         Category("text", R.string.cat_text, R.string.cat_text_desc, R.layout.view_cat_text),
         Category("mask", R.string.cat_mask, R.string.cat_mask_desc, R.layout.view_cat_mask),
@@ -138,6 +142,8 @@ class SettingsActivity : AppCompatActivity() {
         // [spec/65] iOS 动态倾斜/透视（实验性，默认关）
         Category("tilt", R.string.cat_tilt, R.string.cat_tilt_desc, R.layout.view_cat_tilt),
         Category("desktop", R.string.cat_desktop, R.string.cat_desktop_desc, R.layout.view_cat_desktop),
+        // 其他组件：音量条 + 第三方 App（相册/计算器/智能侧边栏）的组件级玻璃开关
+        Category("components", R.string.cat_components, R.string.cat_components_desc, R.layout.view_cat_components),
         // [2026-09-17] 追踪器分类页已删除（追踪器整体移除，无存活控件）
         Category("log", R.string.cat_log, R.string.cat_log_desc, R.layout.view_cat_log),
         Category("config", R.string.cat_config, R.string.cat_config_desc, R.layout.view_cat_config),
@@ -371,6 +377,7 @@ class SettingsActivity : AppCompatActivity() {
         when (catId) {
             "master" -> bindMaster(view)
             "material" -> bindMaterial(view)
+            "corner" -> bindCornerRadius(view)
             "background" -> bindBackground(view)
             "text" -> bindText(view)
             "mask" -> bindMask(view)
@@ -378,6 +385,7 @@ class SettingsActivity : AppCompatActivity() {
             "anim" -> bindAnim(view)
             "tilt" -> bindTilt(view)
             "desktop" -> bindDesktop(view)
+            "components" -> bindComponents(view)
             "log" -> bindLog(view)
             "config" -> bindConfig(view)
             "about" -> bindAbout(view)
@@ -703,10 +711,20 @@ class SettingsActivity : AppCompatActivity() {
     private fun detectedGlassClasses(): List<String> {
         val saved = GlassRegistry.parseClasses(frameworkPrefs()?.getString(Prefs.KEY_GLASS_CLASSES, null))
         val local = com.coloros16.liquidglass.diagnostics.RuntimeStore.local(this)
-        val observed = listOf("com.android.systemui", "com.android.launcher").flatMap {
+        val observed = com.coloros16.liquidglass.diagnostics.RuntimeStore.HOSTS.flatMap {
             GlassRegistry.parseClasses(local.getString("observed_" + it, null))
         }
         return (saved + observed).map { it.cls }.distinct().sorted()
+    }
+
+    /** 类清单行文案：标签（简单类名）— 位置描述；该类没登记位置时只显示标签行。 */
+    private fun classDisplayText(cls: String): String {
+        val base = GlassRegistry.classLabel(cls)
+        val key = GlassRegistry.classLocationKey(cls) ?: return base
+        val resId = resources.getIdentifier(key, "string", packageName)
+        if (resId == 0) return base
+        val loc = getString(resId)
+        return if (loc.isEmpty()) base else "$base — $loc"
     }
 
     /** 改一次预设列表后写回框架侧；框架未就绪 → 提示并放弃（不用空表覆盖已有数据）。 */
@@ -908,7 +926,7 @@ class SettingsActivity : AppCompatActivity() {
                 val detail = if (preset.classes.isEmpty()) {
                     getString(R.string.glass_preset_none_applied)
                 } else {
-                    preset.classes.joinToString(", ") { GlassRegistry.classLabel(it) }
+                    preset.classes.joinToString(", ") { classDisplayText(it) }
                 }
                 container.addView(glassPresetRow("${preset.name}: $detail") {
                     showPresetClassDialog(preset.id) { rebuild() }
@@ -947,7 +965,7 @@ class SettingsActivity : AppCompatActivity() {
         val pad = (8 * resources.displayMetrics.density).toInt()
         classes.forEach { cls ->
             val box = CheckBox(this)
-            box.text = GlassRegistry.classLabel(cls)
+            box.text = classDisplayText(cls)
             box.textSize = 13f
             box.setPadding(0, pad, 0, pad)
             if (occupied.contains(cls)) {
@@ -976,6 +994,96 @@ class SettingsActivity : AppCompatActivity() {
                 scroll.layoutParams = lp
             }
         }
+    }
+
+    // ------------------------------------------------------------ 圆角独立（按类覆盖） ------------------------------------------------------------
+
+    /** 圆角覆盖滑杆 UI 上限（dp）；渲染侧另按元素短边一半封顶。 */
+    private val cornerOverrideMaxDp = 200
+
+    /** 读框架侧圆角覆盖表；框架未就绪 → 空表。 */
+    private fun readCornerOverrides(): Map<String, Float> =
+        GlassRegistry.parseCornerOverrides(frameworkPrefs()?.getString(Prefs.KEY_CORNER_OVERRIDES, null))
+
+    /** 写一个类的圆角覆盖（px）；0 = 移除覆盖（恢复跟随实测）。框架未就绪 → 提示并放弃。 */
+    private fun writeCornerOverride(cls: String, px: Float) {
+        val framework = frameworkPrefs()
+        if (framework == null) {
+            Toast.makeText(this, R.string.config_framework_not_ready, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val map = readCornerOverrides().toMutableMap()
+        if (px > 0f) map[cls] = px else map.remove(cls)
+        framework.edit().putString(Prefs.KEY_CORNER_OVERRIDES, GlassRegistry.encodeCornerOverrides(map)).apply()
+        Lg.i(TAG, "write glass_corner_overrides count=${map.size}")
+    }
+
+    /** 圆角独立页：探测到的类逐行展示（标签 + 位置 + 当前值），点行弹滑杆编辑。 */
+    private fun bindCornerRadius(view: View) {
+        val list = view.findViewById<LinearLayout>(R.id.cornerClassList)
+        list.removeAllViews()
+        val overrides = readCornerOverrides()
+        val classes = (detectedGlassClasses() + overrides.keys).distinct().sorted()
+        if (classes.isEmpty()) {
+            list.addView(glassPresetRow(getString(R.string.glass_preset_class_empty), null))
+            return
+        }
+        val density = resources.displayMetrics.density
+        classes.forEach { cls ->
+            val px = overrides[cls]?.takeIf { it > 0f }
+            val valueText = if (px == null) {
+                getString(R.string.corner_follow_measured)
+            } else {
+                getString(R.string.corner_custom_value, (px / density).roundToInt())
+            }
+            list.addView(glassPresetRow("${classDisplayText(cls)}\n$valueText") {
+                showCornerRadiusDialog(cls) { bindCurrentPage() }
+            })
+        }
+    }
+
+    /** 单类圆角编辑对话框：滑杆 0（跟随实测）~ 200dp，拖动结束即写；另附「恢复跟随实测」按钮。 */
+    private fun showCornerRadiusDialog(cls: String, onClosed: () -> Unit) {
+        val density = resources.displayMetrics.density
+        val currentPx = readCornerOverrides()[cls]?.takeIf { it > 0f } ?: 0f
+        val pad = (20 * density).toInt()
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+        }
+        val valueText = TextView(this).apply { textSize = 16f }
+        fun dpText(dp: Int): String =
+            if (dp <= 0) getString(R.string.corner_follow_measured)
+            else getString(R.string.corner_custom_value, dp)
+        var currentDp = (currentPx / density).roundToInt().coerceIn(0, cornerOverrideMaxDp)
+        valueText.text = dpText(currentDp)
+        val seek = SeekBar(this).apply {
+            max = cornerOverrideMaxDp
+            progress = currentDp
+        }
+        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                currentDp = progress
+                valueText.text = dpText(progress)
+            }
+
+            override fun onStartTrackingTouch(sb: SeekBar) {
+            }
+
+            override fun onStopTrackingTouch(sb: SeekBar) {
+                writeCornerOverride(cls, currentDp * density)
+            }
+        })
+        column.addView(valueText)
+        column.addView(seek)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(GlassRegistry.classLabel(cls))
+            .setView(column)
+            .setPositiveButton(R.string.glass_preset_close, null)
+            .setNeutralButton(R.string.corner_reset) { _, _ -> writeCornerOverride(cls, 0f) }
+            .create()
+        dialog.setOnDismissListener { onClosed() }
+        dialog.show()
     }
 
     /** 背景与抓屏：模式 / 即时抓屏速率 / 最大抓屏间隔 / 清晰度 / 失败重试 / 区域级抓屏。 */
@@ -1246,6 +1354,33 @@ class SettingsActivity : AppCompatActivity() {
             switchDock, dockListener,
             Prefs.KEY_DOCK_GLASS_ENABLE, Prefs.DEFAULT_DOCK_GLASS_ENABLE
         )
+        bindGlassSwitch(view, R.id.switchPageIndicatorGlass, Prefs.KEY_PAGE_INDICATOR_GLASS, Prefs.DEFAULT_PAGE_INDICATOR_GLASS)
+        bindGlassSwitch(view, R.id.switchCardGlass, Prefs.KEY_CARD_GLASS_ENABLE, Prefs.DEFAULT_CARD_GLASS_ENABLE)
+    }
+
+    /** 其他组件：音量条 + 相册 / 计算器 / 智能侧边栏的组件级玻璃开关。 */
+    private fun bindComponents(view: View) {
+        val supportsVolume=try { CosCompatibility.supportsLegacyVolumeOverrides(
+            packageManager.getPackageInfo("com.android.systemui",0).versionName) } catch(_:Throwable) { false }
+        for(id in listOf(R.id.switchVolumeSeekBarGlass,R.id.switchVolumePanelClean,R.id.switchVolumePanelBackdrop)) {
+            view.findViewById<Switch>(id)?.apply { isEnabled=supportsVolume }
+        }
+        bindGlassSwitch(view, R.id.switchVolumeSeekBarGlass, Prefs.KEY_VOLUME_SEEKBAR_GLASS, Prefs.DEFAULT_VOLUME_SEEKBAR_GLASS)
+        bindGlassSwitch(view, R.id.switchVolumePanelClean, Prefs.KEY_VOLUME_PANEL_CLEAN, Prefs.DEFAULT_VOLUME_PANEL_CLEAN)
+        bindGlassSwitch(view, R.id.switchVolumePanelBackdrop, Prefs.KEY_VOLUME_PANEL_BACKDROP, Prefs.DEFAULT_VOLUME_PANEL_BACKDROP)
+        bindGlassSwitch(view, R.id.switchGalleryGlass, Prefs.KEY_GALLERY_GLASS, Prefs.DEFAULT_GALLERY_GLASS)
+        bindGlassSwitch(view, R.id.switchCalculatorGlass, Prefs.KEY_CALCULATOR_GLASS, Prefs.DEFAULT_CALCULATOR_GLASS)
+        bindGlassSwitch(view, R.id.switchSmartSidebarGlass, Prefs.KEY_SMART_SIDEBAR_GLASS, Prefs.DEFAULT_SMART_SIDEBAR_GLASS)
+    }
+
+    /** 组件级玻璃开关绑定（写 Prefs + 按权威值刷新；hook 端 TTL 500ms 重读，改动即时生效）。 */
+    private fun bindGlassSwitch(view: View, switchId: Int, key: String, default: Boolean) {
+        val switch = view.findViewById<Switch>(switchId)
+        val listener = CompoundButton.OnCheckedChangeListener { _, checked ->
+            writePrefBoolean(key, checked)
+        }
+        switch.setOnCheckedChangeListener(listener)
+        refreshBooleanSwitch(switch, listener, key, default)
     }
 
     // ------------------------------------------------------------ [spec/64] 桌面动画参数 ------------------------------------------------------------
@@ -1448,74 +1583,88 @@ class SettingsActivity : AppCompatActivity() {
 
     // [2026-09-17] bindTracker 已删除：追踪器（通用运动追踪开关 + 三个遍历间隔 SeekBar）整体移除。
 
-    /** 日志与诊断。 */
+    /** 日志与诊断：运行日志开关 + logcat 流式抓取。 */
     private fun bindLog(view: View) {
-        // 模块日志开关（默认开；改动需重启 SystemUI 生效）
+        // 运行日志开关（logcat 详细度门控：开=全量，关=仅 e 级；hook 侧需重启 SystemUI 生效）
         val switchLogs = view.findViewById<Switch>(R.id.switchEnableLogs)
         val logsListener = CompoundButton.OnCheckedChangeListener { _, checked ->
             writePrefBoolean(Prefs.KEY_ENABLE_LOGS, checked)
         }
         switchLogs.setOnCheckedChangeListener(logsListener)
         refreshBooleanSwitch(switchLogs, logsListener, Prefs.KEY_ENABLE_LOGS, Prefs.DEFAULT_ENABLE_LOGS)
-        // 分享日志文件（经 FileProvider 换 content uri，交给系统分享面板）
-        view.findViewById<View>(R.id.shareLogRow).setOnClickListener { shareLogFile() }
-        // 通道状态仪表盘：读框架侧心跳（binder），放后台线程
-        val diagRow = view.findViewById<TextView>(R.id.logDiagRow)
-        diagRow.setOnClickListener { refreshLogDiag(diagRow) }
-        refreshLogDiag(diagRow)
+        // 流式抓取：开始/停止 + 含全部开关 + 已抓文件列表
+        captureStartRow = view.findViewById(R.id.captureStartRow)
+        captureStopRow = view.findViewById(R.id.captureStopRow)
+        val includeAllRow = view.findViewById<Switch>(R.id.switchCaptureAll)
+        captureStatusRow = view.findViewById(R.id.captureStatusRow)
+        captureListView = view.findViewById(R.id.captureList)
+        captureStartRow?.setOnClickListener { startLogCapture(includeAllRow?.isChecked == true) }
+        captureStopRow?.setOnClickListener {
+            LogCapture.stop()
+            refreshCaptureUi()
+        }
+        refreshCaptureUi()
     }
 
-    /** 读三进程日志通道心跳并刷新显示（最近写入时间 + 失败/丢弃计数）。 */
-    private fun refreshLogDiag(row: TextView) {
-        row.setText(R.string.settings_log_diag_busy)
-        Thread {
-            val prefs = com.coloros16.liquidglass.diagnostics.RuntimeStore.local(this)
-            val text = if (prefs == null) {
-                getString(R.string.settings_log_diag_noframe)
-            } else {
-                val procs = listOf(
-                    "systemui" to R.string.settings_log_proc_systemui,
-                    "launcher" to R.string.settings_log_proc_launcher,
-                    "app" to R.string.settings_log_proc_app,
-                )
-                val sb = StringBuilder()
-                for ((slug, labelRes) in procs) {
-                    val hb = prefs.getString(Prefs.KEY_LG_HB_PREFIX + slug, "") ?: ""
-                    val label = getString(labelRes)
-                    val line = if (hb.isEmpty()) {
-                        "$label：${getString(R.string.settings_log_diag_none)}"
-                    } else {
-                        val ok = Regex("ok=(\\d+)").find(hb)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-                        val fail = Regex("fail=(\\d+)").find(hb)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                        val drop = Regex("drop=(\\d+)").find(hb)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-                        val age = if (ok > 0L) formatAge(ok) else getString(R.string.settings_log_diag_never)
-                        getString(R.string.settings_log_diag_fmt, label, age, fail, drop)
-                    }
-                    sb.append(line).append('\n')
-                }
-                sb.toString().trimEnd()
+    private var captureStartRow: TextView? = null
+    private var captureStopRow: TextView? = null
+    private var captureStatusRow: TextView? = null
+    private var captureListView: LinearLayout? = null
+
+    /** 刷新抓取按钮态/状态行/文件列表。 */
+    private fun refreshCaptureUi() {
+        val running = LogCapture.isRunning()
+        captureStartRow?.isEnabled = !running
+        captureStopRow?.isEnabled = running
+        captureStatusRow?.text = if (running) {
+            getString(R.string.settings_capture_running, LogCapture.currentFile?.name ?: "?")
+        } else {
+            getString(R.string.settings_capture_idle)
+        }
+        val host = captureListView ?: return
+        host.removeAllViews()
+        val files = LogCapture.listCaptures(this)
+        if (files.isEmpty()) {
+            host.addView(TextView(this).apply {
+                setText(R.string.settings_capture_empty)
+                setPadding(0, 12, 0, 12)
+            })
+            return
+        }
+        for (f in files) {
+            val row = TextView(this).apply {
+                text = getString(R.string.settings_capture_item, f.name, f.length() / 1024)
+                setBackgroundResource(android.R.drawable.list_selector_background)
+                setPadding(0, 24, 0, 24)
+                setOnClickListener { shareCaptureFile(f) }
             }
-            runOnUiThread { row.text = text }
+            host.addView(row)
+        }
+    }
+
+    /** 后台探测 su → 起 logcat 子进程（不可用 Toast 提示）。 */
+    private fun startLogCapture(includeAll: Boolean) {
+        captureStartRow?.isEnabled = false
+        captureStatusRow?.setText(R.string.settings_capture_probing)
+        val logsOff = !(frameworkPrefs()?.getBoolean(Prefs.KEY_ENABLE_LOGS, Prefs.DEFAULT_ENABLE_LOGS)
+            ?: xmlPrefs.getBoolean(Prefs.KEY_ENABLE_LOGS, Prefs.DEFAULT_ENABLE_LOGS))
+        Thread {
+            val su = LogCapture.probeSu()
+            val ok = su && LogCapture.start(applicationContext, includeAll)
+            runOnUiThread {
+                if (!su) Toast.makeText(this, R.string.settings_capture_no_root, Toast.LENGTH_LONG).show()
+                else if (!ok) Toast.makeText(this, R.string.settings_capture_failed, Toast.LENGTH_SHORT).show()
+                if (ok && logsOff) {
+                    Toast.makeText(this, R.string.settings_capture_logs_off_hint, Toast.LENGTH_LONG).show()
+
+                }
+                refreshCaptureUi()
+            }
         }.start()
     }
 
-    /** 毫秒时间距今 → 「x秒前 / x分钟前 / x小时前」。 */
-    private fun formatAge(ms: Long): String {
-        val diff = System.currentTimeMillis() - ms
-        return when {
-            diff < 60_000L -> "${diff / 1000} 秒前"
-            diff < 3_600_000L -> "${diff / 60_000} 分钟前"
-            else -> "${diff / 3_600_000} 小时前"
-        }
-    }
-
-    /** 分享日志；优先合并各进程经框架回传的日志尾部，再拼主文件。 */
-    private fun shareLogFile() {
-        val file = buildShareFile(File(filesDir, "logs/lg.log"))
-        if (file == null) {
-            Toast.makeText(this, R.string.settings_share_log_empty, Toast.LENGTH_SHORT).show()
-            return
-        }
+    /** 分享单个抓取文件（FileProvider content uri → 系统分享面板）。 */
+    private fun shareCaptureFile(file: File) {
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
             val send = Intent(Intent.ACTION_SEND).apply {
@@ -1529,30 +1678,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    /** 拼接回传尾部与主日志为临时分享文件；无可分享内容返回 null。 */
-    private fun buildShareFile(main: File): File? {
-        val hasMain = main.exists() && main.length() > 0L
-        val prefs = com.coloros16.liquidglass.diagnostics.RuntimeStore.local(this)
-        val chunks = if (prefs != null) {
-            listOf("systemui", "launcher", "app").mapNotNull { slug ->
-                val c = prefs.getString(Prefs.KEY_LG_CHUNK_PREFIX + slug, "") ?: ""
-                if (c.isEmpty()) null else "===== $slug 回传尾部 =====\n$c\n"
-            }
-        } else {
-            emptyList()
-        }
-        if (!hasMain && chunks.isEmpty()) return null
-        if (chunks.isEmpty()) return main
-        return try {
-            val out = File(filesDir, "logs/lg-share.txt")
-            out.parentFile?.mkdirs()
-            val body = if (hasMain) main.readText() else ""
-            out.writeText(chunks.joinToString("\n") + "===== 主日志 =====\n" + body)
-            out
-        } catch (t: Throwable) {
-            if (hasMain) main else null
-        }
-    }
 
     /** 关于：TG/GitHub 完整网址点击跳转浏览器，QQ/开发者点击复制。 */
     // ------------------------------------------------------------ 配置导入导出 ------------------------------------------------------------
@@ -2156,9 +2281,13 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             if (cw > 0 && ch > 0) drawGlass(canvas, pad, cw, ch)
         }
         // 只在可见时续帧：切走/脱离窗口后链条自动断开，动画即停，无泄漏
-        if (isShown && windowVisibility == View.VISIBLE) postInvalidateDelayed(FRAME_INTERVAL_MS)
+        if (isShown && hasWindowFocus() && windowVisibility == View.VISIBLE) postInvalidateDelayed(FRAME_INTERVAL_MS)
     }
 
+    override fun onWindowFocusChanged(hasWindowFocus:Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if(hasWindowFocus)postInvalidate()
+    }
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
         if (visibility == View.VISIBLE) postInvalidate()

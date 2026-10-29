@@ -1,9 +1,23 @@
 <?xml version='1.0' encoding='utf-8'?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
-        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
-            <Switch android:id="@+id/switchDockGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_dock_glass" android:fontFamily="sans-serif-medium" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" android:layout_marginTop="0dp" />
-            <TextView android:id="@+id/dockGlassDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_dock_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" android:fontFamily="sans-serif" android:lineSpacingExtra="3dp" />
-        </com.coloros16.liquidglass.ui.ParameterCard>
-    </LinearLayout>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:scrollbars="none">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+
+        
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchDockGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_dock_glass" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:id="@+id/dockGlassDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_dock_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+        
+        </com.coloros16.liquidglass.ui.ParameterCard><com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchPageIndicatorGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_page_indicator_glass" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:id="@+id/pageIndicatorGlassDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_page_indicator_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+        
+        </com.coloros16.liquidglass.ui.ParameterCard><com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp"><Switch android:id="@+id/switchCardGlass" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_card_glass" android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+
+        <TextView android:id="@+id/cardGlassDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_card_glass_desc" android:textAppearance="?attr/textAppearanceBodySmall" android:textColor="@color/dream_muted" />
+
+
+    </com.coloros16.liquidglass.ui.ParameterCard></LinearLayout>
 </ScrollView>

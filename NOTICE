@@ -29,3 +29,8 @@ LibXposed interface/service AAR metadata was modified: minCompileSdk 37 -> 36.
 Classes and resources were not changed. See app/libs/README.md.
 
 This NOTICE supplements and does not replace any original license or notice.
+
+Android accelerated bitmap blur sample sequence
+Source: https://developer.android.com/guide/topics/renderscript/migrate
+Android Developers / Android Open Source Project, documentation code under Apache-2.0.
+DreamGlass adaptation in HardwareBackdropBlur.kt, 2026-10-29.

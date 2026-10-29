@@ -34,7 +34,7 @@ class MaterialStudyProbeActivity : Activity() {
                     c.restoreToCount(saved)
                 }
             }
-            val worker=ButtonBackdropWorker({postInvalidateOnAnimation()},{throw AssertionError(it)})
+            val worker=ButtonBackdropWorker({postInvalidateOnAnimation()},{throw AssertionError(it)}, {1})
             val values=IosGlassPreset.values
             var logged=false
             fun params(w:Float,h:Float,r:Float)=LiquidGlassShader.Params(

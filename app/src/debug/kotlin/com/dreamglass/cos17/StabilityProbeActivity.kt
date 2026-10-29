@@ -21,7 +21,7 @@ class StabilityProbeActivity : Activity() {
             try {
                 val reports=AtomicInteger();val notifications=AtomicInteger()
                 val worker=ButtonBackdropWorker({ notifications.incrementAndGet();error("injected redraw failure") },
-                    { reports.incrementAndGet();error("injected reporter failure") })
+                    { reports.incrementAndGet();error("injected reporter failure") }, {1})
                 fun source(size:Int,color:Int)=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
                 fun ready(input:Bitmap,radius:Float):Bitmap {
                     val deadline=SystemClock.uptimeMillis()+5000

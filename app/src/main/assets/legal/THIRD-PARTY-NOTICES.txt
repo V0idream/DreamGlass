@@ -1,10 +1,10 @@
 # DreamGlass — 第三方代码、来源与许可
 
-发布日期：2026-10-26；对应版本：1.0.8。DreamGlass 是独立产品名称，For ColorOS 17 仅说明适配范围。
+本地构建日期：2026-10-29；对应版本：1.1.0。DreamGlass 是独立产品名称，For ColorOS 17 仅说明适配范围。
 
 ## 1. 整体许可与派生基础
 
-本软件基于 AYwlilwYA / ColorOS16-LiquidGlass 的代码持续开发，并非完全从零编写。上游地址：https://github.com/AYwlilwYA/ColorOS16-LiquidGlass ，所用基线提交 `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`（0.2.1）。原项目界面中的作者署名为 AlanYan，原有版权继续归原作者和贡献者。
+本软件基于 AYwlilwYA / ColorOS16-LiquidGlass 的代码持续开发，并非完全从零编写。上游地址：https://github.com/AYwlilwYA/ColorOS16-LiquidGlass ，原始基线提交 `aa96e1aeb98f4e3777f4bced265a1b86bf3e10cd`（0.2.1）；本版同步至 `b673884`（0.3.0）。原项目界面中的作者署名为 AlanYan，原有版权继续归原作者和贡献者。
 
 DreamGlass 作为整体按 GNU General Public License version 3 发布，全文见 LICENSE；本声明不移除第三方代码自身的版权或许可条件。新界面、品牌、适配代码和产品流程不改变 GPLv3 派生作品的许可义务。软件无任何担保；接收者有权在 GPLv3 下使用、研究、修改和再分发。
 
@@ -37,3 +37,7 @@ ElbowHitColor 及其适配分支只用于互操作接口和处理思路参考，
 Z841973620/ColorOSLiquidGlass 仅用于公开介绍参考，本项目未复制其代码。DreamGlass 的三层图形标记为本项目绘制；不随包分发上游联系人入口或收款二维码。
 
 以上声明不表示原作者、库作者或 ColorOS 权利人对 DreamGlass 的背书。
+
+## Android 硬件模糊示例
+
+`HardwareBackdropBlur.kt` 的 RenderNode / HardwareRenderer / ImageReader 处理顺序参考并改写自 Android Developers / Android Open Source Project 的 [Migrate from RenderScript — Image blur on Android 12+ rendered into a Bitmap](https://developer.android.com/guide/topics/renderscript/migrate)。文档示例代码按 [Apache License 2.0](https://developer.android.com/license) 提供；许可证全文已随包保留为 Apache-2.0.txt。DreamGlass 额外实现每结果独立缓冲队列、取消、失败回退及有界调度，修改日期为2026-10-29。未引入新的二进制依赖。

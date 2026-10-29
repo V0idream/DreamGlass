@@ -29,11 +29,7 @@ class LogProvider : ContentProvider() {
         private const val ROTATE_BYTES = 2L * 1024 * 1024
 
         /** 允许访问的调用方（日志含界面类名，不放开给任意 app） */
-        private val ALLOWED_PACKAGES = setOf(
-            "com.android.systemui",
-            "com.android.launcher",
-            "com.dreamglass.cos17",
-        )
+        private val ALLOWED_PACKAGES = RuntimeStore.HOSTS + "com.dreamglass.cos17"
     }
 
     override fun onCreate(): Boolean = true
@@ -102,7 +98,7 @@ class LogProvider : ContentProvider() {
         val prefs = RuntimeStore.local(ctx)
         val accepted = when (method) {
             RuntimeStore.STATE -> {
-                require(arg == "com.android.systemui" || arg == "com.android.launcher")
+                require(arg in RuntimeStore.HOSTS)
                 requireHost(arg!!)
                 val raw = extras?.getString("snapshot") ?: return null
                 require(raw.length <= 8192)
@@ -113,7 +109,7 @@ class LogProvider : ContentProvider() {
                 prefs.edit().putString(RuntimeDiagnostics.PREFIX + arg, report.toString()).commit()
             }
             RuntimeStore.CLASSES -> {
-                require(arg == "com.android.systemui" || arg == "com.android.launcher")
+                require(arg in RuntimeStore.HOSTS)
                 requireHost(arg!!)
                 val raw = extras?.getString("classes") ?: return null
                 require(raw.length <= 65_536)
