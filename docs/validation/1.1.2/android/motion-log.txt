@@ -1,0 +1,2 @@
+--------- beginning of main
+I/MotionProbe( 4510): PASS {"physicalDeviceTested":false,"vendorHookTested":false,"nativeRowHasVisible3DPose":true,"nativeTranslationPreserved":true,"cancelRestoresOriginalTransform":true,"newHostTransformSurvivesCleanup":true,"detachStopsCallbacks":true,"naturalEndRestoresTransform":true,"gpuCanvasProjectionRendered":true}

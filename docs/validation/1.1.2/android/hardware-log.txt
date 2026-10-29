@@ -1,0 +1,2 @@
+--------- beginning of main
+I/DreamGlassHardwareProbe( 4224): PASS {"cpuWallMs":162.136585,"hardwareWallMs":48.665343,"cpuWorkerCpuMs":153.552429,"hardwareWorkerCpuMs":0.33802533333333334,"cpuProcessCpuMs":159,"hardwareProcessCpuMs":44,"pixels":294912,"samples":3,"hardwareConfig":true,"translucencyPassed":true,"publishedBufferRetained":true,"checkerResidual":1,"genericVolumeWindowOwnership":true,"productionBackendToggleBinding":true,"physicalPowerMeasured":false}

@@ -41,6 +41,15 @@ object RuntimeDiagnostics {
         if (pending.compareAndSet(false, true)) writer.execute { publish(0) }
     }
 
+    /** For source availability changing from pending/fallback to ready. */
+    fun update(stage:String,detail:String) {
+        if(host.isEmpty())return
+        val value=detail.take(500)
+        if(stages.put(stage,value)!=value)revision.incrementAndGet()
+        if(published==revision.get() || SystemClock.uptimeMillis()<retryAfter)return
+        if(pending.compareAndSet(false,true))writer.execute { publish(0) }
+    }
+
     fun discovered(classes: String) {
         if (classes.length > 65_536 || classes == classesSnapshot) return
         classesSnapshot = classes

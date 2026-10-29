@@ -1,0 +1,25 @@
+{
+  "systemUiSha256": "a06bf8e0046a5e6a19347e09064e6ce8f79e0e963c78c8ce65f0fbf56d770e62",
+  "matchedSignatures": {
+    "com.oplus.keyguard.plugin.AbstractSubPlugin": [
+      "getView(I)Landroid/view/View;"
+    ],
+    "com.oplus.keyguard.plugin.ClockPlugin": [
+      "setPeerWallpaperBitmap(Landroid/os/Bundle;)V"
+    ],
+    "com.oplus.keyguard.plugin.WidgetPlugin": [],
+    "com.oplus.keyguard.binder.WallpaperPeerTransfer": [
+      "resolveBitmapFromBinder(Landroid/os/IBinder;)Landroid/graphics/Bitmap;"
+    ],
+    "com.oplus.systemui.keyguard.wallpaper.OplusLockScreenWallpaperController": [
+      "copyWallpaperBitmap()Landroid/graphics/Bitmap;"
+    ],
+    "com.oplus.systemui.keyguard.view.CustomOplusKeyguardStyleClock": [
+      "onAttachedToWindow()V"
+    ]
+  },
+  "dexInventoryEvidenceOnly": true,
+  "nativePluginMethodsExecuted": false,
+  "physicalDeviceTested": false,
+  "oemAppBackgroundBridge": "Runtime capability check; framework implementation is not contained in this SystemUI inventory"
+}

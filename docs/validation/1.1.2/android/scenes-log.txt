@@ -1,0 +1,2 @@
+--------- beginning of main
+I/SceneGlassProbe( 4559): PASS {"physicalDeviceTested":false,"vendorBridgeExecuted":false,"sharedOpticalPixelsChanged":159961,"threeControlsShareIosPreset":true,"outerToolbarUnframed":true,"liveInputPixelsChangedWithoutEffectRebuild":116757,"foregroundClicksRetained":3,"recordedWallpaperSurvivesHostBitmapRecycle":true,"hardwareOwnedOutput":true}

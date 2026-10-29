@@ -18,14 +18,13 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Choreographer
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import androidx.annotation.RequiresApi
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.log.Lg
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
+import java.lang.reflect.Method
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 import java.util.concurrent.ArrayBlockingQueue
@@ -71,44 +70,53 @@ object ParticleDissolveHook {
             if (installed) return
             val row = Class.forName(ROW, false, loader)
             val helper = Class.forName("com.android.systemui.SwipeHelper", false, loader)
-            // Select the terminal overload: wrappers must not emit a second effect.
-            val dismiss = helper.declaredMethods.filter {
-                it.name == "dismissChild" && it.parameterCount >= 3 &&
-                    View::class.java.isAssignableFrom(it.parameterTypes[0])
-            }.maxByOrNull { it.parameterCount } ?: return
-            api.hook(dismiss).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
-                val view = chain.getArg(0) as? View
-                if (view != null && row.isInstance(view)) safe {
-                    if (allowed(api, view.context)) dismiss(view)
-                }
-                chain.proceed() // Native deletion/animation/cancellation is always authoritative.
-            }
-            // Retain an undragged image, once per touch. No capture while scrolling every frame.
-            val dispatch = ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)
-            api.hook(dispatch).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
-                val view = chain.getThisObject() as? View
-                if (view != null && row.isInstance(view)) safe {
-                    val event = chain.getArg(0) as? MotionEvent
-                    if (event?.actionMasked == MotionEvent.ACTION_DOWN && allowed(api, view.context)) prepare(view)
-                    else if (event?.actionMasked == MotionEvent.ACTION_UP || event?.actionMasked == MotionEvent.ACTION_CANCEL) {
-                        val capture=captures[view];val weak=WeakReference(view)
-                        if (capture!=null) ui.postDelayed({ weak.get()?.let { row ->
-                            if(captures[row]===capture && !capture.requested) {
-                                captures.remove(row);capture.cancelled=true
-                            }
-                        } },400L)
+            // COS17 overrides both the gesture and menu paths in NotificationSwipeHelper.
+            // Hook every concrete declaration; Capture.requested/consumed deduplicates wrappers.
+            val helpers = listOfNotNull(helper, runCatching {
+                Class.forName("com.android.systemui.statusbar.notification.stack.NotificationSwipeHelper", false, loader)
+            }.getOrNull(), runCatching {
+                // Confirmed stock COS17 callback. Its start/commit events cover clear-all too;
+                // clearNotifications() does not call row.performDismiss() for every row.
+                Class.forName("com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayoutController\$10", false, loader)
+            }.getOrNull()).distinct()
+            var mounted = 0
+            for (type in helpers) for (route in NotificationMotionContract.routes(type)) {
+                api.hook(route.method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                    val view = chain.getArg(route.index) as? View
+                    if (view != null && row.isInstance(view)) safe {
+                        if (route.event == NotificationMotionContract.Event.CANCEL ||
+                            route.event == NotificationMotionContract.Event.ABORT || allowed(api, view.context))
+                            onGesture(view, route.event)
                     }
+                    chain.proceed()
                 }
-                chain.proceed()
+                mounted++
             }
-            // Aborted swipe: stop the visual immediately; never touch the host animator.
-            helper.declaredMethods.filter { it.name == "snapChild" && it.parameterCount > 0 &&
-                View::class.java.isAssignableFrom(it.parameterTypes[0]) }.forEach { method ->
-                api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
-                    safe { (chain.getArg(0) as? View)?.let(::cancel) };chain.proceed()
-                }
+            // Native row deletion is the commit point. An attempted swipe/menu open is not deletion.
+            val commit = row.getDeclaredMethod("performDismiss", Boolean::class.javaPrimitiveType)
+            api.hook(commit).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val view = chain.getThisObject() as? View
+                if (view != null) safe { if (allowed(api, view.context)) request(view) }
+                val result = chain.proceed()
+                if (view != null) safe { if (allowed(api, view.context)) dismiss(view) }
+                result
             }
+            Lg.i("LiquidGlass", "particle gesture routes=$mounted; native row commit installed")
             installed = true
+        }
+
+        internal fun onGesture(view: View, event: NotificationMotionContract.Event) {
+            if (Looper.myLooper() != Looper.getMainLooper()) return
+            when (event) {
+                NotificationMotionContract.Event.PREPARE -> {
+                    val old = captures[view]
+                    if (old == null || old.cancelled || SystemClock.uptimeMillis()-old.createdAt>100L) prepare(view)
+                }
+                NotificationMotionContract.Event.REQUEST -> request(view)
+                NotificationMotionContract.Event.CANCEL -> cancel(view)
+                NotificationMotionContract.Event.COMMIT -> if (captures[view]?.requested == true) dismiss(view)
+                NotificationMotionContract.Event.ABORT -> abort(view)
+            }
         }
 
         private inline fun safe(block: () -> Unit) {
@@ -127,7 +135,7 @@ object ParticleDissolveHook {
                 val prefs = Prefs.read(api)
                 enabled = prefs.getBoolean(Prefs.KEY_MASTER, false) && prefs.getBoolean(KEY_ENABLED, false)
                 speed = Prefs.readIntCompat(prefs, KEY_SPEED, DEFAULT_SPEED).coerceIn(MIN_SPEED, MAX_SPEED)
-                if (!enabled) effects.values.toList().forEach { it.stop() }
+                if (!enabled) stopAll()
             }
             val power = context.getSystemService(PowerManager::class.java)
             return enabled && ValueAnimator.areAnimatorsEnabled() && power?.isInteractive == true && !power.isPowerSaveMode
@@ -139,6 +147,7 @@ object ParticleDissolveHook {
             @Volatile var bitmap: Bitmap? = null
             @Volatile var cancelled = false
             var requested = false
+            var committed = false
             var consumed = false
             var finished: (() -> Unit)? = null
         }
@@ -153,7 +162,15 @@ object ParticleDissolveHook {
             val node = RenderNode("LiquidGlass dismissed notification")
             node.setPosition(0, 0, view.width, view.height)
             val canvas = node.beginRecording(view.width, view.height)
-            try { view.draw(canvas) } finally { node.endRecording() }
+            try {
+                // COS17 slides mTranslateableViews instead of the row itself. Compensate only
+                // that child offset in the recording canvas; never mutate the host View.
+                val contentShift = runCatching {
+                    (view.javaClass.getMethod("getTranslation").invoke(view) as Number).toFloat() - view.translationX
+                }.getOrDefault(0f)
+                if (contentShift.isFinite()) canvas.translate(-contentShift, 0f)
+                view.draw(canvas)
+            } finally { node.endRecording() }
             val c = Capture(WeakReference(root), (pos[0]-parent[0]).toFloat(), (pos[1]-parent[1]).toFloat(),
                 view.width, view.height, view.resources.displayMetrics.density, node)
             captures[view] = c
@@ -181,19 +198,25 @@ object ParticleDissolveHook {
             }
             return c
         }
+        private fun request(view: View): Capture? {
+            if (effects.containsKey(view)) return null
+            val old = captures[view]
+            val c = if (old == null || old.cancelled || SystemClock.uptimeMillis()-old.createdAt > 4950)
+                prepare(view) else old
+            c?.requested = true
+            return c
+        }
         private fun dismiss(view: View) {
-            if (effects.containsKey(view)) return
-            var c = captures[view]
-            if (c == null || c.cancelled || SystemClock.uptimeMillis()-c.createdAt > 4950) c = prepare(view)
-            val image = c ?: return
-            if (image.requested) return
-            image.requested = true
-            val weak = WeakReference(view)
-            image.finished = { weak.get()?.let { row -> start(row, image) } }
+            val image = request(view) ?: return
+            if (image.committed) return
+            image.committed = true
+            // Keep the committed row until the bounded GPU job completes; native removal can
+            // otherwise release its last strong reference before the image is ready.
+            image.finished = { start(view, image) }
             if (image.bitmap != null) start(view, image)
         }
         private fun start(view: View, c: Capture) {
-            if (c.cancelled || c.consumed || !c.requested) return
+            if (c.cancelled || c.consumed || !c.committed) return
             val bitmap = c.bitmap ?: return
             val root = c.root.get() ?: return
             val power = root.context.getSystemService(PowerManager::class.java)
@@ -209,8 +232,18 @@ object ParticleDissolveHook {
             dust.start()
         }
         private fun cancel(view: View) {
+            val c = captures[view]
+            if (c?.committed == true || effects.containsKey(view)) return
+            captures.remove(view)?.cancelled = true
+        }
+        private fun abort(view: View) {
             captures.remove(view)?.cancelled = true
             effects.remove(view)?.stop()
+        }
+        internal fun stopAll() {
+            if (Looper.myLooper() != Looper.getMainLooper()) { ui.post { stopAll() };return }
+            captures.values.forEach { it.cancelled = true };captures.clear()
+            effects.values.toList().forEach { it.stop() };effects.clear()
         }
 
         /** Pure GPU render-to-texture. No getPixels, software Canvas, CPU scaling or blur. */
@@ -344,5 +377,24 @@ object ParticleDissolveHook {
                 return motes+solid*(1.0-motes.a);
             }
         """
+    }
+}
+
+/** Match the actual View argument, including COS17 snapChild(float,float,View).
+ * Kept separate from Xposed so ROM-shaped fixtures can exercise the same resolver. */
+object NotificationMotionContract {
+    enum class Event { PREPARE, REQUEST, CANCEL, COMMIT, ABORT }
+    data class Route(val method: Method, val index: Int, val event: Event)
+    fun routes(type: Class<*>): List<Route> = type.declaredMethods.mapNotNull { method ->
+        val event = when (method.name) {
+            "onDownUpdate" -> Event.PREPARE
+            "dismissChild", "dismiss", "superDismissChild" -> Event.REQUEST
+            "snapChild", "snapClosed", "snapOpen", "onChildSnappedBack" -> Event.CANCEL
+            "onSwipeOutAnimStart", "onChildDismissed", "handleChildViewDismissed" -> Event.COMMIT
+            "onChildNotDismissed" -> Event.ABORT
+            else -> return@mapNotNull null
+        }
+        val index = method.parameterTypes.indexOfFirst { View::class.java.isAssignableFrom(it) }
+        if (index < 0 || method.returnType != Void.TYPE) null else Route(method, index, event)
     }
 }

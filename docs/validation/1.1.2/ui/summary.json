@@ -1,0 +1,15 @@
+{
+  "version": "1.1.2",
+  "threeIndependentMotionSwitchesPresent": true,
+  "switchesInspectedWithoutChanges": true,
+  "retainedSwitchStates": {
+    "switchNotificationDissolve": "false",
+    "switchAnimTilt": "true",
+    "switchNotifTilt": "false"
+  },
+  "navigationBackPassed": true,
+  "physicalDeviceAccessed": false,
+  "upgradeRetainedMotionConfiguration": true,
+  "threeAppSceneSwitchesPresent": true,
+  "unifiedMaterialDescriptionsPresent": true
+}

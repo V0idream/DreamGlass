@@ -19,7 +19,18 @@ internal class HardwareBackdropBlur : AutoCloseable {
     private val node = RenderNode("DreamGlass backdrop")
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
 
-    fun render(source: Bitmap, width: Int, height: Int, sigma: Float, cancelled: () -> Boolean): Bitmap {
+    fun render(source: Bitmap, width: Int, height: Int, sigma: Float, cancelled: () -> Boolean): Bitmap =
+        render(width,height,sigma,cancelled) { canvas ->
+            canvas.drawBitmap(source,null,Rect(0,0,width,height),paint)
+        }
+    /** Recorded on the UI thread while a borrowed vendor bitmap is valid. The display list
+     * retains its native image; no worker may dereference a recycled host Bitmap later. */
+    fun render(source:RenderNode,sourceWidth:Int,sourceHeight:Int,width:Int,height:Int,sigma:Float,cancelled:()->Boolean):Bitmap =
+        render(width,height,sigma,cancelled) { canvas ->
+            canvas.scale(width.toFloat()/sourceWidth,height.toFloat()/sourceHeight)
+            canvas.drawRenderNode(source)
+        }
+    private fun render(width:Int,height:Int,sigma:Float,cancelled:()->Boolean,record:(Canvas)->Unit):Bitmap {
         if (cancelled()) throw CancellationException()
         val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 1,
             HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
@@ -34,7 +45,7 @@ internal class HardwareBackdropBlur : AutoCloseable {
             val canvas = node.beginRecording(width, height)
             try {
                 canvas.drawColor(Color.TRANSPARENT, BlendMode.CLEAR)
-                canvas.drawBitmap(source, null, Rect(0, 0, width, height), paint)
+                record(canvas)
             } finally { node.endRecording() }
             if (cancelled()) throw CancellationException()
             val result=engine.createRenderRequest().setWaitForPresent(true).syncAndDraw()

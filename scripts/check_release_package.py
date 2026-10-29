@@ -51,8 +51,10 @@ with zipfile.ZipFile(args.apk) as apk:
         assert hashlib.sha256(data).hexdigest() == notice['sha256']
     dex = b''.join(apk.read(n) for n in entries if re.fullmatch(r'classes\d*\.dex', n))
     assert b'com/coloros16/liquidglass/update/UpdateChecker;' not in dex
-    assert b'ParticleDissolveHook' in dex and b'HardwareBackdropBlur' in dex and b'KeyguardGlassHook' in dex
-    assert b'SamplingProbeActivity' not in dex and b'IconContrastProbeActivity' not in dex and b'BlurQualityProbeActivity' not in dex and b'MaterialStudyProbeActivity' not in dex and b'StabilityProbeActivity' not in dex and b'HardwareBlurProbeActivity' not in dex and b'AppGlassProbeShader' not in dex and b'ProbeVolumeView' not in dex and b'ParticleProbeActivity' not in dex and b'KeyguardGlassProbeActivity' not in dex, 'Debug probe leaked into release'
+    assert b'AppGlassDecorDrawable' not in dex, 'Retired frame overlay leaked into release'
+    assert b'AppGlassEffect' in dex and b'SharedGlassParams' in dex
+    assert b'ParticleDissolveHook' in dex and b'HardwareBackdropBlur' in dex and b'KeyguardGlassHook' in dex and b'LauncherTiltCompat' in dex and b'NotificationTiltCompat' in dex
+    assert b'SamplingProbeActivity' not in dex and b'IconContrastProbeActivity' not in dex and b'BlurQualityProbeActivity' not in dex and b'MaterialStudyProbeActivity' not in dex and b'StabilityProbeActivity' not in dex and b'HardwareBlurProbeActivity' not in dex and b'AppGlassProbeShader' not in dex and b'ProbeVolumeView' not in dex and b'ParticleProbeActivity' not in dex and b'KeyguardGlassProbeActivity' not in dex and b'MotionProbeActivity' not in dex and b'SceneGlassProbeActivity' not in dex, 'Debug probe leaked into release'
 
 shader_path = 'app/src/main/kotlin/com/coloros16/liquidglass/liquidglass/LiquidGlassShader.kt'
 shader = (root / shader_path).read_text(encoding='utf-8')
@@ -72,7 +74,7 @@ assert 'Copyright 2025 Kyant' in shader and '2026-10-23' in shader
 changed = command('git', 'diff', '--name-only', baseline, '--', 'app/src/main/kotlin').splitlines()
 allowed_hooks = {'BlurDrawHook.kt', 'QsSurfaceHook.kt', 'LocalTextContrast.kt',
                  'ButtonBackdropBlur.kt', 'ButtonBackdropWorker.kt', 'QsIconContrastHook.kt', 'QsIconContrastPolicy.kt', 'RuntimeWorkPolicy.kt', 'AppGlassDecorDrawable.kt', 'AppGlassHook.kt',
-                 'HostVersion.kt', 'LauncherHook.kt', 'VolumeMaskGuard.kt', 'HardwareBackdropBlur.kt',
+                 'HostVersion.kt', 'AppGlassEffect.kt', 'AppGlassSurfacePolicy.kt', 'LauncherTiltCompat.kt', 'NotificationTiltCompat.kt', 'LauncherHook.kt', 'VolumeMaskGuard.kt', 'HardwareBackdropBlur.kt',
                  'BackgroundCadence.kt', 'CosCompatibility.kt', 'PerClassCache.kt', 'SnapshotFingerprint.kt', 'ParticleDissolveHook.kt', 'KeyguardGlassHook.kt', 'KeyguardGlassAttachment.kt', 'KeyguardGlassMaterial.kt', 'KeyguardGlassPolicy.kt'}
 assert all('/hook/' not in f or Path(f).name in allowed_hooks for f in changed)
 
@@ -121,7 +123,7 @@ for layout in (root / 'app/src/main/res/layout').glob('view_*.xml'):
     layout_count += 1
 
 unit = [ET.parse(f).getroot() for f in (build_dir / 'test-results/testReleaseUnitTest').glob('TEST-*.xml')]
-assert sum(int(t.get('tests')) for t in unit) == 94
+assert sum(int(t.get('tests')) for t in unit) == 110
 assert sum(int(t.get('failures')) + int(t.get('errors')) for t in unit) == 0
 lint = ET.parse(build_dir / 'reports/lint-results-release.xml').getroot()
 lint_errors = [n for n in lint if n.get('severity') in ('Error', 'Fatal')]
@@ -142,7 +144,7 @@ report = {
     'apkSha256': hashlib.sha256(args.apk.read_bytes()).hexdigest(),
     'runtimeComponents': len(inventory['components']),
     'retainedNoticeEntries': len(inventory['retainedOriginalNotices']),
-    'unitTestsPassed': 94, 'lintErrors': 0,
+    'unitTestsPassed': 110, 'lintErrors': 0,
     'lintWarnings': sum(n.get('severity') == 'Warning' for n in lint),
     'parameterBindingLayoutsPreserved': layout_count,
     'opticalBaseline': '1.0.7 fixture', 'parameterBindingBaseline': baseline, 'opticalChangesLimitedToMarkedLensAndCoat': True, 'materialAlphaControlRemoved': True, 'snapshotBindingFirstDrawAndRefreshChecked': True,

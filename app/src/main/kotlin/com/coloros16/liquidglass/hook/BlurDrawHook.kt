@@ -6044,6 +6044,7 @@ object BlurDrawHook {
      * OplusHeadsUpAnimator 之外的 AOSP 面板漏斗）见 spec/112 §二。挂载失败只禁用本效果（PROTECTIVE）。
      */
     private fun mountNotificationTilt(api: XposedInterface, classLoader: ClassLoader) {
+        if (NotificationTiltCompat.install(api, classLoader)) return
         // 驱动门控用的通知行类（一次解析，供 startNotifTilt instanceof 判定）
         try {
             mExpandableRowClass = Class.forName(
@@ -12099,6 +12100,8 @@ object BlurDrawHook {
      * 旧 hook 卸载 + 新 hook 重装在 XposedEntry.onHotReloaded 完成，本方法只管异步与资源。
      */
     fun shutdownForHotReload() {
+        NotificationTiltCompat.stopAll()
+        if (Build.VERSION.SDK_INT >= 33) ParticleDissolveHook.Api33.stopAll()
         try {
             geometryPool.shutdownNow()
         } catch (t: Throwable) {

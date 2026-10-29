@@ -1,0 +1,2 @@
+--------- beginning of main
+I/ParticleProbe( 4389): PASS {"scaledSnapshotCoordinates":true,"coverage":"[64325, 46085, 11981, 0]","escapedPixels":1894,"shaderCompiled":true,"zeroProgressIdentity":true,"endTransparent":true,"detachReleasesOverlay":true,"hardwareSnapshot":true,"cancelBeforeCommitReleasesCapture":true,"attemptDoesNotEmitParticles":true,"nativeResetAfterCommitKeepsDust":true,"nativeAbortStopsParticles":true,"stopAllReleasesOverlay":true,"completionReleasesOverlay":true,"physicalDeviceTested":false}

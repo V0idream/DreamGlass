@@ -14,6 +14,7 @@ import io.github.libxposed.api.XposedInterface.ExceptionMode
 import com.coloros16.liquidglass.hook.Cos17Contract
 import com.coloros16.liquidglass.hook.LauncherAnimHook
 import com.coloros16.liquidglass.hook.LauncherHook
+import com.coloros16.liquidglass.hook.LauncherTiltCompat
 import com.coloros16.liquidglass.hook.LauncherTiltHook
 import com.coloros16.liquidglass.hook.KeyguardGlassHook
 import com.coloros16.liquidglass.hook.SceneFilter
@@ -218,13 +219,12 @@ class XposedEntry : XposedModule() {
             PACKAGE_LAUNCHER -> {
                 val hostVer = HostVersion.hostVersionCode(PACKAGE_LAUNCHER)
                 if (hostVer >= VERSION_LAUNCHER_17_3_12 || Cos17Contract.launcherInline(classLoader)) {
-                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=17.3.12+: skip LauncherAnimHook (17.x fields obfuscated), tilt=native zuyqa path")
+                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=17.3.12+: skip LauncherAnimHook (17.x fields obfuscated), tilt=stock matrix contract or modified-launcher native gate")
                     LauncherHook.install(this, classLoader)
                     if (Cos17Contract.nativeTilt(classLoader)) {
                         LauncherTiltHook.installNativeZuyqa(this, classLoader)
                     } else {
-                        RuntimeDiagnostics.mark("extensions", "旧版弹簧及 Zuyqa 原生倾斜入口不可用；系统动画保留")
-                        Lg.i(TAG, "native tilt entry absent; preserve system animations")
+                        LauncherTiltCompat.install(this, classLoader)
                     }
                 } else {
                     Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=<17.3.12 (or unknown -1): install all 3 hooks")
@@ -234,7 +234,7 @@ class XposedEntry : XposedModule() {
                 }
             }
             // 第三方 App（相册/计算器/智能侧边栏/速览）：A/B 族模糊挂载点登记（组件清单 + 预设按组件命中）。
-            // 渲染腿尚未接通（进程内无抓屏权限拿不到背景源），背景仍由系统模糊渲染，见 AppGlassHook 头注。
+            // OEM 背景输入通道使用统一 GPU 光学材质；不需要向第三方进程开放抓屏权限。
             PACKAGE_GALLERY, PACKAGE_CALCULATOR, PACKAGE_SMART_SIDEBAR, PACKAGE_ASSISTANT_SCREEN -> {
                 AppGlassHook.install(this, classLoader, packageName)
             }

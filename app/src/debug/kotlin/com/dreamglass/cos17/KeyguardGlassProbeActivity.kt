@@ -40,7 +40,12 @@ class KeyguardGlassProbeActivity:Activity() {
   for(i in 0..35) { p.color=Color.argb(22,4,17,28);c.drawCircle((i*83%w).toFloat(),h*.33f+(i*97%(h/3)),(12+i%7*5).toFloat(),p) }
   root.background=BitmapDrawable(resources,input)
   fun add(v:View,x:Float,y:Float,width:Float,height:Float,role:Int) { root.addView(v,FrameLayout.LayoutParams(width.toInt(),height.toInt()).apply { leftMargin=x.toInt();topMargin=y.toInt() });targets.add(v to role) }
-  val clock=text("15\n36",w*.36f).apply { typeface=Typeface.create("sans-serif-condensed",Typeface.BOLD);gravity=android.view.Gravity.CENTER_HORIZONTAL }
+  val clock=FrameLayout(this).apply {
+   addView(object:View(this@KeyguardGlassProbeActivity) {
+    val glyphPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=Color.WHITE;textSize=w*.36f;typeface=Typeface.create("sans-serif-condensed",Typeface.BOLD);textAlign=Paint.Align.CENTER }
+    override fun onDraw(c:Canvas) { c.drawText("15",width*.5f,height*.44f,glyphPaint);c.drawText("36",width*.5f,height*.90f,glyphPaint) }
+   },FrameLayout.LayoutParams(-1,-1))
+  }
   add(clock,w*.03f,h*.13f,w*.62f,h*.55f,KeyguardGlassPolicy.TEXT)
   add(text("10月29日\n星期四\n九月二十",w*.058f),w*.07f,h*.70f,w*.55f,h*.15f,KeyguardGlassPolicy.TEXT)
   for((i,name) in listOf("3062\n步数","+\n选设备","☀\n20°","◷\n07:00").withIndex()) {
@@ -55,6 +60,13 @@ class KeyguardGlassProbeActivity:Activity() {
   label=text("DreamGlass · synthetic lockscreen GPU test",w*.029f);root.addView(label,FrameLayout.LayoutParams(-1,70).apply { leftMargin=30;topMargin=25 })
   root.postDelayed({ try {
    before=render(root);save(before,"native.png")
+   val clockView=targets[0].first
+   var nativeClockPixels=0
+   for(y in clockView.top until clockView.bottom)for(x in clockView.left until clockView.right) {
+    val colour=before.getPixel(x,y)
+    if(Color.red(colour)>220 && Color.green(colour)>220 && Color.blue(colour)>220)nativeClockPixels++
+   }
+   check(nativeClockPixels>20000) { "Native custom clock not visible: $nativeClockPixels" }
    Thread({ try { texture=HardwareBackdropBlur().use { it.render(input,w,h,6f) { false } };ui.post { try { applyAll() } catch(t:Throwable){fail(t)} } } catch(t:Throwable){ui.post {fail(t)}} },"Keyguard-GPU-test").start()
   } catch(t:Throwable){fail(t)} },250)
  }
@@ -92,7 +104,21 @@ class KeyguardGlassProbeActivity:Activity() {
     }
    }
    check(white>100 && retained.toFloat()/white>.995f) { "Widget foreground changed: $retained/$white" }
-   val report=glyphMask().put("cardForegroundRetention",retained.toDouble()/white).put("clickCallbacksPreserved",clicks).put("paddingPreserved",true)
+   val custom=targets[0].first
+   val nativeMask=render(custom)
+   val identity=RuntimeShader("uniform shader content; half4 main(float2 p) { return content.eval(p); }")
+   val referenceMask=render(custom,RenderEffect.createRuntimeShaderEffect(identity,"content"))
+   val glassMask=render(custom,attachments[0].compose(null))
+   var customAlphaDelta=0;var customCoverage=0;var identityNativeDelta=0;var glassNativeDelta=0
+   for(y in 0 until nativeMask.height)for(x in 0 until nativeMask.width) {
+    val a=Color.alpha(nativeMask.getPixel(x,y));if(a>200)customCoverage++
+    val reference=Color.alpha(referenceMask.getPixel(x,y));val actual=Color.alpha(glassMask.getPixel(x,y))
+    identityNativeDelta=maxOf(identityNativeDelta,kotlin.math.abs(a-reference))
+    glassNativeDelta=maxOf(glassNativeDelta,kotlin.math.abs(a-actual))
+    customAlphaDelta=maxOf(customAlphaDelta,kotlin.math.abs(reference-actual))
+   }
+   check(customCoverage>20000 && customAlphaDelta<=1) { "Custom glyph coverage $customCoverage alpha delta $customAlphaDelta identity/native=$identityNativeDelta glass/native=$glassNativeDelta" }
+   val report=glyphMask().put("customClockGlyphPixels",customCoverage).put("customClockAlphaMaxDeltaVsIdentityEffect",customAlphaDelta).put("customClockIdentityVsNativeAlphaMaxDelta",identityNativeDelta).put("customClockGlassVsNativeAlphaMaxDelta",glassNativeDelta).put("customCanvasClockInPluginRoot",targets[0].first is FrameLayout).put("cardForegroundRetention",retained.toDouble()/white).put("clickCallbacksPreserved",clicks).put("paddingPreserved",true)
    attachments.forEach {it.restore()};root.invalidate()
    ui.postDelayed({try {
     val restored=render(root);save(restored,"restored.png")

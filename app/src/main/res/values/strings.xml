@@ -240,11 +240,11 @@
     <string name="settings_volume_panel_backdrop">音量面板去白底</string>
     <string name="settings_volume_panel_backdrop_desc">去掉展开音量面板背后那层模糊的发白底色，只保留模糊效果。关闭即恢复系统原样。开启后立即生效，无需重启系统界面。</string>
     <string name="settings_gallery_glass">相册材质边缘</string>
-    <string name="settings_gallery_glass_desc">保留相册原生背景，添加轻量边缘效果；可通过组件预设管理高光与圆角。需在框架中启用相册作用域。</string>
+    <string name="settings_gallery_glass_desc">相册按钮跟随当前材质预设，不给整条工具栏添加外框。需启用相册作用域，支持的系统背景接口可用时生效。</string>
     <string name="settings_calculator_glass">计算器材质边缘</string>
     <string name="settings_calculator_glass_desc">为计算器窗口添加边缘效果，保留原生模糊。需启用计算器作用域。</string>
     <string name="settings_smart_sidebar_glass">侧边栏材质边缘</string>
-    <string name="settings_smart_sidebar_glass_desc">为智能侧边栏面板添加边缘效果，保留原生模糊。需启用侧边栏作用域。</string>
+    <string name="settings_smart_sidebar_glass_desc">侧边栏面板与按钮使用统一玻璃材质，保留原有内容与操作。需启用侧边栏作用域。</string>
     <string name="settings_notification_popup_glass">通知长按菜单玻璃</string>
     <string name="settings_notification_popup_glass_desc">给长按通知后弹出的操作菜单卡加液态玻璃背景。开启后立即生效，无需重启系统界面。</string>
     <string name="loc_notification_popup_menu">长按通知弹出的操作菜单卡</string>
@@ -290,7 +290,7 @@
 
     <string name="cat_tilt_desc">应用打开/退出时的 3D 倾斜（实验性）</string>
     <string name="settings_anim_tilt_enabled">开启动态倾斜</string>
-    <string name="settings_anim_tilt_enabled_desc">实验性功能：应用打开、退出或打断动画时，窗口和图标会有 iOS 风格 3D 倾斜。默认关闭。</string>
+    <string name="settings_anim_tilt_enabled_desc">实验性功能：COS17 应用窗口打开与退出时加入 3D 倾斜，支持标准及轻动画通道。默认关闭；不同桌面版本需验证。</string>
     <string name="settings_anim_tilt_strength">倾斜强度</string>
     <string name="settings_anim_tilt_strength_desc" formatted="false">调节前后倾斜角度；0% 为不倾斜，200% 为两倍角度。</string>
     <string name="settings_anim_tilt_strength_value">%1$d%%</string>
@@ -299,7 +299,7 @@
     <string name="settings_anim_tilt_perspective_value">%1$d%%</string>
     <string name="settings_anim_tilt_restart_note">实验性功能，修改后需重启桌面生效。</string>
     <string name="settings_notif_tilt_enabled">通知卡动效</string>
-    <string name="settings_notif_tilt_enabled_desc" formatted="false">通知横幅从摄像头位置飞入，并带倾斜效果；收回时向摄像头方向飞出。只影响玻璃，不影响文字。默认关闭。</string>
+    <string name="settings_notif_tilt_enabled_desc" formatted="false">COS17 通知横幅与列表卡片在出现、收回时加入 3D 倾斜，横幅可叠加缩放；整张卡片一同变化。默认关闭。</string>
     <string name="settings_notif_tilt_strength">通知卡倾斜角度</string>
     <string name="settings_notif_tilt_strength_desc" formatted="false">调整倾斜角度，默认 3°；0° 表示关闭。角度越大透视越明显。</string>
     <string name="settings_notif_tilt_strength_value">%1$d°</string>
@@ -346,7 +346,7 @@
     <string name="settings_notification_dissolve_speed">飘散速度</string>
     <string name="settings_notification_dissolve_speed_value">%1$.2f×（越高越快）</string>
     <string name="settings_assistant_screen_glass">负一屏材质边缘</string>
-    <string name="settings_assistant_screen_glass_desc">保留负一屏原生背景，添加按组件设置的高光与圆角。需在框架中启用负一屏作用域；默认关闭。</string>
+    <string name="settings_assistant_screen_glass_desc">负一屏组件跟随当前材质预设，不给整条工具栏或整屏添加外框。需启用负一屏作用域；默认关闭。</string>
     <string name="cat_keyguard">锁屏玻璃</string>
     <string name="cat_keyguard_desc">时钟、日期、卡片与底部快捷按钮</string>
     <string name="settings_clear_all_btn_unavailable">当前桌面版本暂不支持此接入方式，保持原生清除按钮。</string>

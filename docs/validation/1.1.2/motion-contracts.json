@@ -1,0 +1,24 @@
+{
+  "headsupSourceSha256": "e3d287dbe851648525c93ecb7dd83d8814a958f2e3905ea8db7519ce5a59d6e5",
+  "headsupFieldsCheckedFromDecompilation": true,
+  "launcherSha256": "af89139f18857f5c9e130cd492f08dc1a3e26b131aec74490432b2c590ac972e",
+  "systemUiSha256": "a06bf8e0046a5e6a19347e09064e6ce8f79e0e963c78c8ce65f0fbf56d770e62",
+  "matchedClasses": [
+    "com.android.quickstep.util.animation.RectTransformHelper",
+    "com.android.quickstep.util.animation.RectTransformHelper$TransformParams",
+    "xi.q",
+    "xi.q$b",
+    "gi.c",
+    "com.android.launcher3.anim.light.AppLaunchAnimUtil$getLightWindowAnimation$1",
+    "com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayoutController$10",
+    "com.android.systemui.statusbar.notification.row.ExpandableNotificationRow",
+    "com.android.systemui.SwipeHelper",
+    "com.android.systemui.statusbar.notification.stack.NotificationSwipeHelper",
+    "com.oplus.systemui.notification.headsup.windowframe.OplusHeadsUpAnimator",
+    "com.oplus.systemui.notification.headsup.windowframe.HeadsUpContainerWindow"
+  ],
+  "classCount": 12,
+  "physicalDeviceTested": false,
+  "dexSignatureEvidenceOnly": true,
+  "surface4x4ImplementationExecuted": false
+}

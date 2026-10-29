@@ -1,0 +1,63 @@
+{
+  "product": "DreamGlass",
+  "supportedRelease": "For ColorOS 17",
+  "version": "1.1.2",
+  "versionCode": 1001002,
+  "package": "com.dreamglass.cos17",
+  "debuggable": false,
+  "apkSha256": "4e656c27de7d801d66a070a248a841bed0c44329bc9cf0d54b01995c0f644737",
+  "runtimeComponents": 57,
+  "retainedNoticeEntries": 12,
+  "unitTestsPassed": 110,
+  "lintErrors": 0,
+  "lintWarnings": 283,
+  "parameterBindingLayoutsPreserved": 18,
+  "opticalBaseline": "1.0.7 fixture",
+  "parameterBindingBaseline": "25c47e7",
+  "opticalChangesLimitedToMarkedLensAndCoat": true,
+  "materialAlphaControlRemoved": true,
+  "snapshotBindingFirstDrawAndRefreshChecked": true,
+  "upstreamBase": "1bb018615af3261d3e9de0165169a0e75917d2fe",
+  "particlePullRequest": "https://github.com/AYwlilwYA/ColorOS16-LiquidGlass/pull/2",
+  "hardwareBackendPackageChecked": true,
+  "keyguardGlyphAndBackdropPackaged": true,
+  "hostScopes": [
+    "com.android.launcher",
+    "com.android.systemui",
+    "com.coloros.assistantscreen",
+    "com.coloros.calculator",
+    "com.coloros.gallery3d",
+    "com.coloros.smartsidebar"
+  ],
+  "physicalDeviceAccessed": false,
+  "colorOsRuntimeTested": false,
+  "date": "2026-10-30",
+  "emulator": "API33 SwiftShader; no ColorOS/LibXposed",
+  "emulatorProbeGroupsPassed": [
+    "hardware",
+    "quality",
+    "stability",
+    "particles",
+    "keyguard",
+    "motion",
+    "scenes"
+  ],
+  "debugApkSha256": "504440bb6ee9d6e63cba104bdce92a2e82baa8de8d5173174c404a214be45a51",
+  "oemBackgroundBridgeExecuted": false,
+  "nativePluginMethodsExecuted": false,
+  "releaseUi": {
+    "version": "1.1.2",
+    "threeIndependentMotionSwitchesPresent": true,
+    "switchesInspectedWithoutChanges": true,
+    "retainedSwitchStates": {
+      "switchNotificationDissolve": "false",
+      "switchAnimTilt": "true",
+      "switchNotifTilt": "false"
+    },
+    "navigationBackPassed": true,
+    "physicalDeviceAccessed": false,
+    "upgradeRetainedMotionConfiguration": true,
+    "threeAppSceneSwitchesPresent": true,
+    "unifiedMaterialDescriptionsPresent": true
+  }
+}
