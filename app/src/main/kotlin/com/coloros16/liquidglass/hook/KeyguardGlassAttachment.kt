@@ -19,8 +19,14 @@ internal class KeyguardGlassAttachment(view:View,val role:Int,native:RenderEffec
         val v=view.get() ?: return
         material.update(image,matrix,v.width.toFloat(),v.height.toFloat(),screenW,screenH,strength,corner)
         background?.radius=corner
-        change { if(role==KeyguardGlassPolicy.TEXT)v.setRenderEffect(compose(originalEffect)) else v.background=background }
         applied=true
+        try {
+            change { if(role==KeyguardGlassPolicy.TEXT)v.setRenderEffect(compose(originalEffect)) else v.background=background }
+        } catch(error:Throwable) {
+            // A vendor setter can throw after applying its value. Undo our partial assignment.
+            try { restore() } catch(_:Throwable) { }
+            throw error
+        }
     }
     fun restore() {
         if(!applied)return

@@ -2219,6 +2219,11 @@ object LauncherHook {
      * 捕获挂点 + 开关行，零新绘制 hook。任何解析/绘制失败只回退系统平色，不崩 Launcher。
      */
     private fun mountPressFeedbackGlass(api: XposedInterface, classLoader: ClassLoader) {
+        val version=try { Lg.processContext()?.packageManager?.getPackageInfo("com.android.launcher",0)?.versionName } catch(_:Throwable) { null }
+        if(!CosCompatibility.supportsLegacyPressFeedback(version)) {
+            Lg.i(TAG,"press-feedback glass: incompatible/unknown launcher; keep native clear button")
+            return
+        }
         // ① 各宿主捕获挂点（按钮实例就绪时点 → 写入白名单槽）
         mountClearAllBtnCapture(api)
         // ② 共享拦截：drawPressedColor 白名单命中 → 玻璃顶掉平色（不 proceed）；未命中原样

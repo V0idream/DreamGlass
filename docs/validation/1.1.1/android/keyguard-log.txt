@@ -1,0 +1,2 @@
+--------- beginning of main
+I/KeyguardGlassProbe( 3111): PASS {"wallpaperSensitiveGlyphPixels":8898,"bevelPixelsChanged":4565,"nativeGlyphAlphaMaxDelta":0,"glassPixelsChanged":9056,"nativeEffectAlphaPreserved":true,"cardForegroundRetention":1,"clickCallbacksPreserved":6,"paddingPreserved":true,"nativeRestorationMaxDelta":0,"gpuWallpaper":true,"physicalDeviceTested":false}

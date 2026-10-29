@@ -1,0 +1,14 @@
+{
+  "systemUiSampleSha256": "a06bf8e0046a5e6a19347e09064e6ce8f79e0e963c78c8ce65f0fbf56d770e62",
+  "launcherSampleSha256": "af89139f18857f5c9e130cd492f08dc1a3e26b131aec74490432b2c590ac972e",
+  "clockHostDefined": true,
+  "clockHostSuperclass": "Lcom/oplus/keyguard/ui/OplusKeyguardStyleClock;",
+  "popupMethods": [
+    "dismiss()V",
+    "forceDismiss()V",
+    "show(Landroid/view/View;Z)V"
+  ],
+  "legacyPressHandlerInCos17": false,
+  "clearButtonDefined": true,
+  "evidence": "previously extracted static metadata, not a new APK or device run"
+}

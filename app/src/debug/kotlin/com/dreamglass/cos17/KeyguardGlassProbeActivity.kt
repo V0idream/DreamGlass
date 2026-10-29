@@ -133,6 +133,17 @@ class KeyguardGlassProbeActivity:Activity() {
   val composed=render(v,RenderEffect.createChainEffect(material.effect!!,prior));var maxComposed=0
   for(y in 0 until v.height)for(x in 0 until v.width)maxComposed=maxOf(maxComposed,kotlin.math.abs(Color.alpha(composed.getPixel(x,y))-(Color.alpha(native.getPixel(x,y))*.5f).toInt()))
   check(maxComposed<=1)
-  return JSONObject().put("wallpaperSensitiveGlyphPixels",sourceSensitive).put("bevelPixelsChanged",bevel).put("nativeGlyphAlphaMaxDelta",maxAlpha).put("glassPixelsChanged",changedRgb).put("nativeEffectAlphaPreserved",maxComposed<=1)
+  val broken=object:FrameLayout(this) {
+   override fun setBackgroundDrawable(bg:Drawable?) {
+    super.setBackgroundDrawable(bg)
+    if(bg is KeyguardGlassMaterial.Background)throw IllegalStateException("injected partial vendor assignment")
+   }
+  }
+  val original=ColorDrawable(Color.DKGRAY);broken.background=original;broken.layout(0,0,100,100)
+  val partial=KeyguardGlassAttachment(broken,KeyguardGlassPolicy.CARD)
+  var rejected=false
+  try { partial.apply(texture,m,root.width,root.height,1f,20f) } catch(_:IllegalStateException) { rejected=true }
+  check(rejected && !partial.applied && broken.background===original)
+  return JSONObject().put("partialVendorFailureRestored",true).put("wallpaperSensitiveGlyphPixels",sourceSensitive).put("bevelPixelsChanged",bevel).put("nativeGlyphAlphaMaxDelta",maxAlpha).put("glassPixelsChanged",changedRgb).put("nativeEffectAlphaPreserved",maxComposed<=1)
  }
 }

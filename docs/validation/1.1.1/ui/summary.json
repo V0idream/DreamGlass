@@ -1,0 +1,12 @@
+{
+  "keyguardPagePresent": true,
+  "overallDefaultDisabled": true,
+  "threeAreasDefaultSelected": true,
+  "blurDefaultPx": 6,
+  "scopeReloadNotice": true,
+  "assistantScreenDefaultDisabled": true,
+  "notificationPopupDefaultDisabled": true,
+  "incompatibleClearButtonDisabled": true,
+  "navigationBackPassed": true,
+  "physicalDeviceAccessed": false
+}
