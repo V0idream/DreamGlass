@@ -1,3 +1,13 @@
+# DreamGlass 1.1.3 验证记录
+
+120 项 JVM 与 9 组模拟器 GPU／生命周期验证通过，Android Lint 0 Error、285 Warning。正式包不包含 debug 探针或实际字形导出类。
+
+普通 ADB 确认 debug8 已在实体设备加载；粒子 REQUEST/ACCEPT/COMMIT、硬件纹理和清空通知等待（记录 747ms）实际执行。侧边栏已有用户效果确认。锁屏数字独立 GPU 对照有玻璃折射，但屏上数字仍偏平、相机玻璃未实际绘制；用户决定停止继续调试，本版将其明确列为实验性限制。
+
+详情见 [1.1.3 记录](docs/validation/1.1.3/README.md)。下方保留 1.1.2 的历史验证。
+
+---
+
 # DreamGlass 1.1.2 验证记录
 
 日期：2026-10-30。包名 com.dreamglass.cos17，versionCode 1001002，沿用覆盖升级签名。本地候选，未发布、未连接或操作实体手机。

@@ -34,6 +34,8 @@ object KeyguardGlassHook {
     private val nativeEffects=WeakHashMap<View,RenderEffect?>()
     private val pendingLayout=WeakHashMap<View,Boolean>()
     private val pluginRoots=WeakHashMap<View,Int>()
+    private val watchedRoots=WeakHashMap<View,Boolean>()
+    private val visibleRect=Rect() // UI-thread scratch, not allocated per glyph/frame.
     private var nativeWallpaper:WeakReference<Bitmap>?=null
     private var nativeWallpaperAt=-1000L
     @Volatile private var nativeController:WeakReference<Any>?=null
@@ -100,6 +102,22 @@ object KeyguardGlassHook {
                 val result=chain.proceed()
                 guarded { if(view!=null && entry==null && view.isAttachedToWindow)consider(view) };result
             }
+            api.hook(android.widget.ImageView::class.java.getDeclaredMethod("setImageDrawable",Drawable::class.java))
+                .setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                    if(ownChange || Looper.myLooper()!=Looper.getMainLooper())return@intercept chain.proceed()
+                    val entry=entries[chain.getThisObject() as? View]
+                    if(entry?.attachment?.imageSlot==true) {
+                        entry.attachment.originalImage=chain.getArg(0) as? Drawable;entry.dirty()
+                        if(entry.applied) {
+                            val args=chain.getArgs().toTypedArray();args[0]=entry.background;return@intercept chain.proceed(args)
+                        }
+                    }
+                    if(entry?.role==KeyguardGlassPolicy.SHORTCUT) {
+                        (chain.getThisObject() as? View)?.let { KeyguardLayeredShortcut.unbind(it) }
+                        entry.dirty()
+                    }
+                    chain.proceed()
+                }
             mounted=true
             Lg.processContext()?.applicationContext?.let(::ensureApplication)
             ui.post { guarded { discoverWindows() } }
@@ -119,6 +137,7 @@ object KeyguardGlassHook {
                     widget.isInstance(chain.getThisObject())->KeyguardGlassPolicy.CARD;else->KeyguardGlassPolicy.NONE }
                 if(target!=null && kind!=KeyguardGlassPolicy.NONE)ui.post { guarded {
                     pluginRoots[target]=kind
+                    watchRoot(target)
                     RuntimeDiagnostics.mark("keyguard_plugin_view_$kind","插件已返回实际视图：${target.javaClass.simpleName}")
                     // Replace earlier descendant attachments, avoiding two filters on one glyph.
                     entries.keys.toList().filter { child ->
@@ -149,11 +168,20 @@ object KeyguardGlassHook {
                 result
             }
             RuntimeDiagnostics.mark("keyguard_plugin","已接入原厂时钟/组件 getView 和壁纸传递接口")
-        } catch(error:Throwable) { Lg.w("DreamGlass","keyguard plugin route unavailable",error) }
+        } catch(error:Throwable) {
+            RuntimeDiagnostics.mark("keyguard_plugin_error","${error.javaClass.simpleName}: ${error.message}")
+            Lg.w("DreamGlass","keyguard plugin route unavailable",error)
+        }
         try {
             val type=Class.forName("com.oplus.systemui.keyguard.wallpaper.OplusLockScreenWallpaperController",false,loader)
             val method=type.getDeclaredMethod("copyWallpaperBitmap").apply { isAccessible=true }
             nativeCopy=method
+            // The controller may be constructed during SystemUIApplication.onCreate, before
+            // our safe post-onCreate installation. Retain its live instance at later access.
+            for(access in type.declaredMethods.filter { it.name in setOf("getWallpaperType","onKeyguardDone","onConfigChanged") })
+                api.hook(access).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                    chain.getThisObject()?.let { nativeController=WeakReference(it) };chain.proceed()
+                }
             for(ctor in type.declaredConstructors)api.hook(ctor).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                 val result=chain.proceed();chain.getThisObject()?.let { nativeController=WeakReference(it) };result
             }
@@ -182,18 +210,68 @@ object KeyguardGlassHook {
     }
     private fun guarded(block:()->Unit) { RuntimeWorkPolicy.guarded(::failure,block) }
     private fun failure(error:Throwable) {
+        RuntimeDiagnostics.mark("keyguard_error","${error.javaClass.simpleName}: ${error.message}")
         retryAt=SystemClock.uptimeMillis()+RuntimeWorkPolicy.failureDelayMs(error)
         try { Lg.w("DreamGlass","keyguard glass fallback",error) } catch(_:Throwable) { }
     }
     private fun resourceId(view:View)=try { view.resources.getResourceEntryName(view.id) } catch(_:Throwable) { "" }
+    private fun visibleSurface(view:View):Boolean {
+        if(!view.isShown || view.width<=0 || view.height<=0)return false
+        var parent:View?=view;var count=0
+        while(parent!=null && count++<32) {
+            if(parent.alpha<=.01f || parent.visibility!=View.VISIBLE)return false
+            parent=parent.parent as? View
+        }
+        return view.getGlobalVisibleRect(visibleRect)
+    }
+    private fun removeEntry(view:View) {
+        entries.remove(view)?.let { entry ->
+            entry.restore();view.viewTreeObserver.removeOnPreDrawListener(entry);view.removeOnAttachStateChangeListener(entry)
+        }
+    }
+    private fun watchRoot(root:View) {
+        if(watchedRoots.put(root,true)!=null)return
+        val weak=WeakReference(root)
+        var last=-1000L
+        root.viewTreeObserver.addOnGlobalLayoutListener {
+            val target=weak.get()
+            val now=SystemClock.uptimeMillis()
+            if(target!=null && !scanning && now-last>=200L) {
+                last=now;guarded { scanTree(target) }
+            }
+        }
+        ui.postDelayed({ guarded { weak.get()?.takeIf { it.isAttachedToWindow }?.let(::scanTree) } },1200L)
+    }
     private fun names(view:View):List<String> {
         val out=ArrayList<String>();var node:View?=view;var depth=0
-        while(node!=null && depth++<20) { out.add(node.javaClass.name+"#"+resourceId(node));out.add(node.javaClass.name);node=node.parent as? View }
+        while(node!=null && depth++<24) {
+            out.add(node.javaClass.name+"#"+resourceId(node));out.add(node.javaClass.name)
+            // Theme wrappers are called MyCustomizedImageView/FrameLayout; their superclass
+            // still identifies the actual keyguard control, even when its ID is replaced.
+            var base:Class<*>?=node.javaClass.superclass;var count=0
+            while(base!=null && count++<5 && !base.name.startsWith("android.")) { out.add(base.name);base=base.superclass }
+            node=node.parent as? View
+        }
         return out
     }
     private fun discoverWindows() {
         preferences();if(!enabled)return
-        for(root in android.view.inspector.WindowInspector.getGlobalWindowViews())scanTree(root)
+        val roots=android.view.inspector.WindowInspector.getGlobalWindowViews()
+        for(root in roots)scanTree(root)
+        if(com.coloros16.liquidglass.BuildConfig.DEBUG) {
+            val lines=ArrayList<String>();var count=0
+            fun describe(v:View,inside:Boolean,depth:Int) {
+                if(count++>=1600 || depth>24 || lines.size>=28)return
+                val name=v.javaClass.simpleName;val id=resourceId(v)
+                val kg=inside || v.javaClass.name.contains("keyguard",true)
+                if(kg && visibleSurface(v) && (entries[v]!=null || listOf("affordance","camera","bottom","button","widget").any { (name+id).contains(it,true) }))
+                    lines.add("$name#$id ${v.width}x${v.height} visible=${v.visibility==View.VISIBLE} role=${entries[v]?.role ?: 0} applied=${entries[v]?.applied==true}")
+                if(v is ViewGroup)for(i in 0 until v.childCount)describe(v.getChildAt(i),kg,depth+1)
+            }
+            pluginRoots.keys.toList().forEach { describe(it,true,0) }
+            roots.forEach { describe(it,false,0) }
+            lines.joinToString("; ").chunked(450).take(4).forEachIndexed { i,chunk -> RuntimeDiagnostics.update("keyguard_targets_$i",chunk) }
+        }
         // A disabled-at-start module may have missed the wallpaper event. Read only the native
         // controller's current wallpaper once, when an active lockscreen target actually needs it.
         if(source==null && pendingWallpaper==null && entries.values.any { e -> e.view.get()?.let { active(it,e.role) }==true }) {
@@ -204,14 +282,17 @@ object KeyguardGlassHook {
     }
     private fun scanTree(root:View) {
         preferences();if(!enabled)return
+        entries.keys.toList().filter { !it.isAttachedToWindow || !visibleSurface(it) }.forEach(::removeEntry)
         var count=0
         fun scan(v:View,depth:Int) {
             if(count++>=1600 || depth>24)return
+            if(!v.isShown || v.alpha<=.01f)return
             consider(v)
             if(v is ViewGroup)for(i in 0 until v.childCount)scan(v.getChildAt(i),depth+1)
         }
         val before=scanning;scanning=true
         try { scan(root,0) } finally { scanning=before }
+        RuntimeDiagnostics.update("keyguard_binding_count","当前登记 ${entries.size}/64；仅保留实际可见对象")
     }
     private fun trusted(view:View):Int {
         var node:View?=view;var count=0
@@ -224,6 +305,8 @@ object KeyguardGlassHook {
     private fun consider(view:View) {
         if(Looper.myLooper()!=Looper.getMainLooper() || entries.containsKey(view) || entries.size>=64 || !view.isAttachedToWindow)return
         preferences();if(!enabled)return
+        if(KeyguardGlassPolicy.isClockGlyphRoot(view.javaClass.name) && view.background?.opacity!=PixelFormat.OPAQUE)
+            pluginRoots[view]=KeyguardGlassPolicy.TEXT
         val path=names(view)
         val trust=trusted(view)
         if(trust==KeyguardGlassPolicy.NONE && path.none { it.contains("keyguard",true) })return
@@ -259,11 +342,22 @@ object KeyguardGlassHook {
                 scan(view,0)
             } finally { scanning=false }
         }
+        if(!visibleSurface(view))return
         if(view is SurfaceView)return
-        val glyphRoot=pluginRoots[view]==KeyguardGlassPolicy.TEXT && view.background?.opacity!=PixelFormat.OPAQUE
+        // COS17 buttons are groups containing separate background-circle and icon ImageViews.
+        // Putting a Drawable behind the group leaves the opaque native circle on top of it.
+        if(view is ViewGroup && resourceId(view) in setOf("start_button","end_button") &&
+            (0 until view.childCount).any { resourceId(view.getChildAt(it))=="affordance_background_circle" })return
+        // A full-screen plugin container also includes wallpaper and controls, not just digits.
+        // Keep it as a discovery root and attach materials only to its actual glyph descendants.
+        val fullScreenGroup=view is ViewGroup && view.width>=view.resources.displayMetrics.widthPixels*.9f &&
+            view.height>=view.resources.displayMetrics.heightPixels*.65f
+        if(fullScreenGroup)return
+        val glyphCandidate=view is TextView || KeyguardGlassPolicy.isClockGlyphRoot(view.javaClass.name) ||
+            view !is ViewGroup && listOf("clock","digit","time","hour","minute").any { (view.javaClass.simpleName+resourceId(view)).contains(it,true) }
         val role=KeyguardGlassPolicy.role(path,resourceId(view),view is TextView,view.background!=null,
             view.isClickable,view.width.toFloat()/view.height,
-            if(trust==KeyguardGlassPolicy.TEXT && !glyphRoot)KeyguardGlassPolicy.NONE else trust,
+            if(trust==KeyguardGlassPolicy.TEXT && !glyphCandidate)KeyguardGlassPolicy.NONE else trust,
             view !is ViewGroup && view !is SurfaceView && view !is TextureView)
         if(role==KeyguardGlassPolicy.NONE || view is android.widget.EditText)return
         if(role==KeyguardGlassPolicy.CARD || role==KeyguardGlassPolicy.TEXT) {
@@ -303,6 +397,7 @@ object KeyguardGlassHook {
         val prefs=api?.let(Prefs::read) ?: return
         val before=enabled
         enabled=prefs.getBoolean(Prefs.KEY_MASTER,false) && prefs.getBoolean(Prefs.KEY_GLASS_ENABLE,true) && prefs.getBoolean(KEY_ENABLE,false)
+        RuntimeDiagnostics.update("keyguard_enabled",if(enabled)"开启" else "关闭")
         if(enabled && !before)ui.post { guarded { discoverWindows() } }
         text=prefs.getBoolean(KEY_TEXT,true);cards=prefs.getBoolean(KEY_CARDS,true);shortcuts=prefs.getBoolean(KEY_SHORTCUTS,true)
         strength=(Prefs.readIntCompat(prefs,KEY_STRENGTH,100)/100f).coerceIn(0f,2f)
@@ -318,7 +413,7 @@ object KeyguardGlassHook {
             powerAllowed=power?.isInteractive==true && !power.isPowerSaveMode && view.display?.state==Display.STATE_ON
         }
         return powerAllowed && when(role) { KeyguardGlassPolicy.TEXT->text;KeyguardGlassPolicy.CARD->cards;else->shortcuts } &&
-            view.isShown && view.windowVisibility==View.VISIBLE
+            visibleSurface(view) && view.windowVisibility==View.VISIBLE
     }
     /** One owned decode + hardware blur per wallpaper/config generation, never on the main Looper. */
     private fun request(view:View) {
@@ -393,7 +488,7 @@ object KeyguardGlassHook {
     }
     private class Entry(view:View,val role:Int):ViewTreeObserver.OnPreDrawListener,View.OnAttachStateChangeListener {
         val view=WeakReference(view)
-        private val attachment=KeyguardGlassAttachment(view,role,nativeEffects[view],::change)
+        val attachment=KeyguardGlassAttachment(view,role,nativeEffects[view],::change)
         var originalEffect:RenderEffect?
             get()=attachment.originalEffect
             set(value) { attachment.originalEffect=value }
@@ -425,6 +520,7 @@ object KeyguardGlassHook {
             var hash=System.identityHashCode(image)
             for(value in values)hash=hash*31+value.toRawBits()
             hash=hash*31+v.width;hash=hash*31+v.height;hash=hash*31+strength.toRawBits()
+            if(role==KeyguardGlassPolicy.SHORTCUT && v is android.widget.ImageView)hash=hash*31+System.identityHashCode(v.drawable)
             if(hash!=previous || !applied) {
                 val first=!applied
                 val outline=Outline();originalBackground?.getOutline(outline)
@@ -434,7 +530,16 @@ object KeyguardGlassHook {
                 val dm=v.resources.displayMetrics
                 attachment.apply(image,values,dm.widthPixels,dm.heightPixels,strength,radius)
                 previous=hash;v.invalidate()
-                if(first)RuntimeDiagnostics.mark("keyguard_material","锁屏角色=${role}已挂载GPU材质；真机外观待确认")
+                if(first) {
+                    RuntimeDiagnostics.mark("keyguard_material","锁屏角色=${role}已挂载GPU材质；真机外观待确认")
+                    RuntimeDiagnostics.mark("keyguard_material_$role","${v.javaClass.simpleName}#${resourceId(v)} ${v.width}x${v.height}")
+                    if(role==KeyguardGlassPolicy.TEXT && resourceId(v).contains("digital_time"))
+                        RuntimeDiagnostics.update("keyguard_digits","当前数字 GPU 材质已应用：${v.width}x${v.height}")
+                    if(com.coloros16.liquidglass.BuildConfig.DEBUG && role==KeyguardGlassPolicy.TEXT && resourceId(v).contains("digital_time"))runCatching {
+                        Class.forName("com.dreamglass.cos17.KeyguardGlyphAudit").getMethod("capture",View::class.java,
+                            RenderEffect::class.java,RenderEffect::class.java).invoke(null,v,attachment.originalEffect,attachment.compose(null))
+                    }.onFailure { RuntimeDiagnostics.mark("keyguard_glyph_audit_error","${it.javaClass.simpleName}: ${it.message}") }
+                }
             }
         }
         private fun change(block:()->Unit) { ownChange=true;try { block() } finally { ownChange=false } }

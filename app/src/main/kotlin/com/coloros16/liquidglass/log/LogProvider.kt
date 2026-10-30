@@ -67,6 +67,13 @@ class LogProvider : ContentProvider() {
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         checkCaller()
+        if(com.coloros16.liquidglass.BuildConfig.DEBUG && mode in setOf("w","wt") &&
+            uri.lastPathSegment in setOf("raw.png","native.png","glass.png","combined.png") &&
+            uri.path=="/glyph-debug/${uri.lastPathSegment}") {
+            val directory=File(context!!.filesDir,"glyph-audit").apply { mkdirs() }
+            return ParcelFileDescriptor.open(File(directory,uri.lastPathSegment!!),
+                ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE)
+        }
         if (uri.path != "/log") throw FileNotFoundException("unknown path: $uri")
         val file = logFile()
         file.parentFile?.mkdirs()
@@ -106,7 +113,15 @@ class LogProvider : ContentProvider() {
                 require(report.getString("host") == arg)
                 report.put("pid", Binder.getCallingPid())
                 report.put("receivedAt", System.currentTimeMillis())
-                prefs.edit().putString(RuntimeDiagnostics.PREFIX + arg, report.toString()).commit()
+                val process=report.optString("process",arg)
+                require(process.length<=200 && (process==arg || process.startsWith("$arg:")))
+                val perProcess=RuntimeDiagnostics.PREFIX+arg+"@"+process
+                val editor=prefs.edit().putString(RuntimeDiagnostics.PREFIX + arg, report.toString())
+                    .putString(perProcess,report.toString())
+                // Each allowed package has a small fixed process set. Bound retained history.
+                prefs.all.keys.filter { it.startsWith(RuntimeDiagnostics.PREFIX+arg+"@") && it!=perProcess }
+                    .sorted().drop(7).forEach { editor.remove(it) }
+                editor.commit()
             }
             RuntimeStore.CLASSES -> {
                 require(arg in RuntimeStore.HOSTS)

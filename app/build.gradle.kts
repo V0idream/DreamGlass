@@ -23,8 +23,8 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         // Published versions use SemVer; increment this code for every distributed update so
         // Android and the module framework can recognize the new APK. Do not publish timestamp suffixes.
-        versionCode = 1_001_002
-        versionName = "1.1.2"
+        versionCode = 1_001_003
+        versionName = "1.1.3"
 
     }
 
@@ -41,6 +41,7 @@ android {
     }
 
     buildTypes {
+        debug { versionNameSuffix = "-debug8" }
         release {
             // 框架阶段先不开启 minify，避免 R8 误删 META-INF/xposed 清单文件；
             // 开启 minify 时需配合 proguard-rules.pro（见 LibXposed README 要求）。

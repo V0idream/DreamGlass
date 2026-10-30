@@ -36,7 +36,10 @@ object RuntimeDiagnostics {
 
     fun mark(stage: String, detail: String = "已到达") {
         if (host.isEmpty()) return
-        if (stages.putIfAbsent(stage, detail.take(500)) == null) revision.incrementAndGet()
+        if (stages.putIfAbsent(stage, detail.take(500)) == null) {
+            revision.incrementAndGet()
+            if(BuildConfig.DEBUG) Log.i("DG-Compat", "$host $stage: ${detail.take(500)}")
+        }
         if (published == revision.get() || SystemClock.uptimeMillis() < retryAfter) return
         if (pending.compareAndSet(false, true)) writer.execute { publish(0) }
     }
@@ -45,7 +48,10 @@ object RuntimeDiagnostics {
     fun update(stage:String,detail:String) {
         if(host.isEmpty())return
         val value=detail.take(500)
-        if(stages.put(stage,value)!=value)revision.incrementAndGet()
+        if(stages.put(stage,value)!=value) {
+            revision.incrementAndGet()
+            if(BuildConfig.DEBUG) Log.i("DG-Compat", "$host $stage: $value")
+        }
         if(published==revision.get() || SystemClock.uptimeMillis()<retryAfter)return
         if(pending.compareAndSet(false,true))writer.execute { publish(0) }
     }
@@ -61,6 +67,7 @@ object RuntimeDiagnostics {
         val version = revision.get()
         val snapshot = JSONObject().apply {
             put("host", host); put("pid", Process.myPid()); put("at", System.currentTimeMillis())
+            put("process",android.app.Application.getProcessName())
             put("version", BuildConfig.VERSION_NAME); put("stages", JSONObject(stages.toMap()))
         }.toString()
         val classes = classesSnapshot

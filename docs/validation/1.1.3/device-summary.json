@@ -1,0 +1,19 @@
+{
+  "debugVersion": "1.1.3-debug8",
+  "ordinaryAdbOnly": true,
+  "manualSystemUiRestart": true,
+  "particleNativeEvents": [
+    "REQUEST",
+    "ACCEPT",
+    "COMMIT"
+  ],
+  "hardwareParticleTexture": "768x145",
+  "clearAllDelayObservedMs": 747,
+  "sidebarAppearanceAcceptedByUser": true,
+  "isolatedClockGpuAuditHasGlass": true,
+  "onscreenClockAppearanceVerified": false,
+  "cameraGlassDrawObserved": false,
+  "dynamicTiltVerified": false,
+  "powerMeasured": false,
+  "longTermStabilityTested": false
+}

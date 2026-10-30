@@ -44,6 +44,7 @@ object AppGlassHook {
     fun install(api:XposedInterface,classLoader:ClassLoader,packageName:String) {
         this.api=api;this.packageName=packageName;switchKey=keys[packageName] ?: return
         GlassRegistry.attach { Prefs.read(api) }
+        NativeAppBackdropHook.install(api,classLoader)
         try {
             val type=Class.forName(BRIDGE,false,classLoader)
             val method=type.getMethod("setBackgroundRenderEffect",RenderEffect::class.java,View::class.java)
@@ -51,6 +52,7 @@ object AppGlassHook {
             api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                 if(changing || Looper.myLooper()!=Looper.getMainLooper())return@intercept chain.proceed()
                 val view=chain.getArg(1) as? View ?: return@intercept chain.proceed()
+                if(NativeAppBackdropHook.owns(view.background))return@intercept chain.proceed()
                 val original=chain.getArg(0) as? RenderEffect
                 var state:State?=null
                 var replacement:RenderEffect?=null
@@ -76,7 +78,7 @@ object AppGlassHook {
                 val result=chain.proceed()
                 if(!changing && Looper.myLooper()==Looper.getMainLooper())try {
                     val view=chain.getThisObject() as? View
-                    if(view!=null && isBlur(view.background))observe(view)
+                    if(view!=null && !NativeAppBackdropHook.owns(view.background) && isBlur(view.background))observe(view)
                 } catch(error:Throwable) { failure(error) }
                 result
             }
@@ -87,13 +89,28 @@ object AppGlassHook {
         readAt=now
         val p=api?.let(Prefs::read) ?: return
         enabled=p.getBoolean(Prefs.KEY_MASTER,false) && p.getBoolean(Prefs.KEY_GLASS_ENABLE,true) && p.getBoolean(switchKey,false)
+        RuntimeDiagnostics.update("app-glass-enabled",if(enabled)"开启" else "关闭")
         if(enabled)snapshot=SharedGlassParams.read(p)
+    }
+    internal fun nativeParams(view:View,width:Float,height:Float):com.coloros16.liquidglass.liquidglass.LiquidGlassShader.Params? {
+        preferences();if(!enabled || role(view)==AppGlassSurfacePolicy.NONE)return null
+        val s=snapshot ?: return null
+        val key=System.identityHashCode(view)
+        GlassRegistry.bind(key,view,view.javaClass.name)
+        val outline=Outline();view.background?.getOutline(outline)
+        val radius=GlassRegistry.cornerOverrideFor(key) ?: if(outline.radius>0)outline.radius else minOf(width,height)*.22f
+        return SharedGlassParams.resolve(s.values,s.preset,GlassRegistry.overridesFor(key),width,height,radius,
+            role(view)==AppGlassSurfacePolicy.CONTROL)
     }
     private fun id(view:View)=runCatching { view.resources.getResourceEntryName(view.id) }.getOrDefault("")
     private fun isBlur(drawable:Drawable?,depth:Int=0):Boolean {
         if(drawable==null || depth>4)return false
-        val name=drawable.javaClass.name
-        if(name.contains("BlurDrawable") || name.startsWith("com.oplus.posteffect.drawable."))return true
+        var type:Class<*>?=drawable.javaClass
+        while(type!=null && type!=Drawable::class.java) {
+            val name=type.name
+            if(name.contains("BlurDrawable") || name.startsWith("com.oplus.posteffect.drawable."))return true
+            type=type.superclass
+        }
         if(drawable is LayerDrawable)return (0 until drawable.numberOfLayers).any { isBlur(drawable.getDrawable(it),depth+1) }
         val current=drawable.current
         return current!==drawable && isBlur(current,depth+1)
@@ -185,5 +202,8 @@ object AppGlassHook {
             v.removeOnAttachStateChangeListener(this);states.remove(v)
         }
     }
-    private fun failure(error:Throwable) { Lg.w("AppGlass","native backdrop retained after adapter failure",error) }
+    private fun failure(error:Throwable) {
+        RuntimeDiagnostics.mark("app-glass-error","${error.javaClass.simpleName}: ${error.message}")
+        Lg.w("AppGlass","native backdrop retained after adapter failure",error)
+    }
 }

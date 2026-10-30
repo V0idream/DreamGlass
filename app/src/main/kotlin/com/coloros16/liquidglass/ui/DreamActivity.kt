@@ -279,7 +279,9 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         d.addView(text("目标进程记录", 21f, ink, true))
         d.addView(text("查看最近接收的作用域状态与运行记录。", 13f, muted))
         action(d, "刷新运行记录", true) { showPage() }
-        for ((pkg, label) in listOf("com.android.launcher" to "系统桌面", "com.android.systemui" to "SystemUI")) {
+        for ((pkg, label) in listOf("com.android.launcher" to "系统桌面", "com.android.systemui" to "SystemUI",
+            "com.coloros.smartsidebar" to "智能侧边栏","com.coloros.gallery3d" to "相册",
+            "com.coloros.assistantscreen" to "负一屏","com.coloros.calculator" to "计算器")) {
             val c = card(); c.addView(text(label, 18f, ink, true)); c.addView(text(pkg, 11f, muted))
             val report = readReport(pkg)
             val details=text(report,13f,muted).apply { visibility=View.GONE }
@@ -308,7 +310,10 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             val stamp = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(o.getLong("at")))
             val fields = listOf("loaded" to "入口", "configured" to "配置", "mounted" to "Hook", "invoked" to "调用", "source" to "背景", "render" to "绘制", "extensions" to "扩展") +
                 if (pkg == "com.android.systemui") listOf("startup" to "初始化", "content_render" to "内容绘制", "notification_glass" to "通知玻璃路径", "notification_blur" to "通知回退记录", "qs_glass" to "按钮玻璃路径", "qs_blur" to "按钮回退记录", "qs_seekbar_hook" to "进度接口", "qs_seekbar_active" to "进度对象", "qs_seekbar_tint" to "进度填充", "qs_tile_mask" to "按钮遮罩", "qs_slider_hook" to "滑杆轮廓接口", "qs_slider_clip" to "滑杆填充裁剪", "qs_icon_hook" to "图标底层接口", "qs_icon_background" to "横向图标底层", "volume_native_hook" to "独立音量归属接口", "volume_native" to "独立音量原生保护", "volume_window" to "音量窗口隔离", "keyguard_hook" to "锁屏入口", "keyguard_detected" to "锁屏对象", "keyguard_source" to "锁屏背景", "keyguard_material" to "锁屏材质", "blur_hardware" to "硬件背景", "blur_cpu" to "高精度背景") else emptyList()
-            "宿主模块版本：${o.optString("version", "未知")}\n上次记录 $stamp  ·  PID ${o.optInt("pid")}\n" + fields.joinToString("\n") { (k, n) -> "$n：${s.optString(k, "尚未收到")}" } + "\n历史记录不代表此刻仍在运行。"
+            val known=fields.map { it.first }.toSet()
+            val additional=s.keys().asSequence().filter { it !in known }.sorted().map { "$it：${s.optString(it)}" }.joinToString("\n")
+            "宿主模块版本：${o.optString("version", "未知")}\n上次记录 $stamp  ·  PID ${o.optInt("pid")}\n" + fields.joinToString("\n") { (k, n) -> "$n：${s.optString(k, "尚未收到")}" } +
+                (if(additional.isEmpty())"" else "\n$additional") + "\n历史记录不代表此刻仍在运行。"
         }
     } catch (_: Throwable) { "诊断通道暂不可读，请刷新框架连接。" }
 

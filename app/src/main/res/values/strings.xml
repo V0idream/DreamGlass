@@ -243,7 +243,7 @@
     <string name="settings_gallery_glass_desc">相册按钮跟随当前材质预设，不给整条工具栏添加外框。需启用相册作用域，支持的系统背景接口可用时生效。</string>
     <string name="settings_calculator_glass">计算器材质边缘</string>
     <string name="settings_calculator_glass_desc">为计算器窗口添加边缘效果，保留原生模糊。需启用计算器作用域。</string>
-    <string name="settings_smart_sidebar_glass">侧边栏材质边缘</string>
+    <string name="settings_smart_sidebar_glass">侧边栏液态玻璃</string>
     <string name="settings_smart_sidebar_glass_desc">侧边栏面板与按钮使用统一玻璃材质，保留原有内容与操作。需启用侧边栏作用域。</string>
     <string name="settings_notification_popup_glass">通知长按菜单玻璃</string>
     <string name="settings_notification_popup_glass_desc">给长按通知后弹出的操作菜单卡加液态玻璃背景。开启后立即生效，无需重启系统界面。</string>

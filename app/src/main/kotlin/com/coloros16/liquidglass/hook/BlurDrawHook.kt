@@ -2507,7 +2507,7 @@ object BlurDrawHook {
     private val lastLoggedCornerRadius = ConcurrentHashMap<Int, Float>()
 
     fun install(api: XposedInterface, classLoader: ClassLoader) {
-        ParticleDissolveHook.install(api, classLoader)
+        ParticleDissolveHook.install(api, classLoader, RuntimeDiagnostics::mark)
         this.api = api
         hostClassLoader = classLoader
         GlassRegistry.attach { this.api?.let { a -> Prefs.read(a) } }

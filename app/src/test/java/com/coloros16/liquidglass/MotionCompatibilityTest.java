@@ -26,11 +26,19 @@ public class MotionCompatibilityTest {
         public void snapChild(View v, float x, float velocity) {}
         public void dismissChild(View v, float velocity, boolean animate) {}
     }
+    public abstract static class AbstractSwipe {
+        public abstract void onChildSnappedBack(float x, View v);
+        public void dismissChild(View v, float velocity, boolean animate) {}
+    }
+    @Test public void abstractHookTargetDoesNotAbortOtherParticleRoutes() {
+        var routes=NotificationMotionContract.INSTANCE.routes(AbstractSwipe.class);
+        assertEquals(1,routes.size());assertEquals("dismissChild",routes.get(0).getMethod().getName());
+    }
     @Test public void stock17RoutesFindReorderedViewAndIgnoreUnrelatedMethods() {
         var routes=NotificationMotionContract.INSTANCE.routes(Stock17Swipe.class);
         assertEquals(8,routes.size());
         var snap=routes.stream().filter(r -> r.getMethod().getName().equals("snapChild")).findFirst().get();
-        assertEquals(NotificationMotionContract.Event.COMMIT,routes.stream().filter(r -> r.getMethod().getName().equals("onSwipeOutAnimStart")).findFirst().get().getEvent());
+        assertEquals(NotificationMotionContract.Event.ACCEPT,routes.stream().filter(r -> r.getMethod().getName().equals("onSwipeOutAnimStart")).findFirst().get().getEvent());
         assertEquals(NotificationMotionContract.Event.ABORT,routes.stream().filter(r -> r.getMethod().getName().equals("onChildNotDismissed")).findFirst().get().getEvent());
         assertEquals(2,snap.getIndex());assertEquals(NotificationMotionContract.Event.CANCEL,snap.getEvent());
         assertEquals(NotificationMotionContract.Event.PREPARE,routes.stream().filter(r -> r.getMethod().getName().equals("onDownUpdate")).findFirst().get().getEvent());

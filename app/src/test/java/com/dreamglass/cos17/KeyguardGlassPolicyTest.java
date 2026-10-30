@@ -14,6 +14,24 @@ public class KeyguardGlassPolicyTest {
   assertEquals(0,role("com.oplus.keyguard.widget.WidgetColumn","widget_column",false,true,false,.2f));
  }
  @Test public void flashlightAndCameraOnlyUseExplicitButtons() { for(String id:new String[]{"start_button","end_button","flashlight_button","camera_button"})assertEquals(3,role("com.oplus.systemui.keyguard.ui.view.OplusKeyguardBottomAreaView",id,false,true,true,1)); }
+ @Test public void nativeAffordanceBackgroundIsSeparateFromIcon() {
+  assertEquals(3,role("com.android.systemui.keyguard.ui.view.KeyguardRootView","affordance_background_circle",false,false,false,1));
+  assertEquals(0,role("com.android.systemui.keyguard.ui.view.KeyguardRootView","affordance_foreground_icon",false,false,false,1));
+ }
+ @Test public void pluginBottomSlotsAreIncluded() {
+  for(String id:new String[]{"BOTTOM_START","BOTTOM_END"})assertEquals(3,role("com.oplus.keyguard.ui.base.view.BottomAffordanceContainer",id,false,false,true,1));
+ }
+ @Test public void themeWrapperKeepsNativeShortcutRoleWithoutOriginalId() {
+  assertEquals(3,KeyguardGlassPolicy.INSTANCE.role(Arrays.asList("theme.MyCustomizedImageView",
+      "com.oplus.keyguard.ui.base.widget.OplusLaunchableImageView"),"",false,false,true,1));
+ }
+ @Test public void pluginClockRootDoesNotIncludeSharedKeyguardHost() {
+  assertTrue(KeyguardGlassPolicy.INSTANCE.isClockGlyphRoot("com.oplus.keyguard.clock.base.ui.view.ClockViewRoot"));
+  assertFalse(KeyguardGlassPolicy.INSTANCE.isClockGlyphRoot("com.oplus.keyguard.ui.OplusKeyguardStyleClock"));
+ }
+ @Test public void statusBarClockDoesNotCountAsLockscreenClockSuccess() {
+  assertEquals(0,role("com.oplus.systemui.keyguard.view.OplusKeyguardStatusBarClock","clock",true,false,false,1));
+ }
  @Test public void authenticationAndAodNeverReceiveMaterials() { for(String parent:new String[]{"com.oplus.systemui.aod.aodclock.Clock","com.oplus.keyguard.security.NumericKeyboardWidget","com.android.keyguard.bouncer.BouncerView"})assertEquals(0,role(parent,"clock",true,true,true,1)); }
  @Test public void fingerprintAndNotificationsStayNative() { assertEquals(0,role("com.android.keyguard.KeyguardRootView","fingerprint",false,true,true,1));assertEquals(0,role("com.android.systemui.statusbar.notification.row.ExpandableNotificationRow","date",true,false,false,1)); }
  @Test public void genericWidgetsOutsideKeyguardStayNative() { assertEquals(0,role("com.android.launcher.WidgetCard","widget",false,true,true,1)); }

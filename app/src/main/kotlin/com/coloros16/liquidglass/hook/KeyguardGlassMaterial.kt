@@ -61,26 +61,30 @@ internal class KeyguardGlassMaterial(val glyph:Boolean) {
             half4 main(float2 p) {
                 float alpha;
                 float2 grad;
+                float bevel=clamp(min(uSize.x,uSize.y)*0.022,1.5,7.0);
                 if(uMode<0.5) {
                     alpha=float(uContent.eval(p).a);
                     if(alpha<0.001)return half4(0.0);
-                    grad=float2(float(uContent.eval(p+float2(1.5,0.0)).a-uContent.eval(p-float2(1.5,0.0)).a),
-                                float(uContent.eval(p+float2(0.0,1.5)).a-uContent.eval(p-float2(0.0,1.5)).a));
+                    float2 nearGrad=float2(float(uContent.eval(p+float2(1.25,0.0)).a-uContent.eval(p-float2(1.25,0.0)).a),
+                                float(uContent.eval(p+float2(0.0,1.25)).a-uContent.eval(p-float2(0.0,1.25)).a));
+                    float2 farGrad=float2(float(uContent.eval(p+float2(bevel,0.0)).a-uContent.eval(p-float2(bevel,0.0)).a),
+                                float(uContent.eval(p+float2(0.0,bevel)).a-uContent.eval(p-float2(0.0,bevel)).a));
+                    grad=nearGrad*0.35+farGrad*0.65;
                 } else {
                     float d=distanceBox(p);alpha=1.0-smoothstep(-0.75,0.75,d);
                     if(alpha<0.001)return half4(0.0);
                     float2 normal=float2(distanceBox(p+float2(1.0,0.0))-distanceBox(p-float2(1.0,0.0)),
                                          distanceBox(p+float2(0.0,1.0))-distanceBox(p-float2(0.0,1.0)));
-                    grad=-normal*exp(-abs(d)/2.2);
+                    grad=-normal*exp(-abs(d)/max(bevel,2.2));
                 }
                 float edge=clamp(length(grad),0.0,1.0);
                 float2 normal=-grad/max(length(grad),0.001);
-                float2 q=p+normal*edge*(2.6*uStrength);
+                float2 q=p+normal*edge*(bevel*0.9*uStrength);
                 float2 source=float2(dot(float3(q,1.0),uMapX),dot(float3(q,1.0),uMapY));
                 half3 glass=uWallpaper.eval(source).rgb;
                 float lum=dot(float3(glass),float3(0.2126,0.7152,0.0722));
                 half contrast=lum>0.52?half(0.0):half(1.0);
-                glass=mix(glass,half3(contrast),half(uMode<0.5?0.20:0.10));
+                glass=mix(glass,half3(contrast),half(uMode<0.5?0.09:0.10));
                 float facing=dot(normal,normalize(float2(-0.55,-0.83)));
                 glass+=half3(max(facing,0.0)*edge*0.66*uStrength);
                 glass-=half3(max(-facing,0.0)*edge*0.22*uStrength);
