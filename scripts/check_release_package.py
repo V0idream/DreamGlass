@@ -124,7 +124,7 @@ for layout in (root / 'app/src/main/res/layout').glob('view_*.xml'):
 
 unit = [ET.parse(f).getroot() for f in (build_dir / 'test-results/testReleaseUnitTest').glob('TEST-*.xml')]
 unit_count = sum(int(t.get('tests')) for t in unit)
-assert unit_count >= 120, 'Missing current compatibility regressions'
+assert unit_count >= 124, 'Missing current compatibility regressions'
 assert sum(int(t.get('failures')) + int(t.get('errors')) for t in unit) == 0
 lint = ET.parse(build_dir / 'reports/lint-results-release.xml').getroot()
 lint_errors = [n for n in lint if n.get('severity') in ('Error', 'Fatal')]

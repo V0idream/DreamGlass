@@ -1,0 +1,15 @@
+{
+  "testedVersion": "1.1.4-debug1",
+  "launcherVersion": "17.3.12",
+  "ordinaryAdbOnly": true,
+  "manualLauncherRestart": true,
+  "newOptionEnabledWithPermission": true,
+  "nativeGestureConfirmed": true,
+  "gpuPlayingObserved": true,
+  "hardwareTexture": "165x960",
+  "ownTaskRemoved": true,
+  "otherTasksDeleted": false,
+  "userAcceptedVisibleEffect": true,
+  "clearAllUserExperienceVerified": false,
+  "powerMeasured": false
+}
