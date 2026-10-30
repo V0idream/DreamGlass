@@ -1,0 +1,2 @@
+--------- beginning of main
+I/RecentsParticleProbe( 2655): PASS {"prepareDoesNotPlay":true,"cancelBeforeAcceptKeepsCard":true,"gpuHandoffHidesSource":true,"nativeAlphaUpdatesRetained":true,"clickPreserved":true,"naturalEndRestoresSource":true,"slowPresetCompletesWithoutEarlyTimeout":true,"inFlightSpeedStable":true,"concurrentCaptureLimit":2,"stopAllReleasesPending":true,"removedCardDoesNotKillAcceptedDust":true,"stopReleasesDetachedSource":true,"upwardEscapedPixels":3953,"endTransparent":true,"physicalLauncherHookTested":false}

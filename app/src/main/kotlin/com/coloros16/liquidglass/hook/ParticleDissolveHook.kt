@@ -370,9 +370,10 @@ object ParticleDissolveHook {
         }
 
         /** Pure GPU render-to-texture. No getPixels, software Canvas, CPU scaling or blur. */
-        private fun snapshot(c: Capture): Bitmap {
-            val scale = minOf(1f, 768f/c.width, 384f/c.height)
-            val w = (c.width*scale).toInt().coerceAtLeast(1);val h = (c.height*scale).toInt().coerceAtLeast(1)
+        private fun snapshot(c: Capture): Bitmap = snapshotNode(c.node,c.width,c.height)
+        internal fun snapshotNode(source:RenderNode,width:Int,height:Int,maxWidth:Int=768,maxHeight:Int=384):Bitmap {
+            val scale = minOf(1f,maxWidth.toFloat()/width,maxHeight.toFloat()/height)
+            val w = (width*scale).toInt().coerceAtLeast(1);val h = (height*scale).toInt().coerceAtLeast(1)
             val reader = ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,1,
                 HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
             val renderer = HardwareRenderer()
@@ -381,7 +382,7 @@ object ParticleDissolveHook {
                 renderer.isOpaque = false;renderer.setSurface(reader.surface);renderer.setContentRoot(node)
                 node.setPosition(0,0,w,h)
                 val canvas = node.beginRecording(w,h)
-                try { canvas.drawColor(Color.TRANSPARENT,BlendMode.CLEAR);canvas.scale(scale,scale);canvas.drawRenderNode(c.node) }
+                try { canvas.drawColor(Color.TRANSPARENT,BlendMode.CLEAR);canvas.scale(scale,scale);canvas.drawRenderNode(source) }
                 finally { node.endRecording() }
                 val status = renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
                 check(status and (HardwareRenderer.SYNC_LOST_SURFACE_REWARD_IF_FOUND or
@@ -398,7 +399,7 @@ object ParticleDissolveHook {
 
         internal class Dust(private val root: View, bitmap: Bitmap, x: Float, y: Float,
             width: Int, height: Int, density: Float, private val speed: Int, direction:Float=1f,
-            private val initialProgress:Float=0f,private val ended: () -> Unit)
+            private val initialProgress:Float=0f,private val vertical:Boolean=false,private val ended: () -> Unit)
             : Drawable(), Choreographer.FrameCallback, View.OnAttachStateChangeListener {
             private val shader = RuntimeShader(SHADER)
             private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = this@Dust.shader }
@@ -424,6 +425,7 @@ object ParticleDissolveHook {
                 shader.setFloatUniform("uCell",(1.0f*density).coerceAtLeast(1.2f))
                 shader.setFloatUniform("uProgress",initialProgress)
                 shader.setFloatUniform("uDirection",direction)
+                shader.setFloatUniform("uVertical",if(vertical)1f else 0f)
             }
             fun start() { root.overlay.add(this);root.addOnAttachStateChangeListener(this);frameClock.postFrameCallback(this) }
             fun stop() {
@@ -473,11 +475,16 @@ object ParticleDissolveHook {
             uniform float uCell;
             uniform float uPad;
             uniform float uDirection;
+            uniform float uVertical;
             float hash(float2 p) { return fract(sin(dot(p,float2(127.1,311.7)))*43758.5453); }
             float2 flow(float2 p, float t) {
                 float2 n=p/max(uSize,float2(1.0));
-                return float2((uDirection<0.0?-1.0:1.0)*(0.35+0.18*sin(n.y*9.0+n.x*4.0))*uSize.x,
-                    (-0.28+0.18*sin(n.x*8.0+n.y*3.0))*uSize.y)*t*t;
+                float sign=uDirection<0.0?-1.0:1.0;
+                float2 horizontal=float2(sign*(0.35+0.18*sin(n.y*9.0+n.x*4.0))*uSize.x,
+                    (-0.28+0.18*sin(n.x*8.0+n.y*3.0))*uSize.y);
+                float2 vertical=float2(0.12*sin(n.y*8.0+n.x*3.0)*uSize.x,
+                    sign*(0.35+0.18*sin(n.x*9.0+n.y*4.0))*uSize.y);
+                return mix(horizontal,vertical,uVertical)*t*t;
             }
             half4 main(float2 pos) {
                 float t=clamp(uProgress,0.0,1.0);

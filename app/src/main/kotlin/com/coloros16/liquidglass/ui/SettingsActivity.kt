@@ -49,6 +49,7 @@ import com.coloros16.liquidglass.hook.ButtonBackdropWorker
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.glass.IosGlassPreset
 import com.coloros16.liquidglass.hook.ParticleDissolveHook
+import com.coloros16.liquidglass.hook.RecentsParticleHook
 import com.coloros16.liquidglass.hook.KeyguardGlassHook
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
@@ -1559,6 +1560,15 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun bindTilt(view: View) {
+        bindGlassSwitch(view,R.id.switchRecentsDissolve,RecentsParticleHook.KEY_ENABLED,false)
+        bindIntSeekBarStep(
+            seek=view.findViewById(R.id.seekRecentsDissolveSpeed),
+            valueText=view.findViewById(R.id.recentsDissolveSpeedValue),
+            key=RecentsParticleHook.KEY_SPEED,default=ParticleDissolveHook.DEFAULT_SPEED,
+            max=ParticleDissolveHook.MAX_SPEED-ParticleDissolveHook.MIN_SPEED,step=1,
+            offset=ParticleDissolveHook.MIN_SPEED,
+            format={v->getString(R.string.settings_notification_dissolve_speed_value,v/100f)},
+        )
         bindGlassSwitch(view, R.id.switchNotificationDissolve, ParticleDissolveHook.KEY_ENABLED, false)
         bindIntSeekBarStep(
             seek = view.findViewById(R.id.seekNotificationDissolveSpeed),

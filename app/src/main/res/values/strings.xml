@@ -350,4 +350,7 @@
     <string name="cat_keyguard">锁屏玻璃</string>
     <string name="cat_keyguard_desc">时钟、日期、卡片与底部快捷按钮</string>
     <string name="settings_clear_all_btn_unavailable">当前桌面版本暂不支持此接入方式，保持原生清除按钮。</string>
+    <string name="settings_recents_dissolve">删除多任务卡片时粒子飘散</string>
+    <string name="settings_recents_dissolve_desc">关闭最近任务时向上消散；取消滑动和切换应用不播放。</string>
+    <string name="settings_recents_dissolve_speed">多任务粒子速度</string>
 </resources>
