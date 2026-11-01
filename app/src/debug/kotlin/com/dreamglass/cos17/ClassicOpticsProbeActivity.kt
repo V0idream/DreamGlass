@@ -25,10 +25,10 @@ class ClassicOpticsProbeActivity:Activity() {
         setContentView(label)
         label.post { try { label.text=runProbe().toString(2) } catch(t:Throwable) { Log.e("ClassicOpticsProbe","FAIL",t);label.text="FAIL $t" } }
     }
-    private fun render(shader:RuntimeShader,p:LiquidGlassShader.Params,source:Bitmap):Bitmap {
+    private fun render(shader:RuntimeShader,p:LiquidGlassShader.Params,source:Bitmap,dim:Float=0f):Bitmap {
         val w=p.viewportWidth.toInt();val h=p.viewportHeight.toInt()
         val texture=LiquidGlassShader.createSourceBitmapShader(source)
-        LiquidGlassShader.setUniforms(shader,p,texture,texture,sourceRect=RectF(100f,100f,100f+w,100f+h),maskAlpha=.06f)
+        LiquidGlassShader.setUniforms(shader,p,texture,texture,sourceRect=RectF(100f,100f,100f+w,100f+h),maskAlpha=dim)
         val reader=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,1,HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE)
         val renderer=HardwareRenderer();val node=RenderNode("Classic optics regression")
         try {
@@ -77,8 +77,24 @@ class ClassicOpticsProbeActivity:Activity() {
                 reference.recycle();restored.recycle();newer.recycle();selectedModern.recycle()
             }
         check(modernChanged>10000) { "Negative control did not distinguish the newer compact lens" }
+        val white=Bitmap.createBitmap(768,768,Bitmap.Config.RGBA_F16).apply { eraseColor(Color.WHITE) }
+        val clean=LiquidGlassShader.Params(160f,160f,cornerRadius=80f,blurRadius=0f,refractionAmount=0f,
+            highlight=0f,depth=0f,dispersion=0f,vibrancy=1f)
+        val shader=LiquidGlassShader.create(false)
+        val plain=render(shader,clean,white)
+        val dimPlain=render(shader,clean,white,.65f)
+        val dimPolished=render(shader,clean.copy(surfacePolish=true),white,.65f)
+        check(abs(Color.red(dimPlain.getPixel(80,80))-Color.red(dimPolished.getPixel(80,80)))<=1)
+        check(Color.red(dimPolished.getPixel(80,80)) < Color.red(plain.getPixel(80,80))-80)
+        val dark=render(shader,clean.copy(grayBaseLuma=.1f),white)
+        val light=render(shader,clean.copy(grayBaseLuma=.9f),white)
+        check(Color.red(light.getPixel(80,80))-Color.red(dark.getPixel(80,80))>80)
+        check(Color.alpha(dark.getPixel(0,0))<3)
+        save(dark,"gray-dark");save(light,"gray-light");save(dimPolished,"dim-polished")
+        for(b in listOf(plain,dimPlain,dimPolished,dark,light))b.recycle()
+        white.recycle()
         source.recycle()
-        val report=JSONObject().put("profiles",2).put("shapeAndVariantComparisons",comparisons)
+        val report=JSONObject().put("readabilityDimConsistentAcrossPolish",true).put("grayShadeEndpointsDistinct",true).put("grayCornerAlphaRetained",true).put("profiles",2).put("shapeAndVariantComparisons",comparisons)
             .put("v114ReferenceMaxChannelDelta",modernMaxDelta).put("selectableProfilesCompared",comparisons*2)
             .put("v107ReferenceMaxChannelDelta",maxDelta).put("newerOpticsDifferentPixels",modernChanged)
             .put("nonemptyReferencePixels",nonempty).put("inputConfig","RGBA_F16")

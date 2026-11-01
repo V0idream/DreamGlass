@@ -1,0 +1,17 @@
+{
+  "oldSha256": "af89139f18857f5c9e130cd492f08dc1a3e26b131aec74490432b2c590ac972e",
+  "newSha256": "22fcfa154961d7494bf641874a6e9c92b90373cb595ae7b68061312f742e0388",
+  "versionName": "17.3.12",
+  "oldStandardCallback": "ma.r0",
+  "newStandardCallback": "ma.p0",
+  "capturedTypes": [
+    "gi.c",
+    "RectTransformHelper",
+    "xi.q",
+    "RectTransformHelper.TransformParams"
+  ],
+  "oldCallbackRetained": true,
+  "newReusedOldNameRejected": true,
+  "particleDelegateVariantsRetained": true,
+  "runtimeOnNewLauncherVerified": false
+}

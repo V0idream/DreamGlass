@@ -100,7 +100,7 @@ object AppGlassHook {
         val outline=Outline();view.background?.getOutline(outline)
         val radius=GlassRegistry.cornerOverrideFor(key) ?: if(outline.radius>0)outline.radius else minOf(width,height)*.22f
         return SharedGlassParams.resolve(s.values,s.preset,GlassRegistry.overridesFor(key),width,height,radius,
-            role(view)==AppGlassSurfacePolicy.CONTROL,s.compactOptics)
+            role(view)==AppGlassSurfacePolicy.CONTROL,s.compactOptics,s.grayBaseLuma)
     }
     private fun id(view:View)=runCatching { view.resources.getResourceEntryName(view.id) }.getOrDefault("")
     private fun isBlur(drawable:Drawable?,depth:Int=0):Boolean {
@@ -169,7 +169,7 @@ object AppGlassHook {
             val radius=GlassRegistry.cornerOverrideFor(key) ?: if(outline.radius>0)outline.radius else
                 if(kind==AppGlassSurfacePolicy.CONTROL)minOf(view.width,view.height)*.5f else minOf(view.width,view.height)*.22f
             val p=SharedGlassParams.resolve(s.values,s.preset,GlassRegistry.overridesFor(key),
-                view.width.toFloat(),view.height.toFloat(),radius,kind==AppGlassSurfacePolicy.CONTROL,s.compactOptics)
+                view.width.toFloat(),view.height.toFloat(),radius,kind==AppGlassSurfacePolicy.CONTROL,s.compactOptics,s.grayBaseLuma)
             val hash=p.hashCode()
             if(cached==null || paramsHash!=hash) { cached=material.create(p);paramsHash=hash }
             return cached

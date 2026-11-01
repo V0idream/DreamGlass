@@ -139,6 +139,7 @@ class SettingsActivity : AppCompatActivity() {
         Category("text", R.string.cat_text, R.string.cat_text_desc, R.layout.view_cat_text),
         Category("mask", R.string.cat_mask, R.string.cat_mask_desc, R.layout.view_cat_mask),
         Category("seedling", R.string.cat_seedling, R.string.cat_seedling_desc, R.layout.view_cat_seedling),
+        Category("particles", R.string.cat_particles, R.string.cat_particles_desc, R.layout.view_cat_particles),
         Category("keyguard", R.string.cat_keyguard, R.string.cat_keyguard_desc, R.layout.view_cat_keyguard),
         // [spec/64] 桌面动画参数（三组开关 + 三级参数页）
         Category("anim", R.string.cat_anim, R.string.cat_anim_desc, R.layout.view_cat_anim),
@@ -182,6 +183,10 @@ class SettingsActivity : AppCompatActivity() {
         App.addServiceStateListener(frameworkListener, false)
 
         val entryCategory = savedInstanceState?.getString("dream_category") ?: intent?.getStringExtra("category")
+        if(entryCategory in MembershipState.categories && !MembershipState.confirmed(this)) {
+            startActivity(Intent(this,MembershipActivity::class.java).putExtra("destination",entryCategory))
+            finish();return
+        }
         if (entryCategory != null && categories.any { it.id == entryCategory }) {
             openCategory(entryCategory)
             savedInstanceState?.getString("dream_anim_group")?.let { openAnimParams(it) }
@@ -386,6 +391,7 @@ class SettingsActivity : AppCompatActivity() {
             "mask" -> bindMask(view)
             "seedling" -> bindSeedling(view)
             "keyguard" -> bindKeyguard(view)
+            "particles" -> bindParticles(view)
             "anim" -> bindAnim(view)
             "tilt" -> bindTilt(view)
             "desktop" -> bindDesktop(view)
@@ -427,6 +433,19 @@ class SettingsActivity : AppCompatActivity() {
         }
         refreshBooleanSwitch(opticsSwitch,opticsListener,Prefs.KEY_COMPACT_OPTICS,Prefs.DEFAULT_COMPACT_OPTICS)
         preview?.compactOptics=opticsSwitch.isChecked
+
+        val graySwitch=view.findViewById<Switch>(R.id.switchGrayBase)
+        var shade=Prefs.DEFAULT_GRAY_BASE_SHADE
+        fun updateGrayPreview() { preview?.let { it.grayBaseLuma=if(graySwitch.isChecked)0.9f-0.8f*shade else -1f;it.refresh() } }
+        val grayListener=CompoundButton.OnCheckedChangeListener { _,checked ->
+            writePrefBoolean(Prefs.KEY_GRAY_BASE,checked);updateGrayPreview()
+        }
+        refreshBooleanSwitch(graySwitch,grayListener,Prefs.KEY_GRAY_BASE,false)
+        bindFloatSeekBar(seek=view.findViewById(R.id.seekGrayBaseShade),valueText=view.findViewById(R.id.grayBaseShadeValue),
+            key=Prefs.KEY_GRAY_BASE_SHADE,default=Prefs.DEFAULT_GRAY_BASE_SHADE,
+            fromProgress={it/100f},toProgress={(it*100).roundToInt().coerceIn(0,100)},format={"${(it*100).roundToInt()}%"},
+            onChanged={shade=it;updateGrayPreview()})
+        updateGrayPreview()
 
         // 顶栏预设：选中预设后下方滑杆改读/改写该预设的参数键，未设的键回落全局值
         val glassPresets = readGlassPresets()
@@ -1321,15 +1340,7 @@ class SettingsActivity : AppCompatActivity() {
         )
 
         // [2026-09-16 用户需求变更] 小胶囊（小岛）也玻璃化（默认开）
-        val switchCapsule = view.findViewById<Switch>(R.id.switchSeedlingCapsuleGlass)
-        val capsuleListener = CompoundButton.OnCheckedChangeListener { _, checked ->
-            writePrefBoolean(Prefs.KEY_SEEDLING_CAPSULE_GLASS, checked)
-        }
-        switchCapsule.setOnCheckedChangeListener(capsuleListener)
-        refreshBooleanSwitch(
-            switchCapsule, capsuleListener,
-            Prefs.KEY_SEEDLING_CAPSULE_GLASS, Prefs.DEFAULT_SEEDLING_CAPSULE_GLASS
-        )
+        view.findViewById<View>(R.id.switchSeedlingCapsuleGlass).visibility=View.GONE
 
         // 展开大卡片判定高度系数（0.5~3.0，默认 1.2）
         bindFloatSeekBar(
@@ -1574,7 +1585,7 @@ class SettingsActivity : AppCompatActivity() {
             Prefs.KEY_LOCKSCREEN_CLOCK_BLUR,6f,fromProgress={it.toFloat()},toProgress={it.toInt().coerceIn(0,24)},format={"${it.toInt()} px"})
     }
 
-    private fun bindTilt(view: View) {
+    private fun bindParticles(view:View) {
         bindGlassSwitch(view,R.id.switchRecentsDissolve,RecentsParticleHook.KEY_ENABLED,false)
         bindIntSeekBarStep(
             seek=view.findViewById(R.id.seekRecentsDissolveSpeed),
@@ -1594,6 +1605,9 @@ class SettingsActivity : AppCompatActivity() {
             format = { v -> getString(R.string.settings_notification_dissolve_speed_value, v/100f) },
         )
 
+    }
+
+    private fun bindTilt(view: View) {
         val switch = view.findViewById<Switch>(R.id.switchAnimTilt)
         val listener = CompoundButton.OnCheckedChangeListener { _, checked ->
             writePrefBoolean(Prefs.KEY_ANIM_TILT_ENABLED, checked)
@@ -2261,6 +2275,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
     /** 下列 12 项由 `bindFloatSeekBar(onChanged=...)` 实时喂入（见 [SettingsActivity.bindMaterial]）；
      *  折射区域**模式**由模式 Chip 组喂入（[refractionHeightMode]）。 */
     var compactOptics = Prefs.DEFAULT_COMPACT_OPTICS
+    var grayBaseLuma = -1f
     var blurRadius = Prefs.DEFAULT_BLUR_RADIUS
     var vibrancy = Prefs.DEFAULT_VIBRANCY
     var highlightFalloff = Prefs.DEFAULT_HIGHLIGHT_FALLOFF
@@ -2406,6 +2421,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             parallaxY = 0f,
             surfacePolish = true,
             compactOptics = compactOptics,
+            grayBaseLuma = grayBaseLuma,
         )
         // 卡片窗口在样图中的区域（bitmap 坐标）；AGSL 侧 srcCoord = srcRect.xy + coord/uViewport * srcRect.zw
         var srcRect = RectF(cardLeft + scrollX, cardTop, cardLeft + scrollX + cw, cardTop + ch)

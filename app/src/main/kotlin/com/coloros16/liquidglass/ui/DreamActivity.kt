@@ -50,6 +50,8 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         selected = savedInstanceState?.getInt("tab", 0) ?: 0
         App.addServiceStateListener(this, false)
         showPage()
+        if(savedInstanceState==null && MembershipState.firstNotice(this))
+            startActivity(Intent(this,MembershipActivity::class.java).putExtra("first_notice",true))
     }
 
     override fun onResume() { super.onResume(); if (::frameworkLabel.isInitialized) refreshState() }
@@ -113,6 +115,12 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
     }
 
     private fun overview() {
+        val support = card()
+        support.addView(text("基础功能免费 · 自愿赞赏", 16f, accent, true))
+        support.addView(text("查看赞赏码与关于 DreamGlass；会员扩展采用五元诚信付款。  ›", 12f, muted))
+        support.contentDescription = "基础功能免费，查看会员扩展与诚信付款说明"
+        support.isFocusable = true
+        support.setOnClickListener { startActivity(Intent(this, LicenseActivity::class.java)) }
         val hero = card()
         hero.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xff1b3b42.toInt(), 0xff132a35.toInt())).apply { cornerRadius = dp(26).toFloat() }
         hero.addView(text("FOR COLOROS 17", 11f, accent, true))
@@ -233,12 +241,16 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         entry.addView(text("隐藏后仍可通过 LSPosed 的模块设置打开 DreamGlass。", 12f, muted))
         val groups = listOf(
             "系统外观" to listOf(Triple("master", "渲染开关", "管理模块入口与玻璃效果"), Triple("material", "材质参数", "折射、鲜艳度与边缘高光"), Triple("text", "文字与可读性", "颜色跟随与对比度"), Triple("mask", "背景压暗", "平衡通透感与文字可读性")),
-            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹、搜索栏和小组件"), Triple("corner", "独立圆角", "按组件单独设置形状"), Triple("components", "其他应用与组件", "相册、计算器和智能侧边栏"), Triple("seedling", "流体云卡片", "展开卡片的材质与形状"), Triple("keyguard", "锁屏玻璃", "时钟、日期、卡片与底部快捷按钮"), Triple("tilt", "空间效果", "通知倾斜与透视"), Triple("anim", "桌面动画", "打开、关闭与打断参数")),
+            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹、搜索栏和小组件"), Triple("corner", "独立圆角", "按组件单独设置形状"), Triple("tilt", "空间效果", "通知倾斜与透视"), Triple("anim", "桌面动画", "打开、关闭与打断参数")),
             "维护与数据" to listOf(Triple("background", "采样与性能", "背景刷新、质量及省电策略"), Triple("log", "运行日志", "查看和导出排查记录"), Triple("config", "配置备份", "导入、导出与恢复参数"))
         )
         for ((title, rows) in groups) {
             val c = card(); c.addView(text(title, 11f, accent, true))
             for ((id, label, detail) in rows) DreamUi.row(c, label, detail) { advanced(id) }
+        }
+        val member=card()
+        DreamUi.row(member,"会员功能","粒子飘散、锁屏和其他应用／组件玻璃 · 诚信付款") {
+            startActivity(Intent(this,MembershipActivity::class.java))
         }
         performanceControls()
         rootControls()
@@ -354,6 +366,8 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         val p = remote()
         frameworkLabel.text = if (p == null) "框架未连接 · 需要支持 LibXposed API 102 的 LSPosed" else "框架配置通道已连接 · 系统效果请查看诊断"
         if (selected == 1 && p != null) {
+            preview?.grayBaseLuma=if(p.getBoolean(Prefs.KEY_GRAY_BASE,false))
+                0.9f-0.8f*p.getFloat(Prefs.KEY_GRAY_BASE_SHADE,Prefs.DEFAULT_GRAY_BASE_SHADE).coerceIn(0f,1f) else -1f
             previewCompactOptics = try { p.getBoolean(Prefs.KEY_COMPACT_OPTICS, Prefs.DEFAULT_COMPACT_OPTICS) }
                 catch (_: Throwable) { Prefs.DEFAULT_COMPACT_OPTICS }
             reflectingOptics = true

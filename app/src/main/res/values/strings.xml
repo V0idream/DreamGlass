@@ -358,4 +358,6 @@
     <string name="settings_scene_blur_value">%1$d%% · 系统模糊力度</string>
     <string name="settings_compact_optics">新版渲染方案</string>
     <string name="settings_compact_optics_desc">关闭：经典折射（1.0.7，默认）；开启：新版紧凑折射与细腻边缘。保留当前参数，切换后重新展开系统面板。</string>
+<string name="cat_particles">粒子飘散</string>
+<string name="cat_particles_desc">通知和多任务删除的 GPU 粒子与速度</string>
 </resources>

@@ -1767,22 +1767,23 @@ object BlurDrawHook {
      * - hostViewName 参数保留仅为兼容 3 处调用点签名（computeGeometry / buildLiquidShader
      *   ×2），不参与判定。
      */
+    private var maskGlassDimConfigured=false
     private fun maskAlphaFor(hostViewName: String?, elementId: Int = 0): Float {
         val a = api ?: return Prefs.DEFAULT_MASK_GLASS_DIM
         val now = SystemClock.uptimeMillis()
         if (now - maskGlassDimAtMs >= MATERIAL_PREFS_CACHE_MS) {
             maskGlassDimAtMs = now
             maskGlassDim = try {
-                Prefs.read(a).getFloat(Prefs.KEY_MASK_GLASS_DIM, Prefs.DEFAULT_MASK_GLASS_DIM).coerceIn(0f, 1f)
+                Prefs.read(a).let { p -> maskGlassDimConfigured=p.contains(Prefs.KEY_MASK_GLASS_DIM);p.getFloat(Prefs.KEY_MASK_GLASS_DIM, Prefs.DEFAULT_MASK_GLASS_DIM).coerceIn(0f,1f) }
             } catch (t: Throwable) {
                 Lg.w(TAG, "prefs read mask_glass_dim failed, keep $maskGlassDim", t)
                 maskGlassDim
             }
         }
-        // 预设覆盖：该元素归属的预设有压暗值则用预设值，否则用全局缓存值
-        return IosGlassPreset.resolve(readMaterialParams().builtinPreset, usePolishedMaterial(elementId),
-            GlassRegistry.overridesFor(elementId))?.get(Prefs.KEY_MASK_GLASS_DIM)?.coerceIn(0f, 1f)
-            ?: maskGlassDim
+        val component=GlassRegistry.overridesFor(elementId)?.get(Prefs.KEY_MASK_GLASS_DIM)
+        val preset=IosGlassPreset.resolve(readMaterialParams().builtinPreset,usePolishedMaterial(elementId),null)
+            ?.get(Prefs.KEY_MASK_GLASS_DIM)
+        return MaterialReadabilityPolicy.dim(maskGlassDim,maskGlassDimConfigured,preset,component)
     }
 
     /**
@@ -2598,6 +2599,7 @@ object BlurDrawHook {
         mountCapsuleBackground(api, classLoader)
         mountCapsuleEar(api, classLoader)
         mountMediaCarousel(api, classLoader)
+        MediaGlassLayerGuard.install(api,classLoader)
         mountNotifHeaderMaskColor(api, classLoader)
         mountMetaColorSuppress(api, classLoader)
         mountMixColorTileRegion(api, classLoader)
@@ -7091,10 +7093,7 @@ object BlurDrawHook {
             Lg.i(TAG, "seedling-card: dispatch container=${container.javaClass.name} " +
                 "w=${containerView.width} h=$containerHeight childCount=${containerView.childCount}")
         }
-        if (!seedlingCapsuleGlassEnabled) {
-            if (moduleLogEnabled) Lg.i(TAG, "seedling-card: island glass off, skip")
-            return
-        }
+        // Collapsed CapsuleView always uses black; expanded cards have a separate renderer.
         // [2026-09-16] 目标 = **CapsuleView（胶囊本体）**，不是 CapsuleContainer（外框）：
         // `CapsuleContainer.onMeasure`(:445-449) 宽度 = 子宽 + padding，`CapsuleContainer.q()`(:506-516)
         // 把 CapsuleView **居中**摆放 —— 拿外框当本体玻璃必然画大、超出胶囊（用户反馈「玻璃比岛大」）。
@@ -7155,28 +7154,14 @@ object BlurDrawHook {
                 }
                 continue
             }
-            // [2026-09-16 用户需求] **去掉岛的原版渲染**：置空背景/前景 Drawable（内容 View 不受影响，
-            // 图标/文字照常绘制），配合「玻璃画在子 View 之下」→ 小岛呈现为「纯液态玻璃 + 内容」。
-            // 幂等（已是 null 则跳过）；失败静默（保持原渲染，不崩）。
-            try {
-                if (capsule.background != null) capsule.background = null
-                if (capsule.foreground != null) capsule.foreground = null
-            } catch (t: Throwable) {
+            // Match the capsule's actual native pill bounds, leaving its children untouched.
+            val black = capsule.background as? android.graphics.drawable.GradientDrawable
+            if(black!=null) black.setColor(android.graphics.Color.BLACK)
+            else capsule.background=android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.BLACK);cornerRadius=cvH/2f
             }
-            // 胶囊全圆角：min(可见宽, 高)/2
-            val cornerOverride = Math.min(drawW, cvH) / 2f
-            val id = System.identityHashCode(capsule)
-            registerSeedlingCardRegion(
-                id, region, Rect(0, 0, drawW, cvH), capsule,
-                cornerRadiusOverride = cornerOverride,
-            )
-            // canvas 原点是本容器左上角 → 偏移取胶囊可见区相对容器的位置
-            val offX = left - containerLoc[0]
-            val offY = top - containerLoc[1]
-            drawSeedlingGlassOnCanvas(
-                canvas, capsule, id, drawW, cvH, region,
-                offsetX = offX, offsetY = offY,
-            )
+            screenRegionMap.remove(System.identityHashCode(capsule))
+            RuntimeDiagnostics.mark("seedling-collapsed","收起胶囊强制黑底；展开卡片继续使用独立玻璃路径")
         }
     }
 
@@ -10059,7 +10044,7 @@ object BlurDrawHook {
     }
 
     private class LocalContrastFrame(val map: BackgroundContrastMap, val region: RectF, val capturedAtMs: Long)
-    private class LocalRegionColor(val frame: LocalContrastFrame, val bounds: RectF, val dim: Float, val rgb: Int)
+    private class LocalRegionColor(val frame: LocalContrastFrame, val bounds: RectF, val dim: Float, val rgb: Int, val gray: Float)
     @Volatile private var localContrastFrame: LocalContrastFrame? = null
     // Main-thread only; the worker publishes a complete immutable frame rather than touching this cache.
     private val localRegionColors = HashMap<Int, LocalRegionColor>()
@@ -10089,10 +10074,10 @@ object BlurDrawHook {
         }
         val entry = owner ?: return null
         val rect = bounds ?: return null
-        val dim = (maskAlphaFor(entry.hostViewName, ownerId) *
-            (if (usePolishedMaterial(ownerId)) 0.65f else 1f)).coerceIn(0f, 1f)
+        val dim = maskAlphaFor(entry.hostViewName, ownerId).coerceIn(0f,1f)
+        val gray = Prefs.grayBaseLuma(api)
         val cached = localRegionColors[ownerId]
-        val rgb = if (cached != null && cached.frame === frame && cached.bounds == rect && cached.dim == dim) {
+        val rgb = if (cached != null && cached.frame === frame && cached.bounds == rect && cached.dim == dim && cached.gray == gray) {
             cached.rgb
         } else {
             val screen = frame.region
@@ -10105,10 +10090,9 @@ object BlurDrawHook {
                 (rect.bottom - insetY - screen.top) / screen.height(),
             ) ?: return null
             // Approximate the material's dark tint in linear light; button alpha is not modified.
-            val brightness = (1.0 - dim).let { it * it }
-            val color = LocalTextContrast.readableColor(-1, l * brightness) and 0x00ffffff
+            val color = LocalTextContrast.readableColor(-1,MaterialReadabilityPolicy.tintedLuminance(l,gray,dim)) and 0x00ffffff
             if (localRegionColors.size >= 1024) localRegionColors.clear()
-            localRegionColors[ownerId] = LocalRegionColor(frame, RectF(rect), dim, color)
+            localRegionColors[ownerId] = LocalRegionColor(frame, RectF(rect), dim, color,gray)
             color
         }
         return (original and -0x1000000) or rgb
@@ -11613,6 +11597,8 @@ object BlurDrawHook {
                     if (drawable != null) {
                         try {
                             glassApplied = replaceShaderIfPossible(drawable)
+                            if(screenRegionMap[System.identityHashCode(drawable)]?.mediaSurface==true)
+                                MediaGlassLayerGuard.material(drawable,glassApplied)
                         } catch (t: Throwable) {
                             Lg.e(TAG, "render: drawBlurShader intercept error", t)
                         }
@@ -13587,6 +13573,7 @@ object BlurDrawHook {
                 parallaxY = pick(Prefs.KEY_PARALLAX_Y, m.parallaxY),
                 surfacePolish = usePolishedMaterial(elementId),
                 compactOptics = Prefs.compactOpticsEnabled(api),
+                grayBaseLuma = Prefs.grayBaseLuma(api),
             )
         } catch (t: Throwable) {
             Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)

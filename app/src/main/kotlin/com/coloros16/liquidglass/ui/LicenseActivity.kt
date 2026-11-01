@@ -67,6 +67,18 @@ class LicenseActivity : AppCompatActivity() {
         body.addView(DreamUi.label(this, "DreamGlass", 29f, DreamUi.ink, true))
         body.addView(DreamUi.label(this, "${BuildConfig.VERSION_NAME}  /  For ColorOS 17", 13f, DreamUi.accent))
         body.addView(DreamUi.label(this, "为系统界面调配通透、光线与空间。", 14f, DreamUi.muted).apply { setPadding(0, dp(10), 0, dp(20)) })
+        val support = DreamUi.card(body)
+        support.addView(DreamUi.label(this, "基础功能免费 · 自愿支持", 18f, DreamUi.ink, true))
+        support.addView(DreamUi.label(this, "基础功能完全免费；会员扩展采用五元诚信付款，不联网核验。感谢每一份支持。", 13f, DreamUi.muted))
+        support.addView(android.widget.ImageView(this).apply {
+            setImageDrawable(assets.open("appreciation/wechat.png").use { android.graphics.drawable.Drawable.createFromStream(it,null) })
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true; contentDescription = "开发者的微信赞赏码"
+        }, LinearLayout.LayoutParams(-1, dp(280)).apply { topMargin = dp(12) })
+        DreamUi.action(support, "保存微信赞赏码") { saveAppreciationCode() }
+        DreamUi.action(support,"会员扩展与诚信付款说明",false) {
+            startActivity(Intent(this,MembershipActivity::class.java))
+        }
         val rights = DreamUi.card(body)
         rights.addView(DreamUi.label(this, "开源与授权", 18f, DreamUi.ink, true))
         rights.addView(DreamUi.label(this,
@@ -82,6 +94,29 @@ class LicenseActivity : AppCompatActivity() {
         legal.addView(DreamUi.label(this, "离线许可文档", 11f, DreamUi.accent, true))
         for (title in documents.keys) DreamUi.row(legal, title, "随安装包提供，可离线阅读与选择复制") { open(title) }
         body.addView(DreamUi.label(this, "Copyright © 2026 DreamGlass contributors.\n第三方组件及派生代码的版权归各自作者。", 11f, DreamUi.muted))
+    }
+    private fun saveAppreciationCode() {
+        val values=android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,"DreamGlass-WeChat-Appreciation.png")
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE,"image/png")
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,"Pictures/DreamGlass")
+            put(android.provider.MediaStore.Images.Media.IS_PENDING,1)
+        }
+        var uri: android.net.Uri? = null
+        try {
+            uri=contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values)
+                ?: error("Image destination unavailable")
+            contentResolver.openOutputStream(uri)?.use { out ->
+                assets.open("appreciation/wechat.png").use { it.copyTo(out) }
+            } ?: error("Image stream unavailable")
+            contentResolver.update(uri,android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.IS_PENDING,0)
+            },null,null)
+            android.widget.Toast.makeText(this,"已保存至相册 Pictures/DreamGlass",android.widget.Toast.LENGTH_LONG).show()
+        } catch (_: Exception) {
+            uri?.let { runCatching { contentResolver.delete(it,null,null) } }
+            android.widget.Toast.makeText(this,"保存失败，请重试",android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
     private fun open(title: String) { document = title; show() }
     private fun dp(value: Int) = DreamUi.dp(this, value)

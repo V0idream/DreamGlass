@@ -1,0 +1,77 @@
+{
+  "version": "1.1.6",
+  "versionCode": 1001006,
+  "releaseApkSha256": "2cc39d7d1f5e249ce8652fea5efda047c0e534a2e17f753ac16bacea27171226",
+  "unit": {
+    "tests": 154,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Error": 0,
+    "Warning": 309
+  },
+  "gpu": {
+    "apkSha256": "e04104d6e73c9ecfd56c820eb26b32199cd857147bf2490939aa000e79ef49b1",
+    "probes": {
+      "ClassicOpticsProbe": "PASS",
+      "MediaGeometryProbe": "PASS",
+      "MotionProbe": "PASS",
+      "DreamGlassQualityProbe": "PASS",
+      "SceneGlassProbe": "PASS",
+      "DreamGlassStabilityProbe": "PASS"
+    },
+    "physicalDeviceTested": false
+  },
+  "opticsAndReadability": {
+    "readabilityDimConsistentAcrossPolish": true,
+    "grayShadeEndpointsDistinct": true,
+    "grayCornerAlphaRetained": true,
+    "profiles": 2,
+    "shapeAndVariantComparisons": 24,
+    "v114ReferenceMaxChannelDelta": 0,
+    "selectableProfilesCompared": 48,
+    "v107ReferenceMaxChannelDelta": 0,
+    "newerOpticsDifferentPixels": 278414,
+    "nonemptyReferencePixels": 1168752,
+    "inputConfig": "RGBA_F16",
+    "baseAndMetaballVariantsCompiled": true,
+    "physicalDeviceTested": false
+  },
+  "membershipUi": {
+    "firstLaunchHasExactlyTwoActions": true,
+    "declineExitsApp": true,
+    "freeCoreAvailableOnNextLaunch": true,
+    "memberEntryRequiresHonorConfirmation": true,
+    "confirmationIsLocalOnlyNoPaymentPerformed": true,
+    "particlesGroupedSeparately": true,
+    "aboutQrRendered": true,
+    "savedQrBytesUnchanged": true,
+    "physicalDeviceTested": false
+  },
+  "physicalDeviceInstalled": false,
+  "newLauncherRuntimeVerified": false,
+  "musicAndTiltVisibleOnDeviceVerified": false,
+  "collapsedCapsuleOnDeviceVerified": false,
+  "privateCapturesIncluded": false,
+  "releaseUi": {
+    "firstLaunchHasExactlyTwoActions": true,
+    "declineExitsApp": true,
+    "freeCoreAvailableOnNextLaunch": true,
+    "memberEntryRequiresHonorConfirmation": true,
+    "confirmationIsLocalOnlyNoPaymentPerformed": true,
+    "particlesGroupedSeparately": true,
+    "aboutQrRendered": true,
+    "savedQrBytesUnchanged": true,
+    "physicalDeviceTested": false
+  },
+  "releaseUiPassed": true,
+  "grayUi": {
+    "grayOffByDefault": true,
+    "shadeDefaultPercent": 65,
+    "separateSwitchAndSliderVisible": true,
+    "physicalDeviceTested": false
+  },
+  "gpuSourceSha256": "bb4b7b2728325d6e6a0cfc74a56288c7bce33b3f67f8cc29cce62f8caa23c82d"
+}

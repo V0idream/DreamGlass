@@ -229,7 +229,9 @@ object LauncherTiltCompat {
         // gi.c.g's surface lock. Read its live params and refreshed clip, not a cached
         // transaction-wide Frame with a 40ms expiry.
         runCatching {
-            val callback=Class.forName("ma.r0",false,loader)
+            val callback=LauncherTiltContract.callback(listOf("ma.r0","ma.p0").mapNotNull { name ->
+                runCatching { Class.forName(name,false,loader) }.getOrNull()
+            },target,helper,tx,params) ?: error("No verified standard target callback")
             val capturedTarget=callback.getDeclaredField("a").apply { isAccessible=true }
             val capturedHelper=callback.getDeclaredField("b").apply { isAccessible=true }
             val capturedTx=callback.getDeclaredField("c").apply { isAccessible=true }

@@ -89,7 +89,8 @@ object LiquidGlassShader {
                                          // 0=无内侧衰减（现状）、1=内半几乎归零（只剩贴边一条线）
         uniform float uInnerGlow;        // 内侧光 0~1：边缘向中心的全向发光强度（区别于定向边缘高光）；0=关
         uniform float uVibrancy;         // 鲜艳度/饱和度倍数（Kyant vibrancy=1.5；1=不变）
-        uniform float uCompactOptics;    // 0: classic 1.0.7 (default); 1: compact modern optics.
+        uniform float uCompactOptics;
+        uniform float2 uGrayBase;    // 0: classic 1.0.7 (default); 1: compact modern optics.
         uniform float uSurfacePolish;    // COS17 controls/cards only: finer rim and clearer background. Other scenes stay unchanged.
         uniform float uLightAngle;       // 光角度（弧度；Kotlin 侧由角度转弧度）
         uniform vec2  uParallax;         // 视差（面板几何中心偏移，可接传感器）
@@ -776,7 +777,10 @@ object LiquidGlassShader {
             //     （遮罩→底层背景，玻璃区域与卡片间 scrim 黑 tint 展开态同为 `壁纸×(1-maskAlpha)` 统一）。
             //     uMaskAlpha=0 时 mix 系数 0 → 零开销跳过。历史：spec/48 曾整体移除（改为系统 scrim 黑 tint
             //     单一来源），快照叠黑方案验证无效后用户决定恢复 shader 内压暗（uMaskAlpha/uMaskColor 直接生效）。
-            glass.rgb = mix(glass.rgb, uMaskColor.rgb, uMaskAlpha * uMaskColor.a * mix(1.0, 0.65, polish));
+            // Optional neutral backing remains inside this material's own alpha/shape.
+            glass.rgb = mix(glass.rgb, float3(uGrayBase.x) * glass.a, uGrayBase.y);
+            // The global dim slider has the same strength on QS, shade and heads-up.
+            glass.rgb = mix(glass.rgb, uMaskColor.rgb * glass.a, uMaskAlpha * uMaskColor.a);
 
             // 3. vibrancy：饱和度提升（Kyant colorControls saturation=1.5 的矩阵等价：mix(luma, rgb, s)）
             float luma = dot(glass.rgb, float3(0.213, 0.715, 0.072));
@@ -961,6 +965,7 @@ object LiquidGlassShader {
         val surfacePolish: Boolean = false,
         val sourcePreblurred: Boolean = false,
         val compactOptics: Boolean = false,
+        val grayBaseLuma: Float = -1f,
     )
 
     /**
@@ -1138,6 +1143,9 @@ object LiquidGlassShader {
         shader.setFloatUniform("uVibrancy", params.vibrancy)
         shader.setFloatUniform("uSurfacePolish", if (params.surfacePolish) 1f else 0f)
         shader.setFloatUniform("uCompactOptics", if (params.compactOptics) 1f else 0f)
+        val gray = params.grayBaseLuma
+        shader.setFloatUniform("uGrayBase", if(gray.isFinite())gray.coerceIn(0f,1f) else 0f,
+            if(gray.isFinite() && gray>=0f)0.72f else 0f)
         shader.setFloatUniform("uLightAngle", (params.lightAngleDegrees * PI / 180.0).toFloat())
         shader.setFloatUniform("uParallax", params.parallaxX, params.parallaxY)
         shader.setFloatUniform("uDebugCoord", debugCoord)

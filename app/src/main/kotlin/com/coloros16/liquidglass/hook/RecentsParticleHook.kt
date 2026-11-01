@@ -106,7 +106,10 @@ object RecentsParticleHook {
                 result
             }
             api.deoptimize(end)
-            runCatching {Class.forName("no.g",false,loader).declaredMethods.filter {it.name=="onDragEnd"}.forEach {api.deoptimize(it)}}
+            for(name in listOf("no.g","no.h","no.d","no.e","no.i"))runCatching {
+                Class.forName(name,false,loader).declaredMethods.filter { it.name=="onDragEnd" &&
+                    it.parameterTypes.contentEquals(arrayOf(Float::class.javaPrimitiveType)) }.forEach { api.deoptimize(it) }
+            }
             mark("gesture-hook","17.3.12 删除决策与 playback 身份校验已安装")
         }.onFailure {mark("gesture-unavailable","${it.javaClass.simpleName}: ${it.message}")}
         runCatching {

@@ -48,3 +48,8 @@ DreamGlass restores its v1.0.7 refraction band, circleMap displacement and rim/v
 ## 2026-11-01 — selectable optics and COS17 media geometry
 
 Preserved the v1.1.4 compact material behind a global opt-in switch; classic v1.0.7 remains the default. Shared shader callers and the preview receive the same selection without resetting saved parameters. Media card clipping no longer changes the optical viewport or interprets scroll offsets as symmetric padding. Added bounded final-transaction tilt submission with merge/close handling and a visible-phase notification envelope. GPU regression assets are synthetic; proprietary binaries, private device captures and signing keys are excluded. No new external dependency was added.
+
+
+## 2026-11-01 — 1.1.6 readability, media and honor-support UI
+
+Added opt-in GPU neutral backing and a shade slider, consistent explicit dim priority and tint-aware foreground decisions. Added conditional media-decoration suppression, preserved both supplied launcher callback contracts and revised notification pivot/camera distance. Collapsed native capsules use black while expanded cards retain their renderer. Added a local-only honor support page and member grouping; no payment SDK, network verification or new dependencies. The appreciation image was supplied by the project owner for inclusion; the original PNG is preserved and saving does not rewrite it. Private phone captures and proprietary APKs remain outside source distribution.

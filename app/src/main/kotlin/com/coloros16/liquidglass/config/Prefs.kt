@@ -701,6 +701,27 @@ object Prefs {
 
     fun masterEnabled(api: XposedInterface): Boolean = read(api).getBoolean(KEY_MASTER, false)
 
+    const val KEY_GRAY_BASE = "gray_base_enabled"
+    const val KEY_GRAY_BASE_SHADE = "gray_base_shade"
+    const val DEFAULT_GRAY_BASE_SHADE = 0.65f
+    @Volatile private var grayReadAt = -1000L
+    @Volatile private var grayLumaCache = -1f
+    /** One cached pair of preference reads, without a frame callback or image processing. */
+    fun grayBaseLuma(api:XposedInterface?):Float {
+        if(api==null)return -1f
+        val now=SystemClock.uptimeMillis()
+        if(now-grayReadAt<500L)return grayLumaCache
+        grayReadAt=now
+        grayLumaCache=runCatching {
+            val p=read(api)
+            if(!p.getBoolean(KEY_GRAY_BASE,false)) -1f
+            else 0.9f-0.8f*p.getFloat(KEY_GRAY_BASE_SHADE,DEFAULT_GRAY_BASE_SHADE).let {
+                if(it.isFinite())it.coerceIn(0f,1f) else DEFAULT_GRAY_BASE_SHADE
+            }
+        }.getOrDefault(grayLumaCache)
+        return grayLumaCache
+    }
+
     @Volatile private var compactOpticsCache = DEFAULT_COMPACT_OPTICS
     @Volatile private var compactOpticsReadAt = -1000L
     /** Cached global optical choice; no new polling worker or per-frame IPC. */

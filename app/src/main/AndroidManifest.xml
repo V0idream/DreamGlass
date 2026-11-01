@@ -52,6 +52,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+        <activity android:name=".ui.MembershipActivity" android:exported="false" />
         <activity android:name=".ui.LicenseActivity" android:exported="false" />
         <!-- 完整高级配置。 -->
         <activity

@@ -1,0 +1,1 @@
+PASS {"physicalDeviceTested":false,"vendorBridgeExecuted":false,"sharedOpticalPixelsChanged":159961,"threeControlsShareIosPreset":true,"outerToolbarUnframed":true,"liveInputPixelsChangedWithoutEffectRebuild":116751,"foregroundClicksRetained":3,"recordedWallpaperSurvivesHostBitmapRecycle":true,"hardwareOwnedOutput":true}

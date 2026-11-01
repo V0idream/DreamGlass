@@ -1,3 +1,4 @@
+uniform float2 uGrayBase;
 uniform float uCompactOptics; // Debug compatibility; historical optical math ignores this.
 // Debug reference: DreamGlass v1.1.4 optical source. Kyant adaptation; see THIRD-PARTY-NOTICES.md.
 

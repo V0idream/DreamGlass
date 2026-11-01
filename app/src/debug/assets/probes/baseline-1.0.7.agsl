@@ -1,3 +1,4 @@
+uniform float2 uGrayBase;
 uniform float uCompactOptics; // Debug compatibility; historical optical math ignores this.
 
         // ============================================================================

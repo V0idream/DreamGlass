@@ -3430,6 +3430,7 @@ object LauncherHook {
                 parallaxX = pick(Prefs.KEY_PARALLAX_X, m.parallaxX),
                 parallaxY = pick(Prefs.KEY_PARALLAX_Y, m.parallaxY),
                 compactOptics = Prefs.compactOpticsEnabled(api),
+                grayBaseLuma = Prefs.grayBaseLuma(api),
             )
         } catch (t: Throwable) {
             Lg.e(TAG, "launcher buildParams: prefs float read failed, use defaults", t)

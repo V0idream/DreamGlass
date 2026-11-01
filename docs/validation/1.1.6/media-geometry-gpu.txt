@@ -1,0 +1,1 @@
+PASS {"comparisons":6,"clipVsUnclippedMaxPremultipliedChannelDelta":1,"nonemptyPixels":593268,"physicalDeviceTested":false}

@@ -144,7 +144,7 @@ object NotificationTiltCompat {
         private val visibleRect=Rect()
         private val observer=view.viewTreeObserver
         private var stopped=false
-        private val baseline=floatArrayOf(view.rotationX,view.scaleX,view.scaleY,view.cameraDistance)
+        private val baseline=floatArrayOf(view.rotationX,view.scaleX,view.scaleY,view.cameraDistance,view.pivotX,view.pivotY)
         private val last=baseline.copyOf()
         private var applied=false
         fun start() {
@@ -174,7 +174,7 @@ object NotificationTiltCompat {
                 if (!stopped && view.isAttachedToWindow && view.isShown && view.windowVisibility==View.VISIBLE &&
                     view.width>0 && view.height>0 && view.getGlobalVisibleRect(visibleRect)) {
                     if(visibleAt<0)visibleAt=SystemClock.uptimeMillis()
-                    val values=floatArrayOf(view.rotationX,view.scaleX,view.scaleY,view.cameraDistance)
+                    val values=floatArrayOf(view.rotationX,view.scaleX,view.scaleY,view.cameraDistance,view.pivotX,view.pivotY)
                     for (i in values.indices) if (!applied || values[i]!=last[i]) baseline[i]=values[i]
                     val p=progress?.invoke()?.takeIf { it.isFinite() }?.coerceIn(0f,1f) ?:
                         ((SystemClock.uptimeMillis()-visibleAt)/450f).coerceIn(0f,1f)
@@ -183,7 +183,9 @@ object NotificationTiltCompat {
                     val amount=if (incoming) (1f-p)*(1f-p)*(1f-p) else sin(PI*p).toFloat()
                     val scale=1f-shrink.coerceIn(0f,.8f)*amount
                     last[0]=baseline[0]+rotation;last[1]=baseline[1]*scale;last[2]=baseline[2]*scale
-                    last[3]=maxOf(baseline[3],view.resources.displayMetrics.density*1800f)
+                    last[3]=maxOf(view.width.toFloat(),view.height.toFloat(),view.resources.displayMetrics.density*240f)*1.25f
+                    last[4]=view.width/2f;last[5]=0f
+                    view.pivotX=last[4];view.pivotY=last[5]
                     view.rotationX=last[0];view.scaleX=last[1];view.scaleY=last[2]
                     view.cameraDistance=last[3]
                     applied=true
@@ -206,6 +208,8 @@ object NotificationTiltCompat {
                     if (view.scaleX==last[1]) view.scaleX=baseline[1]
                     if (view.scaleY==last[2]) view.scaleY=baseline[2]
                     if (view.cameraDistance==last[3]) view.cameraDistance=baseline[3]
+                    if (view.pivotX==last[4]) view.pivotX=baseline[4]
+                    if (view.pivotY==last[5]) view.pivotY=baseline[5]
                     view.invalidate()
                 }
             };ended()
