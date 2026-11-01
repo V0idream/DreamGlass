@@ -58,6 +58,8 @@ object Prefs {
 
     /** Optional overlay only; original global/custom values are never overwritten. */
     const val KEY_BUILTIN_MATERIAL_PRESET = "builtin_material_preset"
+    const val KEY_COMPACT_OPTICS = "compact_optics_enabled"
+    const val DEFAULT_COMPACT_OPTICS = false
 
     // [2026-09-17 死键清理] 背景档位已删除：KEY_BACKGROUND_MODE + BACKGROUND_TRANSPARENT/LIGHT/SYSTEM
     // 三个取值 + Prefs.backgroundMode()，全部零调用方（档位语义早已被材质参数逐项取代）。
@@ -698,6 +700,19 @@ object Prefs {
     }
 
     fun masterEnabled(api: XposedInterface): Boolean = read(api).getBoolean(KEY_MASTER, false)
+
+    @Volatile private var compactOpticsCache = DEFAULT_COMPACT_OPTICS
+    @Volatile private var compactOpticsReadAt = -1000L
+    /** Cached global optical choice; no new polling worker or per-frame IPC. */
+    fun compactOpticsEnabled(api:XposedInterface?):Boolean {
+        if(api==null)return DEFAULT_COMPACT_OPTICS
+        val now=SystemClock.uptimeMillis()
+        if(now-compactOpticsReadAt<500L)return compactOpticsCache
+        compactOpticsReadAt=now
+        compactOpticsCache=runCatching { read(api).getBoolean(KEY_COMPACT_OPTICS,DEFAULT_COMPACT_OPTICS) }.getOrDefault(compactOpticsCache)
+        return compactOpticsCache
+    }
+
 
     @Volatile
     private var glassEnableCache: Boolean = DEFAULT_GLASS_ENABLE

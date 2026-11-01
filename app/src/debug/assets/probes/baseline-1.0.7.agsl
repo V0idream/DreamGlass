@@ -1,3 +1,4 @@
+uniform float uCompactOptics; // Debug compatibility; historical optical math ignores this.
 
         // ============================================================================
         // 液态玻璃 AGSL 核心（2026-08-12 重构：Kyant 分层结构）

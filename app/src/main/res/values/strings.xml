@@ -353,4 +353,9 @@
     <string name="settings_recents_dissolve">删除多任务卡片时粒子飘散</string>
     <string name="settings_recents_dissolve_desc">关闭最近任务时向上消散；取消滑动和切换应用不播放。</string>
     <string name="settings_recents_dissolve_speed">多任务粒子速度</string>
+    <string name="settings_scene_blur">自定义展开页面背景模糊</string>
+    <string name="settings_scene_blur_desc" formatted="false">统一调节通知长按菜单、桌面弹出层、负一屏、桌面背景及已适配应用的 COUI 弹层模糊。0% 清晰，100% 系统原值；保留前景和原生动画。修改后重新展开页面。控制中心与玻璃按钮的材质模糊仍单独设置。</string>
+    <string name="settings_scene_blur_value">%1$d%% · 系统模糊力度</string>
+    <string name="settings_compact_optics">新版渲染方案</string>
+    <string name="settings_compact_optics_desc">关闭：经典折射（1.0.7，默认）；开启：新版紧凑折射与细腻边缘。保留当前参数，切换后重新展开系统面板。</string>
 </resources>

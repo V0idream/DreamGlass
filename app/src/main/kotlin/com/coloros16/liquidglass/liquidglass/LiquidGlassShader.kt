@@ -14,7 +14,7 @@
    limitations under the License.
  */
 /* Modified for Android AGSL / ColorOS by ColorOS16-LiquidGlass and DreamGlass contributors.
- * DreamGlass modifications: 2026-10-23, 2026-10-25. See THIRD-PARTY-NOTICES.md and MODIFICATIONS.md.
+ * DreamGlass modifications: 2026-10-23, 2026-10-25, 2026-11-01. See THIRD-PARTY-NOTICES.md and MODIFICATIONS.md.
  * The combined DreamGlass application is distributed under GPL-3.0. */
 package com.coloros16.liquidglass.liquidglass
 
@@ -89,6 +89,7 @@ object LiquidGlassShader {
                                          // 0=无内侧衰减（现状）、1=内半几乎归零（只剩贴边一条线）
         uniform float uInnerGlow;        // 内侧光 0~1：边缘向中心的全向发光强度（区别于定向边缘高光）；0=关
         uniform float uVibrancy;         // 鲜艳度/饱和度倍数（Kyant vibrancy=1.5；1=不变）
+        uniform float uCompactOptics;    // 0: classic 1.0.7 (default); 1: compact modern optics.
         uniform float uSurfacePolish;    // COS17 controls/cards only: finer rim and clearer background. Other scenes stay unchanged.
         uniform float uLightAngle;       // 光角度（弧度；Kotlin 侧由角度转弧度）
         uniform vec2  uParallax;         // 视差（面板几何中心偏移，可接传感器）
@@ -597,11 +598,11 @@ object LiquidGlassShader {
         // 注意：整体模糊 = 普通毛玻璃（2026-08-12 重构前的错误形态，已废弃）。
         half4 main(float2 coord) {
             float polish = clamp(uSurfacePolish, 0.0, 1.0);
+            float compact = polish * clamp(uCompactOptics, 0.0, 1.0);
             float materialBlur = uBlurRadius * mix(1.0, 0.60, polish);
-            // @DG-LENS-START 2026-10-26: compact, monotone edge lens; preserve other scenes.
+            // Both optical profiles share the current GPU/F16 pipeline.
             float lensHeight = mix(uRefractionHeight,
-                min(uRefractionHeight, min(uViewport.x, uViewport.y) * 0.24 + 2.0), polish);
-            // @DG-LENS-END
+                min(uRefractionHeight, min(uViewport.x, uViewport.y) * 0.24 + 2.0), compact);
             // [调试] uDebugCoord>0.5 → 决定性实验：coord/500 取小数。
             // 像素坐标(0~1440) → fract(coord/500) 周期渐变（每 500px 红/绿各循环一次，
             // 1440 宽 → 红通道约 3 段 0~1 循环）；归一化 [0,1] → coord/500≈0 → 全黑。
@@ -693,7 +694,7 @@ object LiquidGlassShader {
                 // 2b. 折射环带：边缘位移最大，向内趋 0（包络 circleMap 与 Kyant 语义不变）
                 float d = circleMap(1.0 - -sd / max(uRefractionHeight, 1.0)) * uRefractionAmount;
                 // @DG-PROFILE-START 2026-10-26: C2 taper, bounded displacement prevents folded text.
-                if (polish > 0.5) {
+                if (compact > 0.5) {
                     float lensT = clamp(-sd / max(lensHeight, 1.0), 0.0, 1.0);
                     float lensT3 = lensT * lensT * lensT;
                     float lensProfile = 1.0 - lensT3 * (lensT * (lensT * 6.0 - 15.0) + 10.0);
@@ -849,7 +850,7 @@ object LiquidGlassShader {
             // after clipping without multiplying by alpha produces a hard bright fringe at corners.
             float rim = hl * band * innerAtt * uHighlight;
             // @DG-COAT-START 2026-10-26: directional dielectric coat, soft inner contact shading.
-            if (polish > 0.5) {
+            if (compact > 0.5) {
                 float face = -dot(sdfGrad, lightDir);
                 float key = pow(max(face, 0.0), max(uHighlightFalloff * 0.8, 0.5));
                 float fill = pow(max(-face, 0.0), max(uHighlightFalloff, 0.5));
@@ -873,7 +874,22 @@ object LiquidGlassShader {
                 glass.rgb += max(float3(glass.a) - glass.rgb, 0.0) * reflectance;
                 glass.rgb = clamp(glass.rgb, float3(0.0), float3(glass.a));
             } else {
-                glass.rgb += float3(rim);
+                float3 polishedRim = max(float3(glass.a) - glass.rgb, 0.0) * clamp(rim * 0.72, 0.0, 1.0);
+                // 2026-10-25: a rounded glass cross-section, separate from the fine specular line.
+                // Low-energy interior shading and a soft lit shoulder give volume without a hard white border.
+                float volumeWidth = clamp(min(halfSize.x, halfSize.y) * 0.065, 2.5, 8.0);
+                float shoulderX = (dIn - volumeWidth * 0.90) / max(volumeWidth * 0.65, 1.0);
+                float shoulder = exp(-shoulderX * shoulderX * 1.8);
+                float direction = dot(sdfGrad, lightDir);
+                float litFace = smoothstep(-0.25, 0.85, direction);
+                float darkFace = smoothstep(-0.25, 0.85, -direction);
+                float volumeGain = polish * clamp(uDepth / 2.4, 0.0, 1.4) *
+                    clamp(uHighlight, 0.0, 1.5) * step(0.01, uHighlightWidth);
+                glass.rgb *= 1.0 - shoulder * (0.045 + 0.09 * darkFace) * volumeGain;
+                glass.rgb += max(float3(glass.a) - glass.rgb, 0.0) * shoulder *
+                    (0.035 + 0.10 * litFace) * volumeGain;
+                glass.rgb += mix(float3(rim), polishedRim, polish);
+                if (polish > 0.5) glass.rgb = min(glass.rgb, float3(glass.a));
             }
             // @DG-COAT-END
 
@@ -944,6 +960,7 @@ object LiquidGlassShader {
         /** Use the COS17 control/card finish; launcher and clock callers keep the original material. */
         val surfacePolish: Boolean = false,
         val sourcePreblurred: Boolean = false,
+        val compactOptics: Boolean = false,
     )
 
     /**
@@ -1120,6 +1137,7 @@ object LiquidGlassShader {
         shader.setFloatUniform("uHighlightFalloff", params.highlightFalloff)
         shader.setFloatUniform("uVibrancy", params.vibrancy)
         shader.setFloatUniform("uSurfacePolish", if (params.surfacePolish) 1f else 0f)
+        shader.setFloatUniform("uCompactOptics", if (params.compactOptics) 1f else 0f)
         shader.setFloatUniform("uLightAngle", (params.lightAngleDegrees * PI / 180.0).toFloat())
         shader.setFloatUniform("uParallax", params.parallaxX, params.parallaxY)
         shader.setFloatUniform("uDebugCoord", debugCoord)

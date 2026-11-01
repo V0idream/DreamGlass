@@ -1,0 +1,2 @@
+--------- beginning of main
+11-01 04:29:21.749  2195  2218 I DreamGlassStabilityProbe: PASS callback+reporter exceptions contained; 120 frame/geometry churn; four styles recover; clear cancels; published bitmap retained; F16

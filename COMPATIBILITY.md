@@ -1,3 +1,7 @@
+# 1.1.5 增量兼容状态
+
+原厂 COS17 倾斜使用 LauncherTiltCompat 的逐目标回调与原生 4×4 通道，包含最终 apply／merge 补强；不要求所给 APK 中不存在的 Zuyqa 类。模拟器投影通过，实际窗口／通知透视仍待确认。下表中的 Zuyqa 旧入口与暂停状态是早期静态审计记录；新增主题锁屏适配见 [1.1.5 验证](docs/validation/1.1.5/README.md)。音乐几何修正只处理经父链确认的媒体背景，不移动原生播放控件。
+
 # DreamGlass 1.1.2 · 动画兼容补充
 
 另核对6个锁屏插件/壁纸类接口，见scene-contracts.json；OEM App背景桥仅在宿主运行时核对，尚无实际厂商执行证据。

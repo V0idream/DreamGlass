@@ -41,6 +41,9 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
     private var reflectingMaster = false
     private var preview: LiquidGlassPreviewView? = null
     private var previewStyle = Styles.all.first()
+    private var opticsSwitch: Switch? = null
+    private var previewCompactOptics = Prefs.DEFAULT_COMPACT_OPTICS
+    private var reflectingOptics = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -161,6 +164,27 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         val canvas = card()
         canvas.addView(text("材质预览", 22f, ink, true))
         canvas.addView(text("先预览，再将材质写入系统配置。", 13f, muted))
+        opticsSwitch = Switch(this).apply {
+            text = "新版渲染方案"; setTextColor(ink); minHeight = dp(48)
+            isChecked = previewCompactOptics
+            setOnCheckedChangeListener { _, checked ->
+                if (!reflectingOptics) {
+                    val p = remote()
+                    if (p == null) {
+                        previewCompactOptics = checked; updatePreview()
+                        notice("仅更新预览；框架未连接，未保存系统配置")
+                    } else try {
+                        if (p.edit().putBoolean(Prefs.KEY_COMPACT_OPTICS, checked).commit()) {
+                            previewCompactOptics = checked
+                            Prefs.read(this@DreamActivity).edit().putBoolean(Prefs.KEY_COMPACT_OPTICS, checked).apply()
+                            updatePreview(); notice("已保存渲染方案；重新展开系统面板后查看")
+                        } else { notice("保存失败，请刷新框架连接"); refreshState() }
+                    } catch (_: Throwable) { notice("框架写入失败"); refreshState() }
+                }
+            }
+            canvas.addView(this)
+        }
+        canvas.addView(text("关闭：经典宽幅折射（默认） · 开启：新版紧凑镜片。切换保留材质参数。", 12f, muted))
         attachPreview(canvas)
         for (style in Styles.all) {
             val c = card()
@@ -181,6 +205,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
 
     private fun updatePreview() {
         preview?.apply {
+            compactOptics = previewCompactOptics
             blurRadius = previewStyle.blur; refractionAmount = previewStyle.refract
             dispersion = previewStyle.dispersion; highlight = previewStyle.highlight
             refresh()
@@ -328,6 +353,14 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
     private fun refreshState() {
         val p = remote()
         frameworkLabel.text = if (p == null) "框架未连接 · 需要支持 LibXposed API 102 的 LSPosed" else "框架配置通道已连接 · 系统效果请查看诊断"
+        if (selected == 1 && p != null) {
+            previewCompactOptics = try { p.getBoolean(Prefs.KEY_COMPACT_OPTICS, Prefs.DEFAULT_COMPACT_OPTICS) }
+                catch (_: Throwable) { Prefs.DEFAULT_COMPACT_OPTICS }
+            reflectingOptics = true
+            opticsSwitch?.isChecked = previewCompactOptics
+            reflectingOptics = false
+            updatePreview()
+        }
         if (selected == 0 && ::master.isInitialized) {
             val enabled = try { p?.getBoolean(Prefs.KEY_MASTER, false) ?: false } catch (_: Throwable) { false }
             reflectingMaster = true

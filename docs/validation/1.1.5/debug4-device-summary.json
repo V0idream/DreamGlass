@@ -1,0 +1,15 @@
+{
+  "version": "1.1.5-debug4",
+  "bothHostsLoadedVersion": true,
+  "popupBlurPercent": 0,
+  "popupBackgroundIconsClearVerified": true,
+  "popupOwnGlassRetained": true,
+  "notificationNativeCallbackAndViewTransformReached": true,
+  "notificationAngleDegrees": 3,
+  "notificationVisiblePerspectiveVerified": false,
+  "windowMidAnimationTransactionCommitted": true,
+  "windowVisiblePerspectiveVerified": false,
+  "testNotificationRemoved": true,
+  "configurationChanged": false,
+  "shellRootUsed": false
+}

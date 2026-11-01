@@ -1,0 +1,16 @@
+{
+  "verifiedAgainstExtractedComponent": true,
+  "contracts": {
+    "com.oplus.keyguard.clock.digital.ui.controller.DigitalClockColorCoordinator": [
+      "resolveGlassEffectTargets()Ljava/util/List;"
+    ],
+    "com.oplus.keyguard.clock.common.view.livecontent.effect.shader.glass.GlassEffectHelper": [
+      "setRenderEffectImpl()Z",
+      "effectMap:Ljava/util/Map;"
+    ],
+    "com.oplus.keyguard.clock.common.view.livecontent.effect.shader.glass.GlassEffectHelper$refreshRenderEffect$applied$1": [
+      "invoke()Ljava/lang/Boolean;"
+    ]
+  },
+  "physicalDebug3Verified": false
+}

@@ -59,6 +59,15 @@ class ShortcutLayerProbeActivity:Activity() {
             material.material.update(image,map,rect.width().toFloat(),rect.height().toFloat(),root.width,root.height,1f,90f)
         })
         val glass=capture()
+        // The actual COS17 theme clears the old Drawable while its native blur owns it.
+        (button.drawable as LayerDrawable).getDrawable(0).alpha=0
+        button.invalidate()
+        val themeGlass=capture()
+        check(themeGlass.getPixel(180,370)==glass.getPixel(180,370)) { "Native background alpha=0 suppressed the glass" }
+        button.imageAlpha=0;button.invalidate()
+        val hidden=capture()
+        check(hidden.getPixel(180,370)==native.getPixel(180,370)) { "Image alpha visibility was ignored" }
+        button.imageAlpha=255
         check(button.drawable===layers)
         check(glass.getPixel(160,320)==native.getPixel(160,320)) { "Native foreground icon changed" }
         val old=native.getPixel(180,370);val changed=glass.getPixel(180,370)
@@ -69,7 +78,7 @@ class ShortcutLayerProbeActivity:Activity() {
         val restored=capture();check(restored.getPixel(180,370)==old)
         val dir=File(filesDir,"shortcut-probe").apply {mkdirs()}
         File(dir,"glass.png").outputStream().use {glass.compress(Bitmap.CompressFormat.PNG,100,it)}
-        Log.i("ShortcutLayerProbe","PASS: actual native-layer compositor draws glass; foreground and native objects retained; launch fallback; disable restores native")
+        Log.i("ShortcutLayerProbe","PASS: actual native-layer compositor draws glass with transparent native background; respects image alpha; foreground and native objects retained; launch fallback; disable restores native")
         label.text="PASS · native shortcut GPU compositor"
     }
     override fun onDestroy() {KeyguardLayeredShortcut.unbind(button);ui.removeCallbacksAndMessages(null);super.onDestroy()}

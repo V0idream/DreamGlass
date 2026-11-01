@@ -1,10 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <activity android:name="com.dreamglass.cos17.MediaGeometryProbeActivity" android:exported="true" />
         <!-- Local regression probe only; excluded from every release APK. -->
         <activity android:name="com.dreamglass.cos17.SamplingProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.IconContrastProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.BlurQualityProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.MaterialStudyProbeActivity" android:exported="true" />
+        <activity android:name="com.dreamglass.cos17.ClassicOpticsProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.StabilityProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.HardwareBlurProbeActivity" android:exported="true" />
     <activity android:name="com.coloros16.liquidglass.particles.ParticleProbeActivity" android:exported="true" /><activity android:name="com.dreamglass.cos17.KeyguardGlassProbeActivity" android:exported="true" /><activity android:name="com.dreamglass.cos17.MotionProbeActivity" android:exported="true" /><activity android:name="com.dreamglass.cos17.SceneGlassProbeActivity" android:exported="true" /><activity android:name="com.dreamglass.cos17.ClearAllCloseProbeActivity" android:exported="true" /><activity android:name="com.dreamglass.cos17.ShortcutLayerProbeActivity" android:exported="true" /><activity android:name="com.dreamglass.cos17.RecentsParticleProbeActivity" android:exported="true" /></application>

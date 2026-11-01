@@ -684,6 +684,7 @@ object BlurDrawHook {
          *  开关（Prefs.KEY_UNIFIED_CORNER_ENABLE）另在渲染期读，与本标记是「与」关系：
          *  两者都真才重算圆角，任一为假即维持元素自身圆角。 */
         val unifiedScope: Boolean = false,
+        val mediaSurface: Boolean = false,
     ) {
         /**
          * [doc/spec/99 clip∩bounds] 宿主 canvas 的 **clipBounds**（与 [autoBounds] 同坐标空间 =
@@ -2111,6 +2112,7 @@ object BlurDrawHook {
     /** COUIPopupListWindow.mMainMenuWrapper 字段缓存（null = 宿主无此字段，玻璃降级跳过） */
     @Volatile
     private var menuWrapperField: Field? = null
+    private val notificationPopupOwners = java.util.WeakHashMap<View, NotificationPopupGlassDrawable>()
     /** 菜单桥接目标（装饰中的菜单主体；show 时写、dismiss 时清） */
     private var menuBridgeHost: WeakReference<View>? = null
     @Volatile
@@ -4330,7 +4332,7 @@ object BlurDrawHook {
         } catch (t: Throwable) {
             Lg.e(TAG, "$logTag: posteffect getBounds failed", t); null
         }
-        val bounds = targetBounds ?: Rect(0, 0, hostView.width, hostView.height)
+        val bounds = targetBounds?.let(::Rect) ?: Rect(0, 0, hostView.width, hostView.height)
         if (bounds.width() <= 0 || bounds.height() <= 0) {
             logThrottled("$logTag-skip-empty-bounds", Log.DEBUG) { "$logTag: skip empty bounds $bounds, id=${System.identityHashCode(target)}" }
             return
@@ -4357,6 +4359,7 @@ object BlurDrawHook {
             // [doc/spec/101] 统一界面圆角作用域（注册期判定）：本链注册的是胶囊/胶囊耳/媒体横幅
             //（logTag = capsule/capsule-shard/capsuleEar/mediaCarousel），全在排除清单 → 恒 false。
             unifiedScope = isUnifiedCornerScope(hostView, target, logTag),
+            mediaSurface = isMediaSurface(hostView),
         )
         val previous = screenRegionMap[key]
         // [doc/spec/100 方案2] metaball 黏连参数快照（每帧刷新；拿不到 = null → 原路径零变化）
@@ -4836,7 +4839,7 @@ object BlurDrawHook {
         } catch (t: Throwable) {
             Lg.e(TAG, "$logTag: getBounds(posteffect) failed", t); null
         }
-        val bounds = targetBounds ?: autoBounds ?: Rect(0, 0, hostView.width, hostView.height)
+        val bounds = (targetBounds ?: autoBounds)?.let(::Rect) ?: Rect(0, 0, hostView.width, hostView.height)
         if (bounds.width() <= 0 || bounds.height() <= 0) {
             logThrottled("$logTag-skip-empty-bounds", Log.DEBUG) { "$logTag: skip empty bounds auto=$autoBounds target=$targetBounds, id=${System.identityHashCode(target)}" }
             return false
@@ -4885,6 +4888,7 @@ object BlurDrawHook {
             // [doc/spec/101] 统一界面圆角作用域（注册期判定）：本链覆盖 shade 面板层元素（QS tile/
             // seekbar/卡片等，logTag="map"）与侧滑按钮（logTag="swipe"，排除清单兜底）。
             unifiedScope = isUnifiedCornerScope(hostView, target, logTag),
+            mediaSurface = isMediaSurface(hostView),
         )
         val previous = screenRegionMap[key]
         // [doc/spec/99] 每次绘制刷新 clip（父容器 clip 随动画/布局逐帧可能变）：map 快照 + 新 entry
@@ -7909,7 +7913,11 @@ object BlurDrawHook {
                 Lg.w(TAG, "notif-popup: field $FIELD_MENU_MAIN_WRAPPER not found, glass degraded")
                 null
             }
-            val method = clazz.getMethod(METHOD_SHOW_VIEW_BOOL, View::class.java, Boolean::class.javaPrimitiveType)
+            // COS17 also calls the four-argument overload directly; hook the implementation,
+            // not only its tiny/inlinable two-argument forwarding method.
+            val method = runCatching { clazz.getMethod(METHOD_SHOW_VIEW_BOOL, Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType, View::class.java, Boolean::class.javaPrimitiveType) }
+                .getOrElse { clazz.getMethod(METHOD_SHOW_VIEW_BOOL, View::class.java, Boolean::class.javaPrimitiveType) }
             api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
@@ -7920,6 +7928,21 @@ object BlurDrawHook {
                         Lg.e(TAG, "notif-popup: glass apply error", t)
                     }
                     result
+                }
+            api.deoptimize(method)
+            clazz.declaredMethods.filter { it.name==METHOD_SHOW_VIEW_BOOL }.forEach { runCatching { api.deoptimize(it) } }
+            // The COUI theme/material controller can replace the wrapper background after
+            // show(), discarding our attachment. Retain its latest drawable for restoration.
+            api.hook(View::class.java.getDeclaredMethod("setBackgroundDrawable",Drawable::class.java))
+                .setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                    val owner=notificationPopupOwners[chain.getThisObject() as? View]
+                    val incoming=chain.getArg(0) as? Drawable
+                    if(owner!=null && incoming!==owner && notificationPopupGlassEnabled()) {
+                        owner.orig=incoming
+                        val args=chain.getArgs().toTypedArray();args[0]=owner
+                        RuntimeDiagnostics.mark("notification_popup_theme","已保留菜单玻璃，接管 COUI 主题背景重置")
+                        chain.proceed(args)
+                    } else chain.proceed()
                 }
             notificationPopupMounted = true
             Lg.i(TAG, "Notification popup glass mounted: $CLASS_COUI_POPUP_LIST_WINDOW#$METHOD_SHOW_VIEW_BOOL(View,boolean)")
@@ -7971,11 +7994,14 @@ object BlurDrawHook {
         if (notificationPopupGlassEnabled()) {
             if (bg is NotificationPopupGlassDrawable) return
             val corner = resolveMenuCornerPx(wrapper)
-            wrapper.background = NotificationPopupGlassDrawable(wrapper, bg, corner)
+            val glass=NotificationPopupGlassDrawable(wrapper, bg, corner)
+            wrapper.background = glass
+            notificationPopupOwners[wrapper]=glass
             menuBridgeHost = WeakReference(wrapper)
             menuBridgeHostAtMs = SystemClock.uptimeMillis()
             Lg.i(TAG, "notif-popup: glass installed on ${wrapper.javaClass.simpleName} corner=$corner")
         } else if (bg is NotificationPopupGlassDrawable) {
+            notificationPopupOwners.remove(wrapper)
             wrapper.background = bg.orig
         }
     }
@@ -7989,6 +8015,7 @@ object BlurDrawHook {
             null
         }
         if (bg is NotificationPopupGlassDrawable) {
+            notificationPopupOwners.remove(wrapper)
             wrapper.background = bg.orig
             Lg.i(TAG, "notif-popup: glass removed on ${wrapper.javaClass.simpleName}")
         }
@@ -8077,14 +8104,17 @@ object BlurDrawHook {
 
     /** 菜单卡背景 drawable：开关开 → 液态玻璃；关 → 原背景（纯色 surface shape）。 */
     private class NotificationPopupGlassDrawable(
-        private val host: View,
-        val orig: Drawable?,
+        host: View,
+        var orig: Drawable?,
         private val cornerPx: Float,
     ) : Drawable() {
+        private val target=WeakReference(host)
         override fun draw(canvas: Canvas) {
             if (BlurDrawHook.notificationPopupGlassEnabled()) {
                 try {
+                    val host=target.get() ?: return
                     BlurDrawHook.renderNotificationPopupGlass(canvas, host, cornerPx)
+                    RuntimeDiagnostics.mark("notification_popup_draw","通知菜单背景已进入玻璃绘制入口")
                     return
                 } catch (t: Throwable) {
                     Lg.e(BlurDrawHook.TAG, "notif-popup: glass draw failed", t)
@@ -13121,7 +13151,28 @@ object BlurDrawHook {
      * @param entry screenRegionMap 条目（maskRect 兜底来源；仅 swipe 注册时设置）
      * @param screenRegion 渲染区域（reconcileRegion 对齐后，扩张坐标系）
      */
+    private fun isMediaSurface(host: View): Boolean {
+        var cursor: View? = host
+        repeat(8) {
+            val view = cursor ?: return false
+            var type: Class<*>? = view.javaClass
+            while (type != null && type != View::class.java) {
+                if (MediaSurfaceGeometry.owns(type.name)) return true
+                type = type.superclass
+            }
+            cursor = view.parent as? View
+        }
+        return false
+    }
+
     private fun computeRealGeometry(bounds: Rect, entry: RegionEntry, screenRegion: RectF): RealGeometry {
+        if (entry.mediaSurface) {
+            MediaSurfaceGeometry.resolve(bounds.left, bounds.top, bounds.right, bounds.bottom)?.let { media ->
+                // The ROM already clips the draw path. Rebuilding a smaller rounded viewport
+                // from that clip moves the rim inward while the native media controls stay put.
+                return RealGeometry(RectF(0f, 0f, media.width, media.height), 0f, 0f, null, screenRegion)
+            }
+        }
         // ============ [doc/spec/100 方案2] metaball 元素：撤销 viewport 收缩 ============
         // `MetaBallBlurDrawable.setBounds`（反编译 :264-271）刻意把 bounds 左右（blendMode=0）或上下
         // （=1）各扩 `boundsExtension = BLEND_COLOR_RANGE(55) + blendRange`（真机 69px）——
@@ -13535,6 +13586,7 @@ object BlurDrawHook {
                 parallaxX = pick(Prefs.KEY_PARALLAX_X, m.parallaxX),
                 parallaxY = pick(Prefs.KEY_PARALLAX_Y, m.parallaxY),
                 surfacePolish = usePolishedMaterial(elementId),
+                compactOptics = Prefs.compactOpticsEnabled(api),
             )
         } catch (t: Throwable) {
             Lg.e(TAG, "buildParams: prefs float read failed, use defaults", t)

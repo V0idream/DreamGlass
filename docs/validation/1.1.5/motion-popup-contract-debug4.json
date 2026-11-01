@@ -1,0 +1,25 @@
+{
+  "verifiedAgainstExtractedComponents": true,
+  "contracts": {
+    "ma.r0": [
+      "run()V"
+    ],
+    "gi.c": [
+      "g(Ljava/lang/Runnable;)V"
+    ],
+    "com.android.launcher3.anim.light.AppLaunchAnimUtil$getLightWindowAnimation$1": [
+      "onUpdate(F)V"
+    ],
+    "hl.a$a": [
+      "a(Lhl/a;FFFI)V"
+    ],
+    "com.android.systemui.statusbar.notification.row.ExpandableNotificationRow": [
+      "onAppearAnimationStarted(Z)V",
+      "onAppearAnimationFinished(ZZ)V"
+    ],
+    "com.android.systemui.statusbar.notification.row.ActivatableNotificationView": [
+      "getAppearAnimationFraction()F"
+    ]
+  },
+  "physicalDebug4Verified": false
+}

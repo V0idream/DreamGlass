@@ -61,4 +61,18 @@ public class SceneGlassCompatibilityTest {
             assertEquals(0,KeyguardGlassPolicy.INSTANCE.role(List.of(name),"clock",false,false,false,1,1,true));
         assertEquals(0,KeyguardGlassPolicy.INSTANCE.role(List.of("vendor.theme.Clock"),"fingerprint",false,false,false,1,1,true));
     }
+
+    @Test public void opticalSwitchPreservesParametersAndInvalidatesEffectCache() {
+        var values=Map.of(Prefs.KEY_REFRACTION_AMOUNT,52f,Prefs.KEY_BLUR_RADIUS,11f);
+        var classic=SharedGlassParams.INSTANCE.resolve(values,"default",null,320,160,80,false);
+        var modern=SharedGlassParams.INSTANCE.resolve(values,"default",null,320,160,80,false,true);
+        assertFalse(classic.getCompactOptics());assertTrue(modern.getCompactOptics());
+        assertEquals(classic.getRefractionAmount(),modern.getRefractionAmount(),0);
+        assertEquals(classic.getBlurRadius(),modern.getBlurRadius(),0);
+        assertNotEquals(classic.hashCode(),modern.hashCode());
+    }
+    @Test public void opticalSwitchIsIndependentOfIosAndClassOverrides() {
+        var p=SharedGlassParams.INSTANCE.resolve(Collections.emptyMap(),IosGlassPreset.ID,Map.of(Prefs.KEY_HIGHLIGHT,.2f),200,200,100,true,true);
+        assertTrue(p.getCompactOptics());assertEquals(36,p.getRefractionAmount(),0);assertEquals(.2,p.getHighlight(),.0001);
+    }
 }

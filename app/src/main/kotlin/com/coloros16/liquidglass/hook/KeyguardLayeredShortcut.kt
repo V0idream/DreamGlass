@@ -57,12 +57,14 @@ internal object KeyguardLayeredShortcut {
             val native=view.drawable as? LayerDrawable ?: return
             if(native.numberOfLayers<3)return
             val background=native.getDrawable(0);val rect=background.bounds
-            if(rect.isEmpty || background.alpha==0)return
+            // COS17's native material deliberately clears the legacy background layer.
+            // That alpha is a renderer ownership flag, not the visibility of this button.
+            if(rect.isEmpty || view.imageAlpha==0)return
             val outer=canvas.save()
             try {
                 canvas.translate(view.paddingLeft.toFloat(),view.paddingTop.toFloat());canvas.concat(view.imageMatrix)
                 prepare(rect)
-                val alpha=background.alpha*drawAlpha/255
+                val alpha=view.imageAlpha*drawAlpha/255
                 val save=if(alpha<255)canvas.saveLayerAlpha(rect.left.toFloat(),rect.top.toFloat(),rect.right.toFloat(),rect.bottom.toFloat(),alpha) else canvas.save()
                 try {
                     canvas.translate(rect.left.toFloat(),rect.top.toFloat())

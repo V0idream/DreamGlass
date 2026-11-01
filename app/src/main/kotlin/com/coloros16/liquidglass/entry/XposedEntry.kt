@@ -201,6 +201,7 @@ class XposedEntry : XposedModule() {
             return
         }
         Lg.i(TAG, "installing hooks into $packageName")
+        com.coloros16.liquidglass.hook.SceneBackdropBlurHook.install(this, classLoader, packageName)
         when (packageName) {
             // SystemUI：Hook B 绘制替换 / Hook C 场景过滤（占位实现，保持现状）。
             // [2026-08-13 用户决定] BlurService 端全移除：模块不再干预 com.oplus.blur 进程，

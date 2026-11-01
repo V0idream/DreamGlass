@@ -11,6 +11,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
 import com.coloros16.liquidglass.hook.LauncherTiltCompat
+import com.coloros16.liquidglass.hook.LauncherTiltFrameScope
 import com.coloros16.liquidglass.hook.NotificationTiltCompat
 import java.io.File
 import org.json.JSONObject
@@ -82,21 +83,63 @@ class MotionProbeActivity:Activity() {
                         ui.postDelayed({ try {
                             check(finished==4 && card.rotationX==11f)
                             report.put("naturalEndRestoresTransform",true)
-                            projectionView(box)
+                            nativeTiming(box)
                         } catch(e:Throwable) { fail(e) } },600)
                     } catch(e:Throwable) { fail(e) } },100)
                 } catch(e:Throwable) { fail(e) }
             }
         } catch(e:Throwable) { fail(e) } },110)
     }
+    private fun nativeTiming(box:FrameLayout) {
+        var phase=.25f;var ended=0
+        val baseline=card.rotationX
+        card.visibility=View.INVISIBLE
+        val animation=NotificationTiltCompat.Animation(card,true,30f,0f,{true},{phase}) { ended++ }
+        animation.start()
+        ui.postDelayed({ try {
+            check(ended==0 && card.rotationX==baseline)
+            card.visibility=View.VISIBLE
+            ui.postDelayed({ try {
+                // Native progress remains at 25% beyond the old 450 ms limit.
+                check(ended==0 && card.rotationX>baseline)
+                report.put("hiddenStartDoesNotConsumeTilt",true).put("nativePhaseOutlivesFixedTimer",true)
+                phase=1f;card.invalidate()
+                ui.postDelayed({ try {
+                    check(ended==1 && card.rotationX==baseline)
+                    report.put("nativePhaseCompletionRestoresTransform",true)
+                    projectionView(box)
+                } catch(e:Throwable) {fail(e)} },100)
+            } catch(e:Throwable) {fail(e)} },500)
+        } catch(e:Throwable) {fail(e)} },180)
+    }
     private fun projectionView(box:FrameLayout) {
+        val scopes=LauncherTiltFrameScope();val tx=Any();val surface=Any()
+        val native=Matrix();val saved=FloatArray(9);val values=FloatArray(16)
+        var nativeCalls=0;var submitted=0
+        val result=scopes.run(tx,surface,{
+            nativeCalls++;native.setScale(.7f,.7f);check(scopes.matrixWritten(tx,surface))
+            // A later native write used to be able to replace an injected pose.
+            native.setScale(.88f,.92f);native.postTranslate(30f,20f)
+            check(scopes.matrixWritten(tx,surface));native.getValues(saved);"native-result"
+        },{
+            submitted++
+            check(LauncherTiltCompat.nativeProjection(values,.5f,1.5f,1f,320f,160f,320f,1f))
+        })
+        check(nativeCalls==1 && submitted==1 && result=="native-result")
+        val unchanged=FloatArray(9);native.getValues(unchanged);check(saved.contentEquals(unchanged))
+        check(!scopes.matrixWritten(tx,surface))
+        report.put("perTargetScopeSubmitsAfterFinalNativeAffine",true).put("nativeAffineAndReturnPreserved",true)
+        report.put("columnMajorNativePayloadRendered",true)
         box.addView(object:View(this) {
             val paint=Paint(Paint.ANTI_ALIAS_FLAG)
             override fun onDraw(c:Canvas) {
-                val values=FloatArray(16)
-                check(LauncherTiltCompat.projection(values,.5f,1.5f,1f,320f,160f,320f,1f))
-                val m=Matrix().apply { setValues(floatArrayOf(values[0],values[1],values[3],values[4],values[5],values[7],values[12],values[13],values[15])) }
-                c.translate(70f,70f);c.concat(m);paint.shader=LinearGradient(0f,0f,640f,320f,Color.CYAN,Color.BLUE,Shader.TileMode.CLAMP)
+                // Decode the exact column-major array submitted to OEM JNI, not the
+                // mathematical row-major helper which previously hid an ABI mismatch.
+                val m=Matrix().apply { setValues(floatArrayOf(values[0],values[4],values[12],values[1],values[5],values[13],values[3],values[7],values[15])) }
+                c.translate(70f,70f);c.concat(native)
+                paint.color=Color.LTGRAY;paint.style=Paint.Style.STROKE;paint.strokeWidth=2f
+                c.drawRoundRect(0f,0f,640f,320f,30f,30f,paint);paint.style=Paint.Style.FILL
+                c.concat(m);paint.shader=LinearGradient(0f,0f,640f,320f,Color.CYAN,Color.BLUE,Shader.TileMode.CLAMP)
                 c.drawRoundRect(0f,0f,640f,320f,30f,30f,paint);paint.shader=null
                 paint.color=Color.WHITE;paint.textSize=30f;c.drawText("Window projection · p=0.5",30f,90f,paint)
                 paint.style=Paint.Style.STROKE;paint.strokeWidth=2f

@@ -1,0 +1,29 @@
+{
+  "launcher": {
+    "sha256": "af89139f18857f5c9e130cd492f08dc1a3e26b131aec74490432b2c590ac972e",
+    "previousSha256": "af89139f18857f5c9e130cd492f08dc1a3e26b131aec74490432b2c590ac972e",
+    "identical": true,
+    "classes": 35223,
+    "added": 0,
+    "removed": 0,
+    "changed": 0,
+    "changedTargets": []
+  },
+  "systemui": {
+    "sha256": "e74869175495f8546f3fe052891d80d880b856356487f722b3ed35b3639f92a5",
+    "previousSha256": "a06bf8e0046a5e6a19347e09064e6ce8f79e0e963c78c8ce65f0fbf56d770e62",
+    "identical": false,
+    "classes": 73027,
+    "added": 0,
+    "removed": 0,
+    "changed": 0,
+    "changedTargets": [],
+    "changedMethodInstructions": [
+      {
+        "class": "com.oplus.systemui.keyguard.anim.OplusKeyguardAppearAnimControllerImpl$PanoramicAodAppearAnimRunner$playPanoramicRemoteAnimation$3",
+        "method": "onAnimationUpdate(Landroid/animation/ValueAnimator;)V"
+      }
+    ],
+    "hookTargetsHaveSameSignaturesAndInstructions": true
+  }
+}

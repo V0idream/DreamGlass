@@ -420,6 +420,14 @@ class SettingsActivity : AppCompatActivity() {
         // [spec/89] 顶部实时效果预览：滑杆拖动中即时刷新（落盘仍走 onStopTrackingTouch，配置写入时机不变）。
         // 视差 X/Y 不喂预览 —— 它会把采样区整体移出预览框，画面会变成空白玻璃（见 doc/spec/89）。
         val preview: LiquidGlassPreviewView? = view.findViewById(R.id.materialPreview)
+        val opticsSwitch=view.findViewById<Switch>(R.id.switchCompactOptics)
+        val opticsListener=CompoundButton.OnCheckedChangeListener { _,checked ->
+            writePrefBoolean(Prefs.KEY_COMPACT_OPTICS,checked)
+            preview?.let { it.compactOptics=checked;it.refresh() }
+        }
+        refreshBooleanSwitch(opticsSwitch,opticsListener,Prefs.KEY_COMPACT_OPTICS,Prefs.DEFAULT_COMPACT_OPTICS)
+        preview?.compactOptics=opticsSwitch.isChecked
+
         // 顶栏预设：选中预设后下方滑杆改读/改写该预设的参数键，未设的键回落全局值
         val glassPresets = readGlassPresets()
         val presetId = normalizeSelectedPresetId(glassPresets)
@@ -1092,6 +1100,13 @@ class SettingsActivity : AppCompatActivity() {
 
     /** 背景与抓屏：模式 / 即时抓屏速率 / 最大抓屏间隔 / 清晰度 / 失败重试 / 区域级抓屏。 */
     private fun bindBackground(view: View) {
+        bindGlassSwitch(view,R.id.switchSceneBackdropBlur,
+            com.coloros16.liquidglass.hook.SceneBlurPolicy.KEY_ENABLED,false)
+        bindIntSeekBarStep(seek=view.findViewById(R.id.seekSceneBackdropBlur),
+            valueText=view.findViewById(R.id.sceneBackdropBlurValue),
+            key=com.coloros16.liquidglass.hook.SceneBlurPolicy.KEY_STRENGTH,default=30,
+            max=100,step=1,offset=0,
+            format={v->getString(R.string.settings_scene_blur_value,v)})
         // 模式：0=即时抓屏 1=变化抓屏 2=静态（默认 1；仅变化抓屏显示最大抓屏间隔）
         val modeSpinner = view.findViewById<Spinner>(R.id.spinnerCaptureMode)
         modeSpinner.adapter = ArrayAdapter(
@@ -2245,6 +2260,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
 
     /** 下列 12 项由 `bindFloatSeekBar(onChanged=...)` 实时喂入（见 [SettingsActivity.bindMaterial]）；
      *  折射区域**模式**由模式 Chip 组喂入（[refractionHeightMode]）。 */
+    var compactOptics = Prefs.DEFAULT_COMPACT_OPTICS
     var blurRadius = Prefs.DEFAULT_BLUR_RADIUS
     var vibrancy = Prefs.DEFAULT_VIBRANCY
     var highlightFalloff = Prefs.DEFAULT_HIGHLIGHT_FALLOFF
@@ -2389,6 +2405,7 @@ class LiquidGlassPreviewView @JvmOverloads constructor(
             parallaxX = 0f,
             parallaxY = 0f,
             surfacePolish = true,
+            compactOptics = compactOptics,
         )
         // 卡片窗口在样图中的区域（bitmap 坐标）；AGSL 侧 srcCoord = srcRect.xy + coord/uViewport * srcRect.zw
         var srcRect = RectF(cardLeft + scrollX, cardTop, cardLeft + scrollX + cw, cardTop + ch)

@@ -1,0 +1,2 @@
+--------- beginning of main
+11-01 04:29:02.302  1904  1904 I ClassicOpticsProbe: PASS {"profiles":2,"shapeAndVariantComparisons":24,"v107ReferenceMaxChannelDelta":0,"newerOpticsDifferentPixels":277644,"nonemptyReferencePixels":1168752,"inputConfig":"RGBA_F16","baseAndMetaballVariantsCompiled":true,"physicalDeviceTested":false}

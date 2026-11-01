@@ -1,0 +1,10 @@
+{
+  "nativeJavaArrayCopiedWithoutTranspose": true,
+  "clientTransactionMatrixType": "android::details::TMat44<float>",
+  "nativeStorage": "column-major",
+  "producerMathStorage": "row-major",
+  "conversionBeforeNativeSubmission": true,
+  "debugProbeDecodesActualNativePayload": true,
+  "physicalDebug5Verified": false,
+  "matrixDefinitionReference": "https://android.googlesource.com/platform/frameworks/native/+/refs/heads/main/libs/math/include/math/mat4.h"
+}

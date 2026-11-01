@@ -22,7 +22,7 @@ object SharedGlassParams {
             Prefs.KEY_PARALLAX_Y to d.parallaxY,
             Prefs.KEY_REFRACTION_HEIGHT_RATIO to Prefs.DEFAULT_REFRACTION_HEIGHT_RATIO)
     }
-    data class Snapshot(val values:Map<String,Float>,val preset:String)
+    data class Snapshot @JvmOverloads constructor(val values:Map<String,Float>,val preset:String,val compactOptics:Boolean=false)
     fun read(prefs:SharedPreferences):Snapshot {
         val map=defaults.mapValues { (key,value) ->
             val n=try { prefs.getFloat(key,value) } catch(_:ClassCastException) { prefs.getInt(key,value.toInt()).toFloat() }
@@ -30,10 +30,11 @@ object SharedGlassParams {
         }.toMutableMap()
         if(Prefs.readIntCompat(prefs,Prefs.KEY_REFRACTION_HEIGHT_MODE,Prefs.REFRACTION_HEIGHT_MODE_RATIO)==Prefs.REFRACTION_HEIGHT_MODE_ABS)
             map[Prefs.KEY_REFRACTION_HEIGHT_PX]=try { prefs.getFloat(Prefs.KEY_REFRACTION_HEIGHT_PX,Prefs.DEFAULT_REFRACTION_HEIGHT_PX) } catch(_:ClassCastException) { prefs.getInt(Prefs.KEY_REFRACTION_HEIGHT_PX,64).toFloat() }
-        return Snapshot(map,prefs.getString(Prefs.KEY_BUILTIN_MATERIAL_PRESET,Prefs.GLASS_PRESET_DEFAULT_ID) ?: Prefs.GLASS_PRESET_DEFAULT_ID)
+        return Snapshot(map,prefs.getString(Prefs.KEY_BUILTIN_MATERIAL_PRESET,Prefs.GLASS_PRESET_DEFAULT_ID) ?: Prefs.GLASS_PRESET_DEFAULT_ID, prefs.getBoolean(Prefs.KEY_COMPACT_OPTICS,Prefs.DEFAULT_COMPACT_OPTICS))
     }
+    @JvmOverloads
     fun resolve(values:Map<String,Float>,preset:String?,custom:Map<String,Float>?,
-        width:Float,height:Float,corner:Float,button:Boolean):LiquidGlassShader.Params {
+        width:Float,height:Float,corner:Float,button:Boolean,compactOptics:Boolean=false):LiquidGlassShader.Params {
         val ov=IosGlassPreset.resolve(preset,true,custom)
         fun pick(key:String)=ov?.get(key)?.takeIf { it.isFinite() } ?: values[key]?.takeIf { it.isFinite() } ?: defaults[key] ?: 0f
         val blur=if(button && pick(Prefs.KEY_BUTTON_BLUR_RADIUS)>=0f)pick(Prefs.KEY_BUTTON_BLUR_RADIUS) else pick(Prefs.KEY_BLUR_RADIUS)
@@ -47,6 +48,6 @@ object SharedGlassParams {
             highlightFloor=pick(Prefs.KEY_HIGHLIGHT_FLOOR),highlightInnerAtt=pick(Prefs.KEY_HIGHLIGHT_INNER_ATT),
             innerGlow=pick(Prefs.KEY_INNER_GLOW).coerceIn(0f,1f),vibrancy=pick(Prefs.KEY_VIBRANCY).coerceIn(1f,3f),
             lightAngleDegrees=pick(Prefs.KEY_LIGHT_ANGLE),parallaxX=pick(Prefs.KEY_PARALLAX_X),parallaxY=pick(Prefs.KEY_PARALLAX_Y),
-            surfacePolish=true,sourcePreblurred=true)
+            surfacePolish=true,sourcePreblurred=true,compactOptics=compactOptics)
     }
 }

@@ -38,3 +38,13 @@ Android Developers/AOSP硬件位图示例顺序用于HardwareBackdropBlur和Part
 保留系统原字体/子视图/点击以及深度遮挡所在的原视图层级。未复制主题插件或用户截图素材。
 实际RenderEffect快照/坐标、开关恢复与GPU像素响应均纳入合成场景测试；厂商主题命中仍需真机。
 最新同步 a8d3f84、4360a02、5beac91，包括负一屏。详见 docs/KEYGUARD_GLASS.md。
+
+
+## 2026-11-01 — classic optical response
+
+DreamGlass restores its v1.0.7 refraction band, circleMap displacement and rim/volume finish as the default shared AGSL material. Current GPU/F16 backdrop handling, linear sampling, lifecycle guards and compatibility routes are retained; existing saved parameter values are not reset. Synthetic GPU comparisons against the v1.0.7 reference cover default and IOS profiles across 24 geometry/variant cases. No new external dependency was added.
+
+
+## 2026-11-01 — selectable optics and COS17 media geometry
+
+Preserved the v1.1.4 compact material behind a global opt-in switch; classic v1.0.7 remains the default. Shared shader callers and the preview receive the same selection without resetting saved parameters. Media card clipping no longer changes the optical viewport or interprets scroll offsets as symmetric padding. Added bounded final-transaction tilt submission with merge/close handling and a visible-phase notification envelope. GPU regression assets are synthetic; proprietary binaries, private device captures and signing keys are excluded. No new external dependency was added.

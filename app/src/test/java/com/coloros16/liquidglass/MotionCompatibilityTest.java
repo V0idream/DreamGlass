@@ -76,7 +76,9 @@ public class MotionCompatibilityTest {
         }
     }
     @Test public void notificationEnvelopeSettlesAndRespectsAngleSetting() {
-        assertEquals(12,NotificationTiltCompat.INSTANCE.angle(0,true,12),0);
+        assertEquals(0,NotificationTiltCompat.INSTANCE.angle(0,true,12),0);
+        assertEquals(12,NotificationTiltCompat.INSTANCE.angle(.5f,true,12),.0001);
+        assertTrue(NotificationTiltCompat.INSTANCE.angle(.4f,true,12)>10);
         assertEquals(0,NotificationTiltCompat.INSTANCE.angle(1,true,12),0);
         assertEquals(0,NotificationTiltCompat.INSTANCE.angle(0,false,12),.0001);
         assertEquals(0,NotificationTiltCompat.INSTANCE.angle(1,false,12),.0001);

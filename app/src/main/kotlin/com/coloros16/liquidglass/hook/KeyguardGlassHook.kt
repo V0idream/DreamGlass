@@ -32,8 +32,12 @@ object KeyguardGlassHook {
     private val ui=Handler(Looper.getMainLooper())
     private val entries=WeakHashMap<View,Entry>()
     private val nativeEffects=WeakHashMap<View,RenderEffect?>()
+    private val asyncEffects=WeakHashMap<View,Boolean>()
+    private var asyncEffectSetter:java.lang.reflect.Method?=null
+    private val deoptimizedGlyphs=HashSet<Class<*>>()
     private val pendingLayout=WeakHashMap<View,Boolean>()
     private val pluginRoots=WeakHashMap<View,Int>()
+    private val nativeMounts=WeakHashMap<View,Boolean>()
     private val watchedRoots=WeakHashMap<View,Boolean>()
     private val visibleRect=Rect() // UI-thread scratch, not allocated per glyph/frame.
     private var nativeWallpaper:WeakReference<Bitmap>?=null
@@ -62,10 +66,12 @@ object KeyguardGlassHook {
     fun install(api:XposedInterface,loader:ClassLoader) {
         if(mounted || Application.getProcessName()!="com.android.systemui")return
         this.api=api
+        KeyguardGlyphDraw.install(api)
         try {
             // Install discovery even when disabled: the next screen-on can discover an already
             // attached plugin after enabling. Disabled consider() returns before any tree scan.
             installPluginRoutes(api,loader)
+            installAsyncGlyphRoute(api,loader)
             api.hook(View::class.java.getDeclaredMethod("onAttachedToWindow")).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                 val result=chain.proceed()
                 guarded { (chain.getThisObject() as? View)?.let(::consider) };result
@@ -81,6 +87,7 @@ object KeyguardGlassHook {
                     if(view!=null) {
                         if(nativeEffects.size>=128)nativeEffects.clear()
                         nativeEffects[view]=native
+                        asyncEffects[view]=false
                         entries[view]?.let { entry -> entry.originalEffect=native
                             if(entry.applied)replacement=entry.compose(native)
                         }
@@ -124,6 +131,44 @@ object KeyguardGlassHook {
             RuntimeDiagnostics.mark("keyguard_hook","锁屏视图发现入口已安装；实际命中与效果待核验")
         } catch(error:Throwable) { failure(error) }
     }
+    /** Theme clocks can write directly to mNativeRenderNode and bypass View.setRenderEffect.
+     * Compose at that actual setter too, and restore through the last native setter route.
+     * Never replace the theme plugin, glyph painter, transition blur or AOD renderer.
+     */
+    private fun installAsyncGlyphRoute(api:XposedInterface,loader:ClassLoader) {
+        runCatching {
+            val type=Class.forName("com.oplus.animation.OplusAsyncAnimatorUtils",false,loader)
+            val setter=type.getDeclaredMethod("setRenderEffect",View::class.java,RenderEffect::class.java)
+            check(java.lang.reflect.Modifier.isStatic(setter.modifiers) && setter.returnType==Boolean::class.javaPrimitiveType)
+            asyncEffectSetter=setter
+            api.hook(setter).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                if(ownChange || Looper.myLooper()!=Looper.getMainLooper())return@intercept chain.proceed()
+                val view=chain.getArg(0) as? View ?: return@intercept chain.proceed()
+                if(!view.javaClass.name.contains("keyguard",true))return@intercept chain.proceed()
+                val native=chain.getArg(1) as? RenderEffect
+                var replacement=native
+                guarded {
+                    if(nativeEffects.size>=128)nativeEffects.clear()
+                    nativeEffects[view]=native;asyncEffects[view]=true
+                    entries[view]?.takeIf { it.role==KeyguardGlassPolicy.TEXT }?.let { entry ->
+                        entry.originalEffect=native
+                        if(entry.applied)replacement=entry.compose(native)
+                    }
+                }
+                val args=chain.getArgs().toTypedArray();args[1]=replacement
+                val result=chain.proceed(args)
+                RuntimeDiagnostics.mark("keyguard_theme_effect","已命中主题时钟原生 RenderNode 效果入口")
+                result
+            }
+            api.deoptimize(setter)
+        }.onFailure { Lg.w("DreamGlass","theme async effect route unavailable; keep View route",it) }
+    }
+    private fun setGlyphEffect(view:View,effect:RenderEffect?) {
+        view.setRenderEffect(effect)
+        // A direct native update does not update View's Java-side effect cache. Keep both
+        // in sync so returning from a theme transition cannot retain an obsolete effect.
+        if(asyncEffects[view]==true)asyncEffectSetter?.invoke(null,view,effect)
+    }
     private fun installPluginRoutes(api:XposedInterface,loader:ClassLoader) {
         try {
             val base=Class.forName("com.oplus.keyguard.plugin.AbstractSubPlugin",false,loader)
@@ -136,6 +181,7 @@ object KeyguardGlassHook {
                 val kind=when { clock.isInstance(chain.getThisObject())->KeyguardGlassPolicy.TEXT
                     widget.isInstance(chain.getThisObject())->KeyguardGlassPolicy.CARD;else->KeyguardGlassPolicy.NONE }
                 if(target!=null && kind!=KeyguardGlassPolicy.NONE)ui.post { guarded {
+                    if(kind==KeyguardGlassPolicy.TEXT)installNativeMounts(target)
                     pluginRoots[target]=kind
                     watchRoot(target)
                     RuntimeDiagnostics.mark("keyguard_plugin_view_$kind","插件已返回实际视图：${target.javaClass.simpleName}")
@@ -302,13 +348,29 @@ object KeyguardGlassHook {
         }
         return KeyguardGlassPolicy.NONE
     }
+    private fun installNativeMounts(view:View) {
+        api?.let { KeyguardNativeMounts.install(it,view.javaClass.classLoader ?: return,::registerNativeMount) }
+    }
+    private fun registerNativeMount(view:View) { guarded {
+        if(nativeMounts.put(view,true)!=true) {
+            // Promote from leaf to the explicit clock/date mount. One material per
+            // subtree: native colouring happens first, our refraction happens last.
+            entries.keys.toList().filter { child ->
+                var p:View?=child;var inside=false
+                while(p!=null) { if(p===view) { inside=true;break };p=p.parent as? View };inside
+            }.forEach(::removeEntry)
+        }
+        consider(view)
+    } }
     private fun consider(view:View) {
         if(Looper.myLooper()!=Looper.getMainLooper() || entries.containsKey(view) || entries.size>=64 || !view.isAttachedToWindow)return
         preferences();if(!enabled)return
+        if(view.javaClass.name.startsWith("com.oplus.keyguard.clock.digital."))installNativeMounts(view)
         if(KeyguardGlassPolicy.isClockGlyphRoot(view.javaClass.name) && view.background?.opacity!=PixelFormat.OPAQUE)
             pluginRoots[view]=KeyguardGlassPolicy.TEXT
         val path=names(view)
-        val trust=trusted(view)
+        val nativeMount=nativeMounts[view]==true
+        val trust=if(nativeMount)KeyguardGlassPolicy.TEXT else trusted(view)
         if(trust==KeyguardGlassPolicy.NONE && path.none { it.contains("keyguard",true) })return
         var parent=view.parent as? View
         while(parent!=null) {
@@ -352,14 +414,22 @@ object KeyguardGlassHook {
         // Keep it as a discovery root and attach materials only to its actual glyph descendants.
         val fullScreenGroup=view is ViewGroup && view.width>=view.resources.displayMetrics.widthPixels*.9f &&
             view.height>=view.resources.displayMetrics.heightPixels*.65f
-        if(fullScreenGroup)return
-        val glyphCandidate=view is TextView || KeyguardGlassPolicy.isClockGlyphRoot(view.javaClass.name) ||
+        if(fullScreenGroup && !nativeMount)return
+        val glyphCandidate=nativeMount || view is TextView || KeyguardGlassPolicy.isClockGlyphRoot(view.javaClass.name) ||
             view !is ViewGroup && listOf("clock","digit","time","hour","minute").any { (view.javaClass.simpleName+resourceId(view)).contains(it,true) }
         val role=KeyguardGlassPolicy.role(path,resourceId(view),view is TextView,view.background!=null,
             view.isClickable,view.width.toFloat()/view.height,
             if(trust==KeyguardGlassPolicy.TEXT && !glyphCandidate)KeyguardGlassPolicy.NONE else trust,
             view !is ViewGroup && view !is SurfaceView && view !is TextureView)
         if(role==KeyguardGlassPolicy.NONE || view is android.widget.EditText)return
+        if(role==KeyguardGlassPolicy.TEXT && deoptimizedGlyphs.size<32 && deoptimizedGlyphs.add(view.javaClass)) {
+            var type:Class<*>?=view.javaClass
+            while(type!=null && !type.name.startsWith("android.")) {
+                type.declaredMethods.filter { it.name=="applyRenderEffectInternal" || it.name=="setBlurRatio" }
+                    .forEach { runCatching { api?.deoptimize(it) } }
+                type=type.superclass
+            }
+        }
         if(role==KeyguardGlassPolicy.CARD || role==KeyguardGlassPolicy.TEXT) {
             entries.keys.toList().filter { child ->
                 var p:View?=child.parent as? View;var inside=false
@@ -488,7 +558,7 @@ object KeyguardGlassHook {
     }
     private class Entry(view:View,val role:Int):ViewTreeObserver.OnPreDrawListener,View.OnAttachStateChangeListener {
         val view=WeakReference(view)
-        val attachment=KeyguardGlassAttachment(view,role,nativeEffects[view],::change)
+        val attachment=KeyguardGlassAttachment(view,role,nativeEffects[view],::change,::setGlyphEffect,nativeMounts[view]==true)
         var originalEffect:RenderEffect?
             get()=attachment.originalEffect
             set(value) { attachment.originalEffect=value }
@@ -533,6 +603,7 @@ object KeyguardGlassHook {
                 if(first) {
                     RuntimeDiagnostics.mark("keyguard_material","锁屏角色=${role}已挂载GPU材质；真机外观待确认")
                     RuntimeDiagnostics.mark("keyguard_material_$role","${v.javaClass.simpleName}#${resourceId(v)} ${v.width}x${v.height}")
+                    if(nativeMounts[v]==true)RuntimeDiagnostics.mark("keyguard_native_mount_applied","主题最终父层已合成玻璃：${v.javaClass.simpleName}#${resourceId(v)} ${v.width}x${v.height}")
                     if(role==KeyguardGlassPolicy.TEXT && resourceId(v).contains("digital_time"))
                         RuntimeDiagnostics.update("keyguard_digits","当前数字 GPU 材质已应用：${v.width}x${v.height}")
                     if(com.coloros16.liquidglass.BuildConfig.DEBUG && role==KeyguardGlassPolicy.TEXT && resourceId(v).contains("digital_time"))runCatching {
@@ -551,7 +622,7 @@ object KeyguardGlassHook {
         override fun onViewAttachedToWindow(v:View) { }
         override fun onViewDetachedFromWindow(v:View) { guarded {
             restore();v.viewTreeObserver.removeOnPreDrawListener(this);v.removeOnAttachStateChangeListener(this)
-            entries.remove(v);nativeEffects.remove(v)
+            entries.remove(v);nativeEffects.remove(v);asyncEffects.remove(v);nativeMounts.remove(v)
         } }
     }
 }

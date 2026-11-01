@@ -1,0 +1,2 @@
+--------- beginning of main
+10-31 21:51:42.253  2136  2136 I ShortcutLayerProbe: PASS: actual native-layer compositor draws glass with transparent native background; respects image alpha; foreground and native objects retained; launch fallback; disable restores native

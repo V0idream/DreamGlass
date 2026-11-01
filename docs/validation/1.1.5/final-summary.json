@@ -1,0 +1,60 @@
+{
+  "version": "1.1.5",
+  "versionCode": 1001005,
+  "unitTests": {
+    "tests": 148,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Error": 0,
+    "Warning": 303
+  },
+  "gpuProbes": {
+    "apkSha256": "2ae8d99b46eb388237e7d40d22a35cb23a15c6636823d6251cf9c2dd1b0549a3",
+    "probes": {
+      "ClassicOpticsProbe": "PASS",
+      "MediaGeometryProbe": "PASS",
+      "MotionProbe": "PASS",
+      "DreamGlassQualityProbe": "PASS",
+      "SceneGlassProbe": "PASS",
+      "DreamGlassStabilityProbe": "PASS"
+    },
+    "physicalDeviceTested": false
+  },
+  "opticsGpu": {
+    "profiles": 2,
+    "shapeAndVariantComparisons": 24,
+    "v114ReferenceMaxChannelDelta": 0,
+    "selectableProfilesCompared": 48,
+    "v107ReferenceMaxChannelDelta": 0,
+    "newerOpticsDifferentPixels": 277644,
+    "nonemptyReferencePixels": 1168752,
+    "inputConfig": "RGBA_F16",
+    "baseAndMetaballVariantsCompiled": true,
+    "physicalDeviceTested": false
+  },
+  "studioUi": {
+    "classicDefault": true,
+    "modernToggleResponded": true,
+    "frameworkAbsentPreviewOnly": true,
+    "physicalDeviceTested": false,
+    "previewPixelsChanged": 357141
+  },
+  "installation": {
+    "version": "1.1.5",
+    "versionCode": 1001005,
+    "apkSha256": "8fd4263150e8dd6daebaa359e80502135dddaf91355e191282b70700a991604c",
+    "ordinaryAdbInstallSucceeded": true,
+    "installedApkHashVerified": true,
+    "configurationPreserved": true,
+    "systemUiRestarted": false,
+    "launcherRestarted": false,
+    "physicalMusicAppearanceVerified": false,
+    "physicalWindowTiltVerified": false
+  },
+  "deviceVisualEffectsVerified": false,
+  "syntheticPicturesReviewed": true,
+  "proprietaryBinariesOrPrivateScreenshotsIncluded": false
+}

@@ -118,7 +118,7 @@ class KeyguardGlassProbeActivity:Activity() {
     customAlphaDelta=maxOf(customAlphaDelta,kotlin.math.abs(reference-actual))
    }
    check(customCoverage>20000 && customAlphaDelta<=1) { "Custom glyph coverage $customCoverage alpha delta $customAlphaDelta identity/native=$identityNativeDelta glass/native=$glassNativeDelta" }
-   val report=glyphMask().put("customClockGlyphPixels",customCoverage).put("customClockAlphaMaxDeltaVsIdentityEffect",customAlphaDelta).put("customClockIdentityVsNativeAlphaMaxDelta",identityNativeDelta).put("customClockGlassVsNativeAlphaMaxDelta",glassNativeDelta).put("customCanvasClockInPluginRoot",targets[0].first is FrameLayout).put("cardForegroundRetention",retained.toDouble()/white).put("clickCallbacksPreserved",clicks).put("paddingPreserved",true)
+   val report=glyphMask().put("nativeGlyphDrawSlot",glyphDrawSlot()).put("nativeParentComposition",parentComposition()).put("customClockGlyphPixels",customCoverage).put("customClockAlphaMaxDeltaVsIdentityEffect",customAlphaDelta).put("customClockIdentityVsNativeAlphaMaxDelta",identityNativeDelta).put("customClockGlassVsNativeAlphaMaxDelta",glassNativeDelta).put("customCanvasClockInPluginRoot",targets[0].first is FrameLayout).put("cardForegroundRetention",retained.toDouble()/white).put("clickCallbacksPreserved",clicks).put("paddingPreserved",true)
    attachments.forEach {it.restore()};root.invalidate()
    ui.postDelayed({try {
     val restored=render(root);save(restored,"restored.png")
@@ -129,6 +129,98 @@ class KeyguardGlassProbeActivity:Activity() {
     File(output,"summary.json").writeText(report.toString(2));Log.i("KeyguardGlassProbe","PASS "+report);label.text="PASS · GPU lockscreen glass / native restored"
    } catch(t:Throwable){fail(t)}},250)
   } catch(t:Throwable){fail(t)}},300)
+ }
+ private fun parentComposition():JSONObject {
+  val parent=FrameLayout(this)
+  val glyph=text("88",105f)
+  parent.addView(glyph,FrameLayout.LayoutParams(220,140))
+  parent.measure(View.MeasureSpec.makeMeasureSpec(220,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(140,View.MeasureSpec.EXACTLY))
+  parent.layout(0,0,220,140)
+  val nativeShader=RuntimeShader("""
+   uniform shader content;
+   half4 main(float2 p) { return half4(0.12,0.20,0.42,1.0)*content.eval(p).a; }
+  """)
+  val native=RenderEffect.createRuntimeShaderEffect(nativeShader,"content")
+  val coords=floatArrayOf(1f,0f,100f,0f,1f,350f,0f,0f,1f)
+  val leaf=KeyguardGlassMaterial(true)
+  leaf.update(texture,coords,220f,140f,root.width,root.height,1f,0f)
+  // Reproduce the failure: an opaque native parent recolours an already glass child.
+  val reference=render(parent,native)
+  val filteredChild=render(parent,RenderEffect.createChainEffect(native,leaf.effect!!))
+  var lostDelta=0
+  for(y in 0 until 140)for(x in 0 until 220) {
+   val a=reference.getPixel(x,y);val b=filteredChild.getPixel(x,y)
+   lostDelta=maxOf(lostDelta,kotlin.math.abs(Color.red(a)-Color.red(b)))
+  }
+  check(lostDelta<=1) { "Probe did not reproduce parent recolouring" }
+  var applied:RenderEffect?=native
+  val attachment=KeyguardGlassAttachment(parent,KeyguardGlassPolicy.TEXT,native,
+   setEffect={_,effect->applied=effect},outerGlyph=true)
+  attachment.apply(texture,coords,root.width,root.height,1f,0f)
+  val glass=render(parent,applied)
+  var alphaDelta=0;var glassPixels=0
+  for(y in 0 until 140)for(x in 0 until 220) {
+   val a=reference.getPixel(x,y);val b=glass.getPixel(x,y)
+   alphaDelta=maxOf(alphaDelta,kotlin.math.abs(Color.alpha(a)-Color.alpha(b)))
+   if(Color.alpha(a)>230 && kotlin.math.abs(Color.red(a)-Color.red(b))>20)glassPixels++
+  }
+  check(alphaDelta<=1 && glassPixels>500) { "Final-parent composition lost mask or glass: $alphaDelta/$glassPixels" }
+  // A later native transition must become the restored effect, rather than a stale snapshot.
+  val latest=RenderEffect.createOffsetEffect(0f,0f,native)
+  attachment.originalEffect=latest;applied=attachment.compose(latest)
+  attachment.restore();check(applied===latest && !attachment.applied)
+  val restored=render(parent,applied);var restoreDelta=0
+  for(y in 0 until 140)for(x in 0 until 220) {
+   val a=reference.getPixel(x,y);val b=restored.getPixel(x,y)
+   restoreDelta=maxOf(restoreDelta,kotlin.math.abs(Color.red(a)-Color.red(b)),kotlin.math.abs(Color.alpha(a)-Color.alpha(b)))
+  }
+  check(restoreDelta<=1)
+  save(reference,"native-parent-recolour.png");save(glass,"final-parent-glass.png")
+  return JSONObject().put("childGlassOverwrittenMaxDelta",lostDelta).put("finalGlassPixels",glassPixels)
+   .put("nativeAlphaMaxDelta",alphaDelta).put("latestNativeEffectRestored",true).put("restoreMaxDelta",restoreDelta)
+ }
+ private fun glyphDrawSlot():JSONObject {
+  val glyph=text("88",105f).apply { layoutParams=FrameLayout.LayoutParams(220,140);layout(0,0,220,140) }
+  val face=glyph.typeface
+  val material=KeyguardGlassMaterial(true)
+  material.update(texture,floatArrayOf(1f,0f,100f,0f,1f,350f,0f,0f,1f),220f,140f,root.width,root.height,1f,0f)
+  val slot=KeyguardGlyphDraw.Slot().apply { effect=material.effect }
+  var result:Any?=null
+  val wrapper=object:View(this) {
+   override fun onDraw(c:Canvas) {
+    result=slot.draw(c,width,height) { nativeCanvas ->
+     check(!slot.available()) { "Nested recording not guarded" }
+     glyph.draw(nativeCanvas);"native-return"
+    }
+   }
+  }.apply { layout(0,0,220,140) }
+  val native=render(glyph);val glass=render(wrapper)
+  check(slot.nativeDraws==1 && result=="native-return")
+  var alphaDelta=0;var colourChanged=0
+  for(y in 0 until 140)for(x in 0 until 220) {
+   val a=native.getPixel(x,y);val b=glass.getPixel(x,y)
+   alphaDelta=maxOf(alphaDelta,kotlin.math.abs(Color.alpha(a)-Color.alpha(b)))
+   if(Color.alpha(a)>230 && kotlin.math.abs(Color.red(a)-Color.red(b))>20)colourChanged++
+  }
+  check(alphaDelta<=4 && colourChanged>500) { "Native draw node changed mask or missed glass: $alphaDelta/$colourChanged" }
+  glyph.text="11"
+  val changed=render(wrapper);val nextNative=render(glyph);var maskChanged=0
+  check(slot.nativeDraws==2)
+  for(y in 0 until 140)for(x in 0 until 220)
+   if(kotlin.math.abs(Color.alpha(changed.getPixel(x,y))-Color.alpha(glass.getPixel(x,y)))>50)maskChanged++
+  check(maskChanged>500) { "Digit content cached after a minute change" }
+  slot.effect=null
+  val restored=render(wrapper);var restoredDelta=0
+  for(y in 0 until 140)for(x in 0 until 220) {
+   val a=restored.getPixel(x,y);val b=nextNative.getPixel(x,y)
+   restoredDelta=maxOf(restoredDelta,kotlin.math.abs(Color.alpha(a)-Color.alpha(b)),kotlin.math.abs(Color.red(a)-Color.red(b)))
+  }
+  check(restoredDelta<=1 && slot.nativeDraws==3 && glyph.typeface===face)
+  slot.close();check(!slot.available())
+  save(glass,"native-glyph-slot.png")
+  return JSONObject().put("nativeDrawCalledOncePerFrame",true).put("maskAlphaMaxDelta",alphaDelta)
+   .put("glassPixels",colourChanged).put("changedDigitMaskPixels",maskChanged)
+   .put("noEffectRestorationMaxDelta",restoredDelta).put("nativeFontAndReturnPreserved",true)
  }
  private fun glyphMask():JSONObject {
   val v=object:TextView(this) { override fun onDraw(c:Canvas) { paint.shader=null;super.onDraw(c) } }

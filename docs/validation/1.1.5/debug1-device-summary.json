@@ -1,0 +1,18 @@
+{
+  "installedCandidate": "1.1.5-debug1",
+  "systemuiLoaded": true,
+  "launcherLoaded": true,
+  "cameraGlassDrawStage": true,
+  "cameraVisibleGlassObserved": true,
+  "clockGlassVisualResolved": false,
+  "windowMatrixSubmissionThread": "launcher.anim",
+  "windowTiltVisualVerified": false,
+  "sceneBackdropRequestPercent": 30,
+  "notificationPopupVerified": false,
+  "desktopPopupVerified": false,
+  "rawPhoneScreenshotsIncluded": false,
+  "newCandidateInstalled": false,
+  "temporarySceneSwitchRestorationVerified": true,
+  "temporarySceneSwitchFinalValue": false,
+  "temporarySceneSwitchOriginalValue": false
+}

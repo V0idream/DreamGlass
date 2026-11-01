@@ -1,0 +1,10 @@
+{
+  "profiles": 2,
+  "shapeAndVariantComparisons": 24,
+  "v107ReferenceMaxChannelDelta": 0,
+  "newerOpticsDifferentPixels": 277644,
+  "nonemptyReferencePixels": 1168752,
+  "inputConfig": "RGBA_F16",
+  "baseAndMetaballVariantsCompiled": true,
+  "physicalDeviceTested": false
+}

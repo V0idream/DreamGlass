@@ -1,0 +1,2 @@
+--------- beginning of main
+11-01 04:29:10.382  2062  2062 I DreamGlassQualityProbe: PASS F16 fractional/alpha; four worker styles; FULL/BASE AGSL; snapshot binding true/false/zero/pending/ready/crop
