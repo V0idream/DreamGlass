@@ -299,7 +299,7 @@
     <string name="settings_anim_tilt_perspective_value">%1$d%%</string>
     <string name="settings_anim_tilt_restart_note">本次升级后重启桌面，替换旧 Hook。兼容模式仅在已识别的窗口动画回调中合成矩阵；设备不匹配时保留原生动画。</string>
     <string name="settings_debug_glass_bounds">显示玻璃渲染框（调试）</string>
-    <string name="settings_debug_glass_bounds_desc">青色线标出实际执行 DreamGlass GPU 材质的区域边界，随控件移动与裁剪。没有青框表示该区域尚未执行此材质，不能凭外框判断已玻璃化。默认关闭；切换后重新打开页面，缓存的系统界面可能需重启对应作用域。参考上游渲染框调试思路，无需悬浮窗权限。</string>
+    <string name="settings_debug_glass_bounds_desc">青色线标出实际执行 DreamGlass GPU 材质且可见的区域边界，随控件移动与裁剪。没有青框时请结合诊断记录确认，边界也可能被前景遮住或被后续裁剪；仅有原生外框不能证明已玻璃化。默认关闭；切换后重新打开页面，缓存的系统界面可能需重启对应作用域。参考上游渲染框调试思路，无需悬浮窗权限。</string>
     <string name="settings_notif_tilt_enabled">通知卡动效</string>
     <string name="settings_notif_tilt_enabled_desc" formatted="false">COS17 通知横幅与列表卡片在出现、收回时加入 3D 倾斜，横幅可叠加缩放；整张卡片一同变化。默认关闭。</string>
     <string name="settings_notif_tilt_strength">通知卡倾斜角度</string>
