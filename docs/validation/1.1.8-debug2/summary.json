@@ -12,5 +12,7 @@
   "shellRootUsed": false,
   "apkSHA256": "b02148a158568b03144fc1bf0fceaff792ecd22d1fbb1046128854d380239d84",
   "normalOpticsReferenceComparisons": 48,
-  "normalOpticsReferenceMaxChannelDelta": 0
+  "normalOpticsReferenceMaxChannelDelta": 0,
+  "physicalDebug2InstallSucceeded": true,
+  "processesRestartedAfterDebug2Install": false
 }

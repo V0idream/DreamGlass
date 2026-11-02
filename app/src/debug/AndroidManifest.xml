@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
+    <activity android:name="com.dreamglass.cos17.MenuBackgroundProbeActivity" android:exported="true" />
     <activity android:name="com.dreamglass.cos17.GlassBoundsProbeActivity" android:exported="true" />
     <activity android:name="com.dreamglass.cos17.TiltCompositionProbeActivity" android:exported="true" />
         <activity android:name="com.dreamglass.cos17.MediaGeometryProbeActivity" android:exported="true" />

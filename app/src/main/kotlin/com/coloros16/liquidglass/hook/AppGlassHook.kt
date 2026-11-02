@@ -72,13 +72,15 @@ object AppGlassHook {
             RuntimeDiagnostics.mark("app-glass-capability","缺少 OEM 背景通道，保留原生；不叠加假玻璃描边")
             failure(error);return
         }
+        Cos17AppSurfaceHooks.install(api,classLoader,packageName)
         for(method in listOf(View::class.java.getDeclaredMethod("setBackgroundDrawable",Drawable::class.java),
             View::class.java.getDeclaredMethod("onAttachedToWindow"))) {
             api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                 val result=chain.proceed()
                 if(!changing && Looper.myLooper()==Looper.getMainLooper())try {
                     val view=chain.getThisObject() as? View
-                    if(view!=null && !NativeAppBackdropHook.owns(view.background) && isBlur(view.background))observe(view)
+                    if(view!=null && !NativeAppBackdropHook.owns(view.background) &&
+                        (isBlur(view.background) || Cos17AppSurfaceHooks.isTarget(view)))observe(view)
                 } catch(error:Throwable) { failure(error) }
                 result
             }
@@ -92,6 +94,7 @@ object AppGlassHook {
         RuntimeDiagnostics.update("app-glass-enabled",if(enabled)"开启" else "关闭")
         if(enabled)snapshot=SharedGlassParams.read(p)
     }
+    internal fun materialApplied(view:View):Boolean = states[view]?.applied==true
     internal fun nativeParams(view:View,width:Float,height:Float):com.coloros16.liquidglass.liquidglass.LiquidGlassShader.Params? {
         preferences();if(!enabled || role(view)==AppGlassSurfacePolicy.NONE)return null
         val s=snapshot ?: return null
@@ -128,7 +131,8 @@ object AppGlassHook {
         if(view.width>=dm.widthPixels*.9f && view.height>=dm.heightPixels*.65f)return AppGlassSurfacePolicy.NONE
         val hint=if(packageName==XposedEntry.PACKAGE_SMART_SIDEBAR)"/sidebar" else if(packageName==XposedEntry.PACKAGE_ASSISTANT_SCREEN)"/assistant" else ""
         return AppGlassSurfacePolicy.role(view.javaClass.name+hint,id(view),view.width.toFloat(),view.height.toFloat(),
-            dm.widthPixels.toFloat(),dm.heightPixels.toFloat(),view is ViewGroup,view.isClickable,hasControl(view))
+            dm.widthPixels.toFloat(),dm.heightPixels.toFloat(),view is ViewGroup,view.isClickable,hasControl(view),
+            nativeCard=Cos17AppSurfaceHooks.isNativeCard(view))
     }
     private fun observe(view:View):State? {
         if(states[view]!=null)return states[view]

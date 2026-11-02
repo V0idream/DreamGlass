@@ -1,0 +1,12 @@
+{
+  "offsetBoundsPassedToMaterial": true,
+  "canvasClippedToBounds": true,
+  "missingSourceKeepsNativeBackground": true,
+  "renderFailureKeepsNativeBackground": true,
+  "constantStateBackgroundIsolated": true,
+  "nativePaddingPreserved": true,
+  "alphaAndDisabledStatesPreserved": true,
+  "nativeCallbackNotReplayed": true,
+  "physicalDeviceTested": false,
+  "vendorHookTested": false
+}

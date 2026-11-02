@@ -8064,58 +8064,40 @@ object BlurDrawHook {
     }
 
     /** 菜单卡玻璃绘制：容器 bounds 登记 + 画玻璃（drawable.draw 的 canvas 原点 = 容器左上角）。 */
-    private fun renderNotificationPopupGlass(canvas: Canvas, host: View, cornerPx: Float) {
-        val w = host.width
-        val h = host.height
-        if (w <= 0 || h <= 0) return
-        if (host.alpha <= 0.01f || !host.isShown) return
+    private fun renderNotificationPopupGlass(canvas: Canvas, host: View, cornerPx: Float, area:Rect):Boolean {
+        val w = area.width()
+        val h = area.height()
+        if (w <= 0 || h <= 0) return false
+        if (host.alpha <= 0.01f || !host.isShown) return false
         val loc = IntArray(2)
         try {
             host.getLocationOnScreen(loc)
         } catch (t: Throwable) {
-            return
+            return false
         }
         val screenRegion = RectF(
-            loc[0].toFloat(), loc[1].toFloat(),
-            (loc[0] + w).toFloat(), (loc[1] + h).toFloat(),
+            (loc[0]+area.left).toFloat(), (loc[1]+area.top).toFloat(),
+            (loc[0]+area.right).toFloat(), (loc[1]+area.bottom).toFloat(),
         )
         val id = System.identityHashCode(host)
         registerSeedlingCardRegion(
             id, screenRegion, Rect(0, 0, w, h), host,
             source = "notif-popup-menu", cornerRadiusOverride = cornerPx,
         )
-        drawSeedlingGlassOnCanvas(canvas, host, id, w, h, screenRegion, offsetX = 0f, offsetY = 0f)
+        return drawSeedlingGlassOnCanvas(canvas, host, id, w, h, screenRegion,
+            offsetX=area.left.toFloat(),offsetY=area.top.toFloat())
     }
 
     /** 菜单卡背景 drawable：开关开 → 液态玻璃；关 → 原背景（纯色 surface shape）。 */
     private class NotificationPopupGlassDrawable(
         host: View,
-        var orig: Drawable?,
-        private val cornerPx: Float,
-    ) : Drawable() {
-        private val target=WeakReference(host)
-        override fun draw(canvas: Canvas) {
-            if (BlurDrawHook.notificationPopupGlassEnabled()) {
-                try {
-                    val host=target.get() ?: return
-                    BlurDrawHook.renderNotificationPopupGlass(canvas, host, cornerPx)
-                    RuntimeDiagnostics.mark("notification_popup_draw","通知菜单背景已进入玻璃绘制入口")
-                    return
-                } catch (t: Throwable) {
-                    Lg.e(BlurDrawHook.TAG, "notif-popup: glass draw failed", t)
-                }
-            }
-            orig?.let {
-                it.setBounds(bounds)
-                it.draw(canvas)
-            }
-        }
-
-        override fun setAlpha(alpha: Int) {}
-        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {}
-        @Deprecated("Deprecated in java")
-        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-    }
+        orig: Drawable?,
+        cornerPx: Float,
+    ) : BoundedGlassDrawable(host,orig,
+        enabled={BlurDrawHook.notificationPopupGlassEnabled()},
+        render={canvas,target,area -> BlurDrawHook.renderNotificationPopupGlass(canvas,target,cornerPx,area)},
+        rendered={RuntimeDiagnostics.mark("notification_popup_draw","通知菜单背景已完成实际玻璃绘制；遵循原背景边界与裁剪")},
+        failure={Lg.e(BlurDrawHook.TAG,"notif-popup: glass draw failed; retain native background",it)})
 
     // ------------------------------------------------------------ [doc/spec/78 补齐] 设备中心卡片组件登记 ------------------------------------------------------------
 
@@ -8234,21 +8216,21 @@ object BlurDrawHook {
         screenRegion: RectF,
         offsetX: Float = host.left.toFloat(),
         offsetY: Float = host.top.toFloat(),
-    ) {
+    ):Boolean {
         // [spec/85 省电模式] 省电开启 → 不画 canvas 玻璃（覆盖 CardBackgroundView / Simple Banner 等
         // 所有走本函数的注入点）
-        if (isPowerSaveGlassOff()) return
-        if (w <= 0 || h <= 0) return
+        if (isPowerSaveGlassOff()) return false
+        if (w <= 0 || h <= 0) return false
         GlassRegistry.bind(id, host)
         val entry = screenRegionMap[id] ?: run {
             logThrottled("seedling-nomap", Log.WARN, 500L) { "seedling-card: ABORT no region map id=$id" }
-            return
+            return false
         }
         val renderSource = resolveRenderSource(id, screenRegion) ?: run {
             logThrottled("seedling-nosrc", Log.WARN, 500L) {
                 "seedling-card: ABORT no render source id=$id region=$screenRegion"
             }
-            return
+            return false
         }
         val srcRect = renderSource.srcRect
         val source = renderSource.source
@@ -8293,6 +8275,7 @@ object BlurDrawHook {
             lowResDiv = if (seedlingTier != null) seedlingWantDiv else 4,
         )
         canvas.save()
+        var drawn=false
         try {
             canvas.translate(offsetX, offsetY)
             seedlingGlassPaint.shader = shader
@@ -8301,6 +8284,7 @@ object BlurDrawHook {
                 addRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), r, r, android.graphics.Path.Direction.CW)
             }
             canvas.drawPath(path, seedlingGlassPaint)
+            drawn=true
         } catch (t: Throwable) {
             Lg.e(TAG, "seedling-card: draw glass on canvas failed id=$id", t)
         } finally {
@@ -8308,6 +8292,7 @@ object BlurDrawHook {
             seedlingGlassPaint.shader = null
             canvas.restore()
         }
+        return drawn
     }
 
     // ------------------------------------------------------------ [spec/44c] 流体云展开卡片玻璃化（CardBackgroundView 宿主）
