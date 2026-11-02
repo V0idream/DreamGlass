@@ -215,18 +215,18 @@ class XposedEntry : XposedModule() {
             // [spec/64] Launcher：桌面动画参数调节（弹簧刚度/阻尼 + 图标透明度时长，默认全关）。
             // [spec/65] Launcher：iOS 动态倾斜/透视（实验性，默认关）。
             // [spec/116 P0/P2] 版本门控：<17.3.12（或读取失败 -1）三 hook 全装、tilt 走 16.x 现状路径；
-            // >=17.3.12 禁用旧 anim hook；本版所有窗口倾斜注入均暂停。
+            // >=17.3.12 禁用旧 anim hook；仅使用当前原生矩阵叠加的兼容倾斜。
             PACKAGE_LAUNCHER -> {
                 val hostVer = HostVersion.hostVersionCode(PACKAGE_LAUNCHER)
                 if (hostVer >= VERSION_LAUNCHER_17_3_12 || Cos17Contract.launcherInline(classLoader)) {
-                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=17.3.12+: skip LauncherAnimHook (17.x fields obfuscated), windowTilt=quarantined; keep native animation")
+                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=17.3.12+: skip LauncherAnimHook; windowTilt=affine-composition")
                     LauncherHook.install(this, classLoader)
-                    LauncherTiltCompat.install()
+                    LauncherTiltCompat.install(this, classLoader)
                 } else {
-                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=<17.3.12 (or unknown -1): keep legacy animation tuning; window tilt paused")
+                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=<17.3.12 (or unknown -1): legacy animation tuning; tilt requires verified COS17 callback")
                     LauncherHook.install(this, classLoader)
                     LauncherAnimHook.install(this, classLoader)
-                    LauncherTiltCompat.install()
+                    LauncherTiltCompat.install(this, classLoader)
                 }
             }
             // 第三方 App（相册/计算器/智能侧边栏/速览）：A/B 族模糊挂载点登记（组件清单 + 预设按组件命中）。

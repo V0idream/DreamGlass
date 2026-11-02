@@ -1,12 +1,11 @@
 /* DreamGlass contributors, 2026. GPL-3.0-or-later. */
 package com.coloros16.liquidglass.hook
 
-import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
+import io.github.libxposed.api.XposedInterface
 import kotlin.math.*
 
-/** Window tilt is quarantined after reports of missing native launch animations.
- * Projection helpers below are debug math only; installation never hooks a
- * transaction, writes a leash matrix, deoptimizes a caller, or schedules resets.
+/** Historical perspective helpers remain debug math only. Production uses the
+ * ordinary affine channel and composes each current native animation matrix.
  */
 object LauncherTiltCompat {
     fun projection(out: FloatArray, progress: Float, strength: Float, perspective: Float,
@@ -40,8 +39,5 @@ object LauncherTiltCompat {
         return active
     }
 
-    fun install():Boolean {
-        RuntimeDiagnostics.mark("launcher-tilt","桌面倾斜已暂停：保留原生启动／退出动画，不注入矩阵")
-        return false
-    }
+    fun install(api:XposedInterface,loader:ClassLoader):Boolean = LauncherTiltAffineHook.install(api,loader)
 }

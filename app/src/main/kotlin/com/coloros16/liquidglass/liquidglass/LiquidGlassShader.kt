@@ -95,6 +95,7 @@ object LiquidGlassShader {
         uniform float uLightAngle;       // 光角度（弧度；Kotlin 侧由角度转弧度）
         uniform vec2  uParallax;         // 视差（面板几何中心偏移，可接传感器）
         uniform float uDebugCoord;       // 调试：1 = 输出 coord/uViewport 位置色（坐标可视化）
+        uniform float uDebugGlassBounds; // Cyan actual-material frame; 0 preserves normal rendering.
         uniform float uDebugHighlight;   // [临时诊断 高光] 逐像素可视化：0=关；1=hl 灰度；2=band 灰度；3=sdRaw 等值线；4=sdfGrad 方向色
         uniform vec4  uMaskRect;         // 掩码矩形（viewport 局部坐标：xy=左上, zw=宽高；默认全视口=无裁剪，侧滑按钮专用）
         uniform float uMaskCornerRadius; // 掩码圆角半径 px（按钮真实圆角 = notification_corner_radius dimen，未×1.5；0=直角裁剪）
@@ -905,6 +906,11 @@ object LiquidGlassShader {
                 return half4(clamp(float3(hl, band, sdfGrad.x * 0.5 + 0.5), 0.0, 1.0), 1.0);
             }
 
+            // Actual rendered material only: follows the same SDF, metaball union,
+            // mask, crop and Canvas transform. No candidate/decor-only fake frames.
+            if (uDebugGlassBounds > 0.5 && sdRaw <= 0.0 && sdRaw >= -3.0) {
+                return half4(0.0, 0.9, 1.0, 1.0) * half(glass.a);
+            }
             // 7. 输出
             return half4(clamp(glass, 0.0, 1.0));
         }
@@ -966,6 +972,7 @@ object LiquidGlassShader {
         val sourcePreblurred: Boolean = false,
         val compactOptics: Boolean = false,
         val grayBaseLuma: Float = -1f,
+        val debugGlassBounds: Boolean = com.coloros16.liquidglass.debug.GlassRenderBounds.enabled(),
     )
 
     /**
@@ -1149,6 +1156,10 @@ object LiquidGlassShader {
         shader.setFloatUniform("uLightAngle", (params.lightAngleDegrees * PI / 180.0).toFloat())
         shader.setFloatUniform("uParallax", params.parallaxX, params.parallaxY)
         shader.setFloatUniform("uDebugCoord", debugCoord)
+        // Historical debug reference shaders predate this optional uniform.
+        // Missing support is acceptable only with debugging OFF.
+        try { shader.setFloatUniform("uDebugGlassBounds", if(params.debugGlassBounds)1f else 0f) }
+        catch(error:IllegalArgumentException) { if(params.debugGlassBounds)throw error }
         shader.setFloatUniform("uDebugHighlight", HL_DEBUG_MODE)
         lastHighlightFloor = params.highlightFloor
         shader.setFloatUniform("uHighlightFloor", params.highlightFloor)

@@ -1,0 +1,11 @@
+{
+  "variants": 6,
+  "baseAndMetaballCompiled": true,
+  "capsuleCircleSliderCovered": true,
+  "cyanPixels": 5208,
+  "centreUnchanged": true,
+  "offRestoresExactPixels": true,
+  "outsideMaskTransparent": true,
+  "physicalDeviceTested": false,
+  "vendorHookTested": false
+}

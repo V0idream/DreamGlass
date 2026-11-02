@@ -219,6 +219,7 @@ object GlassRegistry {
     /** 注入框架侧存储读取器（hook 安装时调用一次）。 */
     fun attach(provider: () -> SharedPreferences?) {
         prefsProvider = provider
+        com.coloros16.liquidglass.debug.GlassRenderBounds.attach(provider)
     }
 
     /** 登记当前绘制对象所属类为玻璃元素；类未变时只刷新最近出现时间。

@@ -1,0 +1,16 @@
+{
+  "version": "1.1.8-debug2",
+  "upstreamReviewed": "d6913e6",
+  "upstreamDebugReference": "468b40c16964f92970e6c63a80cc01201de65ab9",
+  "gpuSyntheticOnly": true,
+  "physicalTiltVisibleAccepted": false,
+  "physicalDebugBoundsTested": false,
+  "physicalDebug1InstallSucceeded": true,
+  "physicalLauncherDebug1Loaded": true,
+  "physicalTiltAffineWriteObserved": false,
+  "nativeAnimationSettingsUnchanged": true,
+  "shellRootUsed": false,
+  "apkSHA256": "b02148a158568b03144fc1bf0fceaff792ecd22d1fbb1046128854d380239d84",
+  "normalOpticsReferenceComparisons": 48,
+  "normalOpticsReferenceMaxChannelDelta": 0
+}

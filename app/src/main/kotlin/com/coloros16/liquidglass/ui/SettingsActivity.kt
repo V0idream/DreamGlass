@@ -1608,15 +1608,24 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun bindTilt(view: View) {
-        // Do not let a previously saved true value re-enable the quarantined injector.
-        // Preserve saved configuration; show the real capability instead of the requested state.
-        view.findViewById<Switch>(R.id.switchAnimTilt).apply {
-            setOnCheckedChangeListener(null);isChecked=false;isEnabled=false
+        val appSwitch=view.findViewById<Switch>(R.id.switchAnimTilt)
+        val appListener=CompoundButton.OnCheckedChangeListener { _,checked ->
+            writePrefBoolean(Prefs.KEY_ANIM_TILT_ENABLED,checked)
         }
-        view.findViewById<View>(R.id.seekAnimTiltStrength).isEnabled=false
-        view.findViewById<View>(R.id.seekAnimTiltPerspective).isEnabled=false
-        view.findViewById<TextView>(R.id.animTiltStrengthValue).text="已暂停"
-        view.findViewById<TextView>(R.id.animTiltPerspectiveValue).text="保留原生动画"
+        appSwitch.setOnCheckedChangeListener(appListener)
+        refreshBooleanSwitch(appSwitch,appListener,Prefs.KEY_ANIM_TILT_ENABLED,Prefs.DEFAULT_ANIM_TILT_ENABLED)
+        bindIntSeekBarStep(
+            seek=view.findViewById(R.id.seekAnimTiltStrength),valueText=view.findViewById(R.id.animTiltStrengthValue),
+            key=Prefs.KEY_ANIM_TILT_STRENGTH,default=Prefs.DEFAULT_ANIM_TILT_STRENGTH,
+            max=Prefs.ANIM_TILT_STRENGTH_MAX,step=1,offset=0,
+            format={getString(R.string.settings_anim_tilt_strength_value,it)},
+        )
+        bindIntSeekBarStep(
+            seek=view.findViewById(R.id.seekAnimTiltPerspective),valueText=view.findViewById(R.id.animTiltPerspectiveValue),
+            key=Prefs.KEY_ANIM_TILT_PERSPECTIVE,default=Prefs.DEFAULT_ANIM_TILT_PERSPECTIVE,
+            max=Prefs.ANIM_TILT_PERSPECTIVE_MAX,step=1,offset=0,
+            format={getString(R.string.settings_anim_tilt_perspective_value,it)},
+        )
 
         // ---- [doc/spec/112] 通知卡倾斜（弹出/收回驱动；hook 端 TTL ≤0.5s 自感知，改动立即生效）----
         val notifSwitch = view.findViewById<Switch>(R.id.switchNotifTilt)
@@ -1645,6 +1654,12 @@ class SettingsActivity : AppCompatActivity() {
 
     /** 日志与诊断：运行日志开关 + logcat 流式抓取。 */
     private fun bindLog(view: View) {
+        val bounds=view.findViewById<Switch>(R.id.switchDebugGlassBounds)
+        val boundsListener=CompoundButton.OnCheckedChangeListener {_,checked ->
+            writePrefBoolean(Prefs.KEY_DEBUG_GLASS_BOUNDS,checked)
+        }
+        bounds.setOnCheckedChangeListener(boundsListener)
+        refreshBooleanSwitch(bounds,boundsListener,Prefs.KEY_DEBUG_GLASS_BOUNDS,false)
         // 运行日志开关（logcat 详细度门控：开=全量，关=仅 e 级；hook 侧需重启 SystemUI 生效）
         val switchLogs = view.findViewById<Switch>(R.id.switchEnableLogs)
         val logsListener = CompoundButton.OnCheckedChangeListener { _, checked ->

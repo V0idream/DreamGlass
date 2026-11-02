@@ -1,0 +1,5 @@
+{
+  "noUnsafeChannels": true,
+  "bothEntryRoutesUseCompatibleInstaller": true,
+  "legacyTiltInjectorUnreachable": true
+}

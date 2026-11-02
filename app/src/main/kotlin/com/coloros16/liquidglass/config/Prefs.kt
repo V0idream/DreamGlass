@@ -656,11 +656,13 @@ object Prefs {
         if (group == ANIM_GROUP_CLOSE) DEFAULT_ANIM_FADE_DURATION_CLOSE else DEFAULT_ANIM_FADE_DURATION_OPEN
 
     // ---------- iOS 动态倾斜 / 透视（doc/spec/65，2026-09-16；实验性，默认关） ----------
-    /** 动态倾斜总开关：true=应用启动/退出/打断动画期间对 app 窗口与图标施加 3D 倾斜（近大远小透视）。
-     *  **实验性功能**，默认 false；关闭时完全不干预（零影响）。改动需重启桌面进程生效。 */
+    /** 兼容窗口倾斜：三维旋转的平行投影，合成当前原生仿射矩阵。
+     * 实验性功能默认关闭。新 Hook 首次安装需重启桌面，随后配置动态读取。 */
     const val KEY_ANIM_TILT_ENABLED = "anim_tilt_enabled"
+    /** Cyan frame inside the actual shared GPU glass mask; debugging only. */
+    const val KEY_DEBUG_GLASS_BOUNDS = "debug_glass_render_bounds"
     /** 倾斜总开关默认值（false = 实验性功能默认关闭） */
-    const val DEFAULT_ANIM_TILT_ENABLED = true
+    const val DEFAULT_ANIM_TILT_ENABLED = false
 
     /** 倾斜强度（%，0~200，默认 100）。0 = 不倾斜；200 = 两倍角度。运行时 ÷100 作倍率。 */
     const val KEY_ANIM_TILT_STRENGTH = "anim_tilt_strength_percent"
@@ -669,7 +671,7 @@ object Prefs {
     /** 倾斜强度上限（200%，超过则 clamp） */
     const val ANIM_TILT_STRENGTH_MAX = 200
 
-    /** 透视扭曲程度（%，0~150，默认 100）。调节上下宽度差；0 = 无近大远小。运行时 ÷100 作倍率。 */
+    /** 保留旧键名；兼容模式中调节对角轴与侧向摆动，不声称完整透视。 */
     const val KEY_ANIM_TILT_PERSPECTIVE = "anim_tilt_perspective_percent"
     /** 透视扭曲默认值（100 = 原值） */
     const val DEFAULT_ANIM_TILT_PERSPECTIVE = 100
