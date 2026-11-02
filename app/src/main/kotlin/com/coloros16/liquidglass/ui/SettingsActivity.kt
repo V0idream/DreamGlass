@@ -1608,27 +1608,15 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun bindTilt(view: View) {
-        val switch = view.findViewById<Switch>(R.id.switchAnimTilt)
-        val listener = CompoundButton.OnCheckedChangeListener { _, checked ->
-            writePrefBoolean(Prefs.KEY_ANIM_TILT_ENABLED, checked)
+        // Do not let a previously saved true value re-enable the quarantined injector.
+        // Preserve saved configuration; show the real capability instead of the requested state.
+        view.findViewById<Switch>(R.id.switchAnimTilt).apply {
+            setOnCheckedChangeListener(null);isChecked=false;isEnabled=false
         }
-        switch.setOnCheckedChangeListener(listener)
-        refreshBooleanSwitch(switch, listener, Prefs.KEY_ANIM_TILT_ENABLED, Prefs.DEFAULT_ANIM_TILT_ENABLED)
-
-        // 倾斜强度：0~200%（默认 100）
-        bindIntSeekBarStep(
-            seek = view.findViewById(R.id.seekAnimTiltStrength), valueText = view.findViewById(R.id.animTiltStrengthValue),
-            key = Prefs.KEY_ANIM_TILT_STRENGTH, default = Prefs.DEFAULT_ANIM_TILT_STRENGTH,
-            max = Prefs.ANIM_TILT_STRENGTH_MAX, step = 1, offset = 0,
-            format = { v -> getString(R.string.settings_anim_tilt_strength_value, v) },
-        )
-        // 透视扭曲程度：0~150%（默认 100）
-        bindIntSeekBarStep(
-            seek = view.findViewById(R.id.seekAnimTiltPerspective), valueText = view.findViewById(R.id.animTiltPerspectiveValue),
-            key = Prefs.KEY_ANIM_TILT_PERSPECTIVE, default = Prefs.DEFAULT_ANIM_TILT_PERSPECTIVE,
-            max = Prefs.ANIM_TILT_PERSPECTIVE_MAX, step = 1, offset = 0,
-            format = { v -> getString(R.string.settings_anim_tilt_perspective_value, v) },
-        )
+        view.findViewById<View>(R.id.seekAnimTiltStrength).isEnabled=false
+        view.findViewById<View>(R.id.seekAnimTiltPerspective).isEnabled=false
+        view.findViewById<TextView>(R.id.animTiltStrengthValue).text="已暂停"
+        view.findViewById<TextView>(R.id.animTiltPerspectiveValue).text="保留原生动画"
 
         // ---- [doc/spec/112] 通知卡倾斜（弹出/收回驱动；hook 端 TTL ≤0.5s 自感知，改动立即生效）----
         val notifSwitch = view.findViewById<Switch>(R.id.switchNotifTilt)

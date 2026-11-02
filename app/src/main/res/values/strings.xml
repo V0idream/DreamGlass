@@ -289,15 +289,15 @@
     
 
     <string name="cat_tilt_desc">应用打开/退出时的 3D 倾斜（实验性）</string>
-    <string name="settings_anim_tilt_enabled">开启动态倾斜</string>
-    <string name="settings_anim_tilt_enabled_desc">实验性功能：COS17 应用窗口打开与退出时加入 3D 倾斜，支持标准及轻动画通道。默认关闭；不同桌面版本需验证。</string>
+    <string name="settings_anim_tilt_enabled">应用窗口倾斜（已暂停）</string>
+    <string name="settings_anim_tilt_enabled_desc">原适配可能覆盖系统启动动画，当前已停止注入。升级后请重启桌面以卸载旧 Hook；应用启动与退出交还系统处理。通知卡片倾斜是独立选项。</string>
     <string name="settings_anim_tilt_strength">倾斜强度</string>
     <string name="settings_anim_tilt_strength_desc" formatted="false">调节前后倾斜角度；0% 为不倾斜，200% 为两倍角度。</string>
     <string name="settings_anim_tilt_strength_value">%1$d%%</string>
     <string name="settings_anim_tilt_perspective">透视强度</string>
     <string name="settings_anim_tilt_perspective_desc" formatted="false">控制近大远小的透视效果。0 表示关闭；倾斜强度为 0 时无效。</string>
     <string name="settings_anim_tilt_perspective_value">%1$d%%</string>
-    <string name="settings_anim_tilt_restart_note">实验性功能，修改后需重启桌面生效。</string>
+    <string name="settings_anim_tilt_restart_note">当前版本不启用应用窗口倾斜；此前保存的开启状态也不会激活注入。</string>
     <string name="settings_notif_tilt_enabled">通知卡动效</string>
     <string name="settings_notif_tilt_enabled_desc" formatted="false">COS17 通知横幅与列表卡片在出现、收回时加入 3D 倾斜，横幅可叠加缩放；整张卡片一同变化。默认关闭。</string>
     <string name="settings_notif_tilt_strength">通知卡倾斜角度</string>

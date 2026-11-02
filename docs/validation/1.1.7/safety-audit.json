@@ -1,0 +1,25 @@
+{
+  "releaseBytecodeAuditPassed": true,
+  "windowTiltInstallerAlwaysUnavailable": true,
+  "nativeAndLegacyTiltInstallersUnreachableFromEntry": true,
+  "transactionHooksAndWatchdogRemoved": true,
+  "unitTests": {
+    "tests": 154,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Error": 0,
+    "Warning": 307
+  },
+  "physicalNativeAnimationVerified": false,
+  "ui": {
+    "releaseUiPausedSwitchUncheckedAndDisabled": true,
+    "windowParameterSlidersDisabled": true,
+    "otherSettingsRetained": true,
+    "physicalDeviceTested": false
+  },
+  "version": "1.1.7",
+  "releaseApkSha256": "3bf855ddc47a72d993a972f27940ed69a3fb663e367b6e0a0b654326f9a3573e"
+}

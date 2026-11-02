@@ -15,7 +15,6 @@ import com.coloros16.liquidglass.hook.Cos17Contract
 import com.coloros16.liquidglass.hook.LauncherAnimHook
 import com.coloros16.liquidglass.hook.LauncherHook
 import com.coloros16.liquidglass.hook.LauncherTiltCompat
-import com.coloros16.liquidglass.hook.LauncherTiltHook
 import com.coloros16.liquidglass.hook.KeyguardGlassHook
 import com.coloros16.liquidglass.hook.SceneFilter
 import com.coloros16.liquidglass.log.Lg
@@ -216,22 +215,18 @@ class XposedEntry : XposedModule() {
             // [spec/64] Launcher：桌面动画参数调节（弹簧刚度/阻尼 + 图标透明度时长，默认全关）。
             // [spec/65] Launcher：iOS 动态倾斜/透视（实验性，默认关）。
             // [spec/116 P0/P2] 版本门控：<17.3.12（或读取失败 -1）三 hook 全装、tilt 走 16.x 现状路径；
-            // >=17.3.12 禁用 anim hook，tilt 改走原生 zuyqa 参数注入路径。
+            // >=17.3.12 禁用旧 anim hook；本版所有窗口倾斜注入均暂停。
             PACKAGE_LAUNCHER -> {
                 val hostVer = HostVersion.hostVersionCode(PACKAGE_LAUNCHER)
                 if (hostVer >= VERSION_LAUNCHER_17_3_12 || Cos17Contract.launcherInline(classLoader)) {
-                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=17.3.12+: skip LauncherAnimHook (17.x fields obfuscated), tilt=stock matrix contract or modified-launcher native gate")
+                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=17.3.12+: skip LauncherAnimHook (17.x fields obfuscated), windowTilt=quarantined; keep native animation")
                     LauncherHook.install(this, classLoader)
-                    if (Cos17Contract.nativeTilt(classLoader)) {
-                        LauncherTiltHook.installNativeZuyqa(this, classLoader)
-                    } else {
-                        LauncherTiltCompat.install(this, classLoader)
-                    }
+                    LauncherTiltCompat.install()
                 } else {
-                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=<17.3.12 (or unknown -1): install all 3 hooks")
+                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=<17.3.12 (or unknown -1): keep legacy animation tuning; window tilt paused")
                     LauncherHook.install(this, classLoader)
                     LauncherAnimHook.install(this, classLoader)
-                    LauncherTiltHook.install(this, classLoader)
+                    LauncherTiltCompat.install()
                 }
             }
             // 第三方 App（相册/计算器/智能侧边栏/速览）：A/B 族模糊挂载点登记（组件清单 + 预设按组件命中）。

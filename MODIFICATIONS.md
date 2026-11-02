@@ -53,3 +53,8 @@ Preserved the v1.1.4 compact material behind a global opt-in switch; classic v1.
 ## 2026-11-01 — 1.1.6 readability, media and honor-support UI
 
 Added opt-in GPU neutral backing and a shade slider, consistent explicit dim priority and tint-aware foreground decisions. Added conditional media-decoration suppression, preserved both supplied launcher callback contracts and revised notification pivot/camera distance. Collapsed native capsules use black while expanded cards retain their renderer. Added a local-only honor support page and member grouping; no payment SDK, network verification or new dependencies. The appreciation image was supplied by the project owner for inclusion; the original PNG is preserved and saving does not rewrite it. Private phone captures and proprietary APKs remain outside source distribution.
+
+
+## 2026-11-02 — 1.1.7 native animation regression hotfix
+
+Quarantined all module window-tilt installers after reports of disappearing native app launch animation. Removed the COS17 transaction hooks, 4x4 writes and asynchronous identity reset from the compatibility installer. Existing enabled preferences cannot reactivate this path; the UI reports the unavailable capability. The pure projection helpers remain diagnostic math only. No shader, payment, notification-tilt or component behavior was changed. No new dependency was added.
