@@ -8,6 +8,7 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.view.View
 import com.coloros16.liquidglass.hook.LauncherTiltAffine
+import com.coloros16.liquidglass.hook.LauncherTiltIconAnchor
 import org.json.JSONObject
 import java.io.File
 
@@ -19,30 +20,35 @@ class TiltCompositionProbeActivity:Activity() {
     override fun onCreate(state:Bundle?) {
         super.onCreate(state)
         val report=JSONObject().put("vendorHookTested",false).put("physicalDeviceTested",false)
+            .put("productionIconDirectedMath",true).put("iconAnchorsSynthetic",true)
         val view=object:View(this) {
             val paint=Paint(Paint.ANTI_ALIAS_FLAG)
             override fun onDraw(canvas:Canvas) {
                 report.put("hardwareAccelerated",canvas.isHardwareAccelerated)
                 canvas.drawColor(Color.rgb(11,20,29))
-                val factor=width/800f;canvas.save();canvas.scale(factor,factor)
+                val factor=width/1000f;canvas.save();canvas.scale(factor,factor)
                 paint.color=Color.WHITE;paint.textSize=25f
-                canvas.drawText("Native animation + compatible tilt",26f,42f,paint)
+                canvas.drawText("Native animation + icon-directed compatible tilt",26f,42f,paint)
                 paint.textSize=18f;paint.color=Color.LTGRAY
-                canvas.drawText("Native",112f,78f,paint);canvas.drawText("Composed",505f,78f,paint)
+                canvas.drawText("Native",112f,78f,paint)
+                canvas.drawText("Icon: top left",415f,78f,paint)
+                canvas.drawText("Icon: bottom right",725f,78f,paint)
                 for((row,p) in listOf(0f,.25f,.5f,.75f,1f).withIndex()) {
                     val top=95f+row*224f
-                    paint.color=Color.rgb(28,43,54);canvas.drawRoundRect(20f,top,780f,top+210,14f,14f,paint)
-                    for(column in 0..1) {
+                    paint.color=Color.rgb(28,43,54);canvas.drawRoundRect(20f,top,980f,top+210,14f,14f,paint)
+                    for(column in 0..2) {
                         val scale=.25f+.75f*p
                         val native=floatArrayOf(scale,0f,100f*(1-p),0f,scale,18f*(1-p),0f,0f,1f)
                         val submitted=FloatArray(9)
-                        val active=LauncherTiltAffine.compose(native,submitted,p,1f,1f,100f,93f,1f)
+                        val anchor=if(column==2)LauncherTiltIconAnchor.fromRects(840f,1740f,900f,1800f,0f,0f,1000f,2000f)
+                            else LauncherTiltIconAnchor.fromRects(100f,200f,160f,260f,0f,0f,1000f,2000f)
+                        val active=LauncherTiltAffine.composeTowardsIcon(native,submitted,p,1f,1f,100f,93f,anchor)
                         if(p==0f || p==1f)check(!active && native.contentEquals(submitted))
                         val cx=100f;val cy=93f
                         check(kotlin.math.abs(native[0]*cx+native[1]*cy+native[2]-(submitted[0]*cx+submitted[1]*cy+submitted[2]))<.001f)
                         check(kotlin.math.abs(native[3]*cx+native[4]*cy+native[5]-(submitted[3]*cx+submitted[4]*cy+submitted[5]))<.001f)
                         val m=Matrix().apply {setValues(if(column==0)native else submitted)}
-                        canvas.save();canvas.translate(80f+column*390f,top+10f);canvas.concat(m)
+                        canvas.save();canvas.translate(40f+column*320f,top+10f);canvas.concat(m)
                         paint.shader=LinearGradient(0f,0f,200f,186f,intArrayOf(Color.rgb(129,223,210),Color.rgb(42,94,143)),null,Shader.TileMode.CLAMP)
                         canvas.drawRoundRect(0f,0f,200f,186f,15f,15f,paint);paint.shader=null
                         paint.style=Paint.Style.STROKE;paint.strokeWidth=1f;paint.color=Color.argb(70,255,255,255)
@@ -55,9 +61,9 @@ class TiltCompositionProbeActivity:Activity() {
                         canvas.restore()
                     }
                     paint.color=Color.rgb(251,197,103);paint.strokeWidth=2f
-                    val centreX=80f+(.25f+.75f*p)*100f+100f*(1-p)
+                    val centreX=40f+(.25f+.75f*p)*100f+100f*(1-p)
                     val centreY=top+10f+(.25f+.75f*p)*93f+18f*(1-p)
-                    for(offset in floatArrayOf(0f,390f)) {
+                    for(offset in floatArrayOf(0f,320f,640f)) {
                         canvas.drawLine(centreX+offset-5,centreY,centreX+offset+5,centreY,paint)
                         canvas.drawLine(centreX+offset,centreY-5,centreX+offset,centreY+5,paint)
                     }

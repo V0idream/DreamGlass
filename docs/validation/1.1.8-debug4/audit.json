@@ -1,0 +1,38 @@
+{
+  "version": "1.1.8-debug4",
+  "date": "2026-11-02",
+  "apkSha256": "eae64f260ae4a6ebd9dd1f38a4fd8e2ed51929b4cb4d8e4c5cad9fc0308e4f7a",
+  "unitTests": {
+    "tests": 208,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Warning": 315
+  },
+  "debugBuild": true,
+  "releaseBuild": true,
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "physicalInstallSucceeded": false,
+  "processesRestarted": false,
+  "physicalVisualAccepted": false,
+  "gpuProbesExecutedThisRound": false,
+  "staticContracts": {
+    "calculator": "17.2.16",
+    "gallery": "17.10.41",
+    "shelf": "17.14.60",
+    "launcherSamples": 2
+  },
+  "launcherStandardAndLightUsePerAnimationIconAnchors": true,
+  "unknownIconRetainsNativeAnimation": true,
+  "calculatorBackgroundSvgPreserved": true,
+  "frameworkDrawBackgroundSuppressionRemoved": true,
+  "galleryNativeChannelsRestoredOnDisableOrError": true,
+  "shelfCardOwners": 3,
+  "shelfImageOwnerOnlyIsolatesScope": true,
+  "noNewCpuBlurOrCapturePipeline": true,
+  "latestStableRetained": "1.1.7",
+  "adbAfterLatestUserInstruction": false,
+  "existingDebug3DiagnosticsReadBeforeLatestInstruction": true
+}

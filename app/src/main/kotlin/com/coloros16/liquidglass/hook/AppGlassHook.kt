@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026-10-30. GPL-3.0. OEM GPU backdrop adapter. */
 package com.coloros16.liquidglass.hook
 import android.graphics.Outline
+import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.RenderEffect
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
@@ -60,10 +62,18 @@ object AppGlassHook {
                 catch(error:Throwable) { failure(error) }
                 if(replacement!=null) {
                     val args=chain.getArgs().toTypedArray();args[0]=replacement
-                    val result=chain.proceed(args)
-                    state?.applied=true
-                    RuntimeDiagnostics.mark("app-glass-material","原生背景输入已接入统一 GPU 材质；前景保持原生")
-                    return@intercept result
+                    if(!nativeMutation {Cos17AppSurfaceHooks.beforeAssign(view,true)})return@intercept chain.proceed()
+                    try {
+                        val result=chain.proceed(args)
+                        state?.applied=true
+                        nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,true)}
+                        RuntimeDiagnostics.mark("app-glass-material","原生背景输入已接入统一 GPU 材质；前景保持原生")
+                        return@intercept result
+                    } catch(error:Throwable) {
+                        // Do not retry the native callback after an exception.
+                        runCatching {state?.restore(view)}.onFailure(::failure)
+                        throw error
+                    }
                 }
                 chain.proceed()
             }
@@ -126,8 +136,16 @@ object AppGlassHook {
         }
         return false
     }
+    private fun canObserve(view:View)=when(packageName) {
+        XposedEntry.PACKAGE_CALCULATOR,XposedEntry.PACKAGE_GALLERY,XposedEntry.PACKAGE_ASSISTANT_SCREEN ->
+            Cos17AppSurfaceHooks.isTarget(view)
+        else -> true
+    }
     private fun role(view:View):Int {
         val dm=view.resources.displayMetrics
+        // Vendor bridges may be called for both parent and child. Limit these
+        // three apps to proven material owners; never filter an icon twice.
+        if(!canObserve(view))return AppGlassSurfacePolicy.NONE
         if(view.width>=dm.widthPixels*.9f && view.height>=dm.heightPixels*.65f)return AppGlassSurfacePolicy.NONE
         val hint=if(packageName==XposedEntry.PACKAGE_SMART_SIDEBAR)"/sidebar" else if(packageName==XposedEntry.PACKAGE_ASSISTANT_SCREEN)"/assistant" else ""
         return AppGlassSurfacePolicy.role(view.javaClass.name+hint,id(view),view.width.toFloat(),view.height.toFloat(),
@@ -135,6 +153,8 @@ object AppGlassHook {
             nativeCard=Cos17AppSurfaceHooks.isNativeCard(view))
     }
     private fun observe(view:View):State? {
+        // Unrelated native blur calls must not exhaust the bounded owner table.
+        if(!canObserve(view))return null
         if(states[view]!=null)return states[view]
         preferences();if(states.size>=96)return null
         val state=State(view);states[view]=state
@@ -142,10 +162,11 @@ object AppGlassHook {
         view.viewTreeObserver.addOnPreDrawListener(state);view.addOnAttachStateChangeListener(state)
         return state
     }
-    private fun assign(view:View,effect:RenderEffect?) {
-        changing=true
-        try { bridge?.invoke(null,effect,view) } finally { changing=false }
+    private inline fun <T> nativeMutation(block:()->T):T {
+        val previous=changing;changing=true
+        try {return block()} finally {changing=previous}
     }
+    private fun assign(view:View,effect:RenderEffect?)=nativeMutation { bridge?.invoke(null,effect,view) }
     private class State(view:View):ViewTreeObserver.OnPreDrawListener,View.OnAttachStateChangeListener {
         val target=WeakReference(view)
         var nativeEffect:RenderEffect?=null
@@ -155,35 +176,41 @@ object AppGlassHook {
         private val material by lazy { AppGlassEffect() }
         private var blockedUntil=0L
         private var lastApplied:RenderEffect?=null
-        private var checkedAt=-1000L
-        private var checkedWidth=0;private var checkedHeight=0;private var checkedBackground=0
         fun effect():RenderEffect? {
           try {
             preferences()
             val view=target.get() ?: return null
             if(!enabled || SystemClock.uptimeMillis()<blockedUntil || !view.isHardwareAccelerated)return null
-            val now=SystemClock.uptimeMillis();val backgroundId=System.identityHashCode(view.background)
-            if(now-checkedAt<250L && checkedWidth==view.width && checkedHeight==view.height && checkedBackground==backgroundId)return cached
-            checkedAt=now;checkedWidth=view.width;checkedHeight=view.height;checkedBackground=backgroundId
             val kind=role(view);if(kind==AppGlassSurfacePolicy.NONE) { cached=null;return null }
             val s=snapshot ?: return null
             val outline=Outline();view.background?.getOutline(outline)
             if(outline.isEmpty)view.outlineProvider?.getOutline(view,outline)
+            val outlineRect=Rect()
+            val nativeBounds=Cos17AppSurfaceHooks.nativeBounds(view)
+            if(Cos17AppSurfaceHooks.isTarget(view) && nativeBounds==null)return null
+            val area=nativeBounds ?: if(outline.getRect(outlineRect) && !outlineRect.isEmpty)RectF(outlineRect)
+                else RectF(0f,0f,view.width.toFloat(),view.height.toFloat())
+            if(area.isEmpty || !listOf(area.left,area.top,area.right,area.bottom).all {it.isFinite()})return null
+            val opacity=Cos17AppSurfaceHooks.nativeFillAlpha(view)
+            if(opacity<=0f)return null
             val key=System.identityHashCode(view)
-            val radius=GlassRegistry.cornerOverrideFor(key) ?: if(outline.radius>0)outline.radius else
-                if(kind==AppGlassSurfacePolicy.CONTROL)minOf(view.width,view.height)*.5f else minOf(view.width,view.height)*.22f
+            val radius=GlassRegistry.cornerOverrideFor(key) ?: Cos17AppSurfaceHooks.nativeRadius(view) ?: if(outline.radius>0)outline.radius else
+                if(kind==AppGlassSurfacePolicy.CONTROL)minOf(area.width(),area.height())*.5f else minOf(area.width(),area.height())*.22f
             val p=SharedGlassParams.resolve(s.values,s.preset,GlassRegistry.overridesFor(key),
-                view.width.toFloat(),view.height.toFloat(),radius,kind==AppGlassSurfacePolicy.CONTROL,s.compactOptics,s.grayBaseLuma)
-            val hash=p.hashCode()
-            if(cached==null || paramsHash!=hash) { cached=material.create(p);paramsHash=hash }
+                area.width(),area.height(),radius.coerceIn(0f,minOf(area.width(),area.height())*.5f),kind==AppGlassSurfacePolicy.CONTROL,s.compactOptics,s.grayBaseLuma)
+            val hash=31*(31*p.hashCode()+area.hashCode())+opacity.hashCode()
+            if(cached==null || paramsHash!=hash) { cached=material.create(p,area,opacity);paramsHash=hash }
             return cached
           } catch(error:Throwable) {
             blockedUntil=SystemClock.uptimeMillis()+30_000L;failure(error);return null
           }
         }
-        private fun restore(view:View) {
-            if(!applied)return
-            assign(view,nativeEffect);applied=false;cached=null;paramsHash=0
+        fun restore(view:View) {
+            try {if(applied)assign(view,nativeEffect)} finally {
+                // Always release native channels even when the OEM bridge fails.
+                applied=false;cached=null;paramsHash=0;lastApplied=null
+                runCatching {nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,false)}}.onFailure(::failure)
+            }
         }
         override fun onPreDraw():Boolean {
             val view=target.get() ?: return true
@@ -191,9 +218,12 @@ object AppGlassHook {
                 val effect=if(view.isShown && view.windowVisibility==View.VISIBLE)effect() else null
                 if(effect==null)restore(view)
                 else if(!applied || lastApplied!==effect) {
-                    assign(view,effect);lastApplied=effect;applied=true
-                    RuntimeDiagnostics.mark("app-glass-material","组件已使用统一预设；未添加工具栏外框")
+                    if(nativeMutation {Cos17AppSurfaceHooks.beforeAssign(view,true)}) {
+                        assign(view,effect);lastApplied=effect;applied=true
+                        RuntimeDiagnostics.mark("app-glass-material","组件已使用统一预设；未添加工具栏外框")
+                    } else restore(view)
                 }
+                if(applied)nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,true)}
             } catch(error:Throwable) {
                 blockedUntil=SystemClock.uptimeMillis()+30_000L
                 runCatching { restore(view) };failure(error)
