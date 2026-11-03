@@ -1,0 +1,45 @@
+{
+  "version": "1.1.9-debug5",
+  "versionCode": 1001009,
+  "unitTests": {
+    "tests": 265,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Warning": 352
+  },
+  "debugBuild": true,
+  "releaseBuild": true,
+  "apkSha256": "b6fb1695a5b5256c80506c43bb060c66503c69d9e490843c01617fb389f54a70",
+  "emulatorLiveNodeProbe": {
+    "version": "1.1.9-debug5",
+    "status": "PASS",
+    "liveContentChangedWithoutEffectRebuild": true,
+    "nativeSourceMotionWithoutEffectRebuild": true,
+    "nonzeroHostOriginAligned": true,
+    "hostAndSourceOriginsIndependent": true,
+    "contentRefreshDoesNotRequestAnotherFrame": true,
+    "outsideMaskTransparent": true,
+    "nativePaintRestoredAfterException": true,
+    "clearVisibleWithoutNativeInput": true,
+    "clearVisibleWithTransparentNativeInput": true,
+    "clearLiveInputChanges": true,
+    "clearNativePaintUntouched": true,
+    "oemViewSourceResolverTested": false,
+    "physicalDeviceTested": false
+  },
+  "physicalInstallSucceeded": false,
+  "physicalVisualAccepted": false,
+  "physicalAdbOperationsThisRound": false,
+  "oemBackdropAccepted": false,
+  "oemRecentsNativeShaderAccepted": false,
+  "clearButtonDrawsBeforeText": true,
+  "clearNativeBackgroundPreserved": true,
+  "productionBlurGpuOnly": true,
+  "dependenciesChanged": false,
+  "legalAssetsMatchSource": true,
+  "probeAbsentFromReleaseDex": true,
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96"
+}

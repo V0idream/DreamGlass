@@ -2,6 +2,7 @@
 package com.coloros16.liquidglass.hook
 
 import android.app.Activity
+import android.app.Dialog
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.*
@@ -9,8 +10,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.ViewTreeObserver
+import android.os.Looper
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
+import io.github.libxposed.api.XposedInterface
+import io.github.libxposed.api.XposedInterface.ExceptionMode
 import java.lang.reflect.Method
 import java.util.WeakHashMap
 import java.lang.ref.WeakReference
@@ -45,6 +49,7 @@ internal object GalleryLiveBackdrop {
     }
     private val frames=WeakHashMap<View,Frame>()
     private val firstFrameRetries=WeakHashMap<View,Int>()
+    private val dialogOwners=WeakHashMap<View,WeakReference<Activity>>()
     private var wrapper:Method?=null
     private var renderNode:Method?=null
     private fun id(view:View)=runCatching {view.resources.getResourceEntryName(view.id)}.getOrDefault("")
@@ -63,9 +68,44 @@ internal object GalleryLiveBackdrop {
             if(next===current)return null
         };return null
     }
+    /** A themed panel Context is not required to retain the Activity. Associate
+     * only the Dialog's own decor with its explicit owner/context at show-time;
+     * never pick an arbitrary recent Activity or another gallery window. */
+    fun installDialogSources(api:XposedInterface) {
+        runCatching {
+            api.hook(Dialog::class.java.getDeclaredMethod("show"))
+                .setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    val result=chain.proceed()
+                    if(Looper.myLooper()==Looper.getMainLooper())runCatching {
+                        val dialog=chain.getThisObject() as Dialog
+                        val owner=dialog.ownerActivity ?: activity(dialog.context)
+                        val decor=dialog.window?.peekDecorView()
+                        if(owner!=null && decor!=null && decor!==owner.window.peekDecorView())
+                            dialogOwners[decor]=WeakReference(owner)
+                    }
+                    result
+                }
+        }.onFailure {
+            RuntimeDiagnostics.mark("gallery-dialog-source-contract","窗口关联未注册：${it.javaClass.simpleName}；使用显式Activity上下文")
+        }
+    }
+    /** transformMatrixToGlobal alone can remain relative to the ViewRoot's
+     * window. Dialog and Activity have DIFFERENT roots/window offsets. Anchor
+     * each matrix to its actual screen origin without losing scale/rotation.
+     * When a ROM already includes that origin the correction is exactly zero. */
+    private fun screenMatrix(view:View):Matrix {
+        val matrix=Matrix();view.transformMatrixToGlobal(matrix)
+        val origin=floatArrayOf(0f,0f);matrix.mapPoints(origin)
+        val screen=IntArray(2);view.getLocationOnScreen(screen)
+        matrix.postTranslate(screen[0]-origin[0],screen[1]-origin[1])
+        return matrix
+    }
     private fun source(host:View):Source? {
         if(GalleryNativeSurfaceContract.isDialogPanel(host)) {
-            val a=activity(host.context) ?: return null
+            val a=dialogOwners[host.rootView]?.get() ?: activity(host.context) ?: run {
+                RuntimeDiagnostics.mark("gallery-live-dialog-missing-owner","面板没有可核对的所属Activity；保持原生")
+                return null
+            }
             if(a.isFinishing || a.isDestroyed || a.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE!=0)return null
             val content=a.window.peekDecorView() ?: return null
             if(content===host.rootView || content.left!=0 || content.top!=0 || !content.matrix.isIdentity)return null
@@ -102,9 +142,8 @@ internal object GalleryLiveBackdrop {
             return null
         }
         firstFrameRetries.remove(host)
-        val global=Matrix()
-        if(from.parent!=null)from.parent.transformMatrixToGlobal(global) else v.transformMatrixToGlobal(global)
-        val hostGlobal=Matrix();host.transformMatrixToGlobal(hostGlobal)
+        val global=screenMatrix(from.parent ?: v)
+        val hostGlobal=screenMatrix(host)
         val inverse=Matrix();if(!hostGlobal.invert(inverse))return null
         val map=Matrix().apply {setConcat(inverse,global)}
         val frame=frames[host] ?: Frame().also {frames[host]=it}

@@ -7,6 +7,7 @@ import android.hardware.HardwareBuffer
 import android.media.ImageReader
 import android.widget.TextView
 import com.coloros16.liquidglass.hook.LiveContentGlassNode
+import com.coloros16.liquidglass.hook.ClearButtonGlassSurface
 import com.coloros16.liquidglass.hook.NativePaintShaderLease
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import java.io.File
@@ -42,9 +43,9 @@ class LiveContentBackdropProbeActivity:Activity() {
             HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE)
         val renderer=HardwareRenderer();val root=RenderNode("probe output").apply {setPosition(0,0,360,300)}
         renderer.isOpaque=false;renderer.setSurface(reader.surface);renderer.setContentRoot(root)
-        fun render(name:String,hostX:Float=0f,hostY:Float=0f):Bitmap {
+        fun render(name:String,hostX:Float=0f,hostY:Float=0f,draw:((Canvas)->Unit)?=null):Bitmap {
             val c=root.beginRecording(360,300);c.drawColor(Color.TRANSPARENT,BlendMode.CLEAR)
-            c.translate(hostX,hostY);live.draw(c);root.endRecording()
+            c.translate(hostX,hostY);if(draw==null)live.draw(c) else draw(c);root.endRecording()
             renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
             val image=reader.acquireNextImage() ?: error("No output image")
             try {
@@ -94,12 +95,40 @@ class LiveContentBackdropProbeActivity:Activity() {
             val expected=IllegalStateException("expected")
             try {NativePaintShaderLease.withShader(paint,replacement) {throw expected}} catch(e:IllegalStateException) {check(e===expected)}
             check(paint.shader===native) {"Native Paint source not restored after recording failure"}
+            val button=ClearButtonGlassSurface()
+            val buttonArea=RectF(45f,80f,305f,150f)
+            val bp=params.copy(viewportWidth=buttonArea.width(),viewportHeight=buttonArea.height(),cornerRadius=35f)
+            fun buttonImage(name:String,source:Shader?)=render(name,draw={canvas ->
+                check(button.draw(canvas,buttonArea,bp,source,1f))
+            })
+            val absent=buttonImage("clear-no-native-input",null)
+            val transparent=buttonImage("clear-transparent-native-input",LinearGradient(0f,0f,1f,1f,0,0,Shader.TileMode.CLAMP))
+            for(image in listOf(absent,transparent)) {
+                check(Color.alpha(image.getPixel(170,115))>=24) {"Clear capsule disappeared with no visible source"}
+                check(Color.alpha(image.getPixel(20,115))==0)
+                check(Color.alpha(image.getPixel(46,81))==0)
+                image.recycle()
+            }
+            val nativeInput=RuntimeShader("""
+                uniform float phase;
+                half4 main(float2 p) {return half4(phase,p.y/300.0,0.15,1.0);}
+            """.trimIndent())
+            val untouchedPaint=Paint().apply {shader=nativeInput;alpha=0}
+            nativeInput.setFloatUniform("phase",.15f)
+            val ca=buttonImage("clear-live-initial",nativeInput)
+            nativeInput.setFloatUniform("phase",.75f)
+            val cb=buttonImage("clear-live-changed",nativeInput)
+            check(Color.red(cb.getPixel(170,115))-Color.red(ca.getPixel(170,115))>100) {"Clear live source frozen"}
+            check(untouchedPaint.shader===nativeInput && untouchedPaint.alpha==0) {"Native Paint mutated"}
+            ca.recycle();cb.recycle()
             val report=JSONObject().put("version",com.coloros16.liquidglass.BuildConfig.VERSION_NAME)
                 .put("status","PASS").put("liveContentChangedWithoutEffectRebuild",true)
                 .put("nativeSourceMotionWithoutEffectRebuild",true).put("nonzeroHostOriginAligned",true)
                 .put("hostAndSourceOriginsIndependent",true)
                 .put("contentRefreshDoesNotRequestAnotherFrame",true)
                 .put("outsideMaskTransparent",true).put("nativePaintRestoredAfterException",true)
+                .put("clearVisibleWithoutNativeInput",true).put("clearVisibleWithTransparentNativeInput",true)
+                .put("clearLiveInputChanges",true).put("clearNativePaintUntouched",true)
                 .put("oemViewSourceResolverTested",false).put("physicalDeviceTested",false)
             File(output,"report.json").writeText(report.toString(2))
             android.util.Log.i("LiveContentBackdropProbe","PASS $report");return report

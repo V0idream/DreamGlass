@@ -11,6 +11,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.hardware.HardwareBuffer
 import android.os.Build
@@ -1278,13 +1279,12 @@ object LauncherHook {
         } catch (t: Throwable) {
             true
         }
-        if (!enable) {NativeLauncherButtonMaterial.unavailable(drawable);return false}
+        if (!enable)return false
         if(NativeLauncherButtonMaterial.contains(drawable)) {
-            val nativePaint=getBlurShaderPaintOf(drawable) ?: return false
-            val nativePath=mDrawablePathField?.get(drawable) as? Path ?: return false
-            return NativeLauncherButtonMaterial.record(drawable,nativePaint,nativePath) {
-                recordPreparedGlass(drawable,nativePaint)
-            }
+            // A recorded native node may still be transparent or alpha=0.
+            // Keep its content original; the button draws its own visible layer
+            // immediately before text using this same prepared input shader.
+            return false
         }
         // 门控 + 建玻璃 shader（与16.x 同一函数：省电/开关/映射/源全在这里判）
         if (!replaceShaderIfPossible(drawable)) return false
@@ -1293,13 +1293,22 @@ object LauncherHook {
     }
 
     internal fun registerNativeClearMaterial(view:View,params:LiquidGlassShader.Params):Boolean {
-        if(mInlineRecordMethod==null || mRenderNodeField==null || mDrawablePathField==null)return false
-        val inner=resolveCardInner(view) ?: return false
-        if(NativeLauncherButtonMaterial.register(inner,view,params)) {
-            mContentDirtyField?.setBoolean(inner,true);view.invalidate()
-        }
+        val inner=clearMaterialInner(view) ?: return false
+        NativeLauncherButtonMaterial.register(inner,view,params)
         return true
     }
+    private fun clearMaterialInner(view:View):Any? = resolveCardInner(view) ?: runCatching {
+        // Some controller variants expose the inner drawable directly while
+        // View.background is null or a transition wrapper.
+        view.javaClass.getMethod("getBlurDrawable").invoke(view)?.takeIf {
+            mBlurShaderPaintField?.declaringClass?.isInstance(it)==true
+        }
+    }.getOrNull()
+    internal fun nativeClearSource(view:View):Shader? = runCatching {
+        val inner=clearMaterialInner(view) ?: return null
+        if(mEnableBlurShaderField?.getBoolean(inner)==false)return null
+        getBlurShaderPaintOf(inner)?.shader?.takeUnless {it is RuntimeShader && shaderOwnerSet.contains(it)}
+    }.getOrNull()
     internal fun removeNativeClearMaterial(view:View) {
         for(inner in NativeLauncherButtonMaterial.remove(view))runCatching {mContentDirtyField?.setBoolean(inner,true)}
         view.invalidate()

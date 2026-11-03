@@ -1,0 +1,17 @@
+{
+  "version": "1.1.9-debug5",
+  "status": "PASS",
+  "liveContentChangedWithoutEffectRebuild": true,
+  "nativeSourceMotionWithoutEffectRebuild": true,
+  "nonzeroHostOriginAligned": true,
+  "hostAndSourceOriginsIndependent": true,
+  "contentRefreshDoesNotRequestAnotherFrame": true,
+  "outsideMaskTransparent": true,
+  "nativePaintRestoredAfterException": true,
+  "clearVisibleWithoutNativeInput": true,
+  "clearVisibleWithTransparentNativeInput": true,
+  "clearLiveInputChanges": true,
+  "clearNativePaintUntouched": true,
+  "oemViewSourceResolverTested": false,
+  "physicalDeviceTested": false
+}

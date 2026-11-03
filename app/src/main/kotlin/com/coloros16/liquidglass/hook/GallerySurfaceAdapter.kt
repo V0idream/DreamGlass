@@ -175,6 +175,7 @@ internal object GallerySurfaceAdapter {
 
     fun install(api:XposedInterface,loader:ClassLoader,materialApplied:(View)->Boolean):List<Class<*>> {
         contract=null;states.clear()
+        GalleryLiveBackdrop.installDialogSources(api)
         return try {
             val wrapper=Class.forName("com.oplus.gallery.basebiz.widget.BlurButtonWrapperView",false,loader)
             val getter=wrapper.getDeclaredMethod("getMaterialEffectDelegate").apply {isAccessible=true}

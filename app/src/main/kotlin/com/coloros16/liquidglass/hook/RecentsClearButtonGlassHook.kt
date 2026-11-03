@@ -14,6 +14,7 @@ import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.glass.SharedGlassParams
 import com.coloros16.liquidglass.log.Lg
+import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
 import java.lang.ref.WeakReference
@@ -95,13 +96,14 @@ internal object RecentsClearButtonGlassHook {
             }
             api.hook(onDraw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 val view=chain.getThisObject() as View
-                val active=ui() && states[view]?.active==true && NativeLauncherButtonMaterial.ready(view) && (chain.getArg(0) as Canvas).isHardwareAccelerated
-                nativeDraw.run(if(active)view else null) {chain.proceed()}
+                val canvas=chain.getArg(0) as Canvas
+                val drawn=ui() && runCatching {states[view]?.draw(canvas)==true}.getOrDefault(false)
+                nativeDraw.run(if(drawn)view else null) {chain.proceed()}
             }
             api.hook(useBlur).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-                // This condition ONLY skips the two fallback solid-color Paths
-                // inside this owner's onDraw. Calls from native g()/controller
-                // setup stay original; no native blur capability flag is forced.
+                // Skip fallback fill ONLY after a visible layer was drawn on
+                // this very Canvas. Native node recording/registration is not
+                // sufficient. Controller setup and unrelated buttons stay native.
                 if(nativeDraw.current()===chain.getThisObject() && nativeDraw.current()!=null)true else chain.proceed()
             }
             api.deoptimize(onDraw);api.deoptimize(useBlur);api.deoptimize(inflate)
@@ -114,13 +116,26 @@ internal object RecentsClearButtonGlassHook {
         private val target=WeakReference(view)
         var active=false;private set
         private var blockedUntil=0L
+        private val surface=ClearButtonGlassSurface()
+        private var area=RectF()
+        private var params:LiquidGlassShader.Params?=null
+        fun draw(canvas:Canvas):Boolean {
+            val view=target.get() ?: return false
+            if(!active || !view.isShown || contract?.forceBlocked?.invoke(view)==true)return false
+            val p=params ?: return false
+            val source=LauncherHook.nativeClearSource(view)
+            val drawn=surface.draw(canvas,area,p,source,view.resources.displayMetrics.density)
+            if(drawn)mark(if(source==null)"visible-base" else "visible-live",
+                if(source==null)"缺少原生GPU输入；保留可见胶囊底色，不删除背景" else "在按钮文字前直接绘制原生实时shader；不依赖背景RenderNode透明度")
+            return drawn
+        }
         private fun sync() {
             val view=target.get() ?: return
             try {
                 preferences()
                 val c=contract ?: return
                 if(!enabled || !eligible(view) || !view.isShown || !view.isHardwareAccelerated ||
-                    !view.clipToOutline || view.width<=0 || view.height<=0 ||
+                    view.width<=0 || view.height<=0 ||
                     c.forceBlocked.invoke(view)==true || SystemClock.uptimeMillis()<blockedUntil) {restore(view);return}
                 val b=RectF(c.bounds.invoke(view) as RectF)
                 val radius=RecentsClearButtonPolicy.radius(b.left,b.top,b.right,b.bottom) ?: run {restore(view);return}
@@ -128,9 +143,11 @@ internal object RecentsClearButtonGlassHook {
                 val key=System.identityHashCode(view);GlassRegistry.bind(key,view,c.button.name)
                 val p=SharedGlassParams.resolve(config.values,config.preset,GlassRegistry.overridesFor(key),
                     b.width(),b.height(),GlassRegistry.cornerOverrideFor(key) ?: radius,true,config.compactOptics,config.grayBaseLuma)
-                if(!LauncherHook.registerNativeClearMaterial(view,p)) {restore(view);return}
-                active=true
-                mark("material","清理按钮保留原生GPU背景；共享材质在原native录制时挂载，不再透明替换背景")
+                LauncherHook.registerNativeClearMaterial(view,p)
+                val changed=!active || area!=b || params!=p
+                area=b;params=p;active=true
+                if(changed)view.invalidate()
+                mark("material","直接绘制可见胶囊与共用玻璃；缺少LayerBlurDrawable也保留底色")
 
             } catch(error:Throwable) {
                 blockedUntil=SystemClock.uptimeMillis()+30_000L
@@ -140,7 +157,7 @@ internal object RecentsClearButtonGlassHook {
         }
         private fun restore(view:View) {
             if(active)LauncherHook.removeNativeClearMaterial(view)
-            active=false
+            active=false;params=null
         }
 
         override fun onPreDraw():Boolean {sync();return true}

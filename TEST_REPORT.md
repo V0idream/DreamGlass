@@ -1,3 +1,9 @@
+# DreamGlass 1.1.9-debug5 验证记录
+
+265 项 JVM 测试、Debug／Release 构建和 Lint 通过（352 Warning，0 Error／Fatal）。隔离模拟器执行生产直接按钮绘制及实时内容核心的 11 项 GPU 断言，包括缺源／透明输入下底层可见、动态颜色更新和原生 Paint 不变。实体设备未安装或操作，厂商控件与画面仍待验收，详见 [记录](docs/validation/1.1.9-debug5/README.md)。
+
+---
+
 # DreamGlass 1.1.9-debug4 验证记录
 
 265 项 JVM 测试、Debug／Release 构建和 Lint 通过（352 Warning，0 Error／Fatal）。隔离 Android 模拟器执行生产实时 RenderNode 核心的内容／位置更新、坐标映射、裁剪与原生 Paint 恢复检查；全部通过。实体手机未安装或操作，厂商相册内容源和桌面 shader 未验收，详见 [验证记录](docs/validation/1.1.9-debug4/README.md)。
