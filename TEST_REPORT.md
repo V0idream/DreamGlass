@@ -1,3 +1,9 @@
+# DreamGlass 2.0 验证记录
+
+正式 Release 构建、265 项 Release JVM 测试、Lint 通过（352 Warning，0 Error／Fatal）。正式 APK 版本 2.0／2000000，不可调试、无新增探针，升级证书及法律附件校验通过。实体设备未安装或验收，已知视觉和时序问题列入发布说明。详见 [发行验证](docs/validation/2.0/README.md)。
+
+---
+
 # DreamGlass 1.1.9-debug5 验证记录
 
 265 项 JVM 测试、Debug／Release 构建和 Lint 通过（352 Warning，0 Error／Fatal）。隔离模拟器执行生产直接按钮绘制及实时内容核心的 11 项 GPU 断言，包括缺源／透明输入下底层可见、动态颜色更新和原生 Paint 不变。实体设备未安装或操作，厂商控件与画面仍待验收，详见 [记录](docs/validation/1.1.9-debug5/README.md)。

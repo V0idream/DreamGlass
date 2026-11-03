@@ -1,0 +1,34 @@
+{
+  "version": "2.0",
+  "versionCode": 2000000,
+  "date": "2026-11-03",
+  "buildType": "release",
+  "debuggable": false,
+  "unitTests": {
+    "tests": 265,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Warning": 352
+  },
+  "apkSha256": "b185ea56d2b56bd431247a4fb5bfbc77ab63558dae2a376464847a4922246fdb",
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "sameCertificateAsPreviousVersions": true,
+  "legalAssetsMatchSource": true,
+  "probeAbsentFromReleaseDex": true,
+  "dependenciesChanged": false,
+  "productionImplementationMatchesDebug5": true,
+  "physicalInstallSucceeded": false,
+  "physicalVisualAccepted": false,
+  "physicalAdbOperationsThisRound": false,
+  "gpuProbesExecutedThisRound": false,
+  "priorDebug5GpuAssertions": 11,
+  "knownIssues": [
+    "gallery_save_panel_appearance",
+    "recents_clear_material_and_enter_delay",
+    "background_refresh_latency",
+    "mixed_ongoing_and_clearable_group_particles"
+  ]
+}
