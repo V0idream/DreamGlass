@@ -24,7 +24,6 @@
         <package android:name="com.android.systemui" />
         <package android:name="com.android.launcher" />
         <package android:name="com.coloros.gallery3d" />
-        <package android:name="com.coloros.calculator" />
         <package android:name="com.coloros.smartsidebar" />
         <package android:name="com.coloros.assistantscreen" />
     </queries>
@@ -52,6 +51,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+        <receiver android:name=".MembershipUpdateReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+        </receiver>
         <activity android:name=".ui.MembershipActivity" android:exported="false" />
         <activity android:name=".ui.LicenseActivity" android:exported="false" />
         <!-- 完整高级配置。 -->

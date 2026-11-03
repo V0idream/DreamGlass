@@ -7,25 +7,24 @@ import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.entry.XposedEntry
 import io.github.libxposed.api.XposedInterface
 
-/** Only verified surface owners are mounted. Never skip framework drawBackground:
- * calculator operators are background SVGs, and opaque HWUI metadata must track
- * ordinary background setter changes. Each adapter owns its native fill only. */
+/** Only verified surface owners are mounted. Preserve foreground rendering and
+ * synchronize opaque HWUI metadata through ordinary background setter changes.
+ * Each adapter owns its native fill only. */
 internal object Cos17AppSurfaceHooks {
     private var targets:List<Class<*>> = emptyList()
-    fun isTarget(view:View)=targets.any {it.isInstance(view)}
+    fun isTarget(view:View)=targets.any {it.isInstance(view)} || AssistantSurfaceAdapter.isSpecificTarget(view) || GallerySurfaceAdapter.matches(view)
     fun isNativeCard(view:View)=AssistantSurfaceAdapter.isNativeCard(view)
-    fun nativeBounds(view:View):RectF? = CalculatorSurfaceAdapter.nativeBounds(view)
-        ?: AssistantSurfaceAdapter.nativeBounds(view) ?: GallerySurfaceAdapter.nativeBounds(view)
+    fun nativeBounds(view:View):RectF? = AssistantSurfaceAdapter.nativeBounds(view) ?: GallerySurfaceAdapter.nativeBounds(view)
     fun nativeFillAlpha(view:View)=AssistantSurfaceAdapter.nativeFillAlpha(view) ?: 1f
     fun beforeAssign(view:View,active:Boolean)=GallerySurfaceAdapter.beforeAssign(view,active)
-    fun nativeRadius(view:View)=GallerySurfaceAdapter.nativeRadius(view)
+    fun nativeRadius(view:View)=GallerySurfaceAdapter.nativeRadius(view) ?: AssistantSurfaceAdapter.nativeRadius(view)
+    fun nativeRole(view:View)=GallerySurfaceAdapter.nativeRole(view)
     fun onMaterialStateChanged(view:View,active:Boolean) {
-        CalculatorSurfaceAdapter.onMaterialStateChanged(view,active)
+        AssistantSurfaceAdapter.onMaterialStateChanged(view,active)
         GallerySurfaceAdapter.onMaterialStateChanged(view,active)
     }
     fun install(api:XposedInterface,loader:ClassLoader,pkg:String) {
         targets=try {when(pkg) {
-            XposedEntry.PACKAGE_CALCULATOR -> CalculatorSurfaceAdapter.install(api,loader,AppGlassHook::materialApplied)
             XposedEntry.PACKAGE_GALLERY -> GallerySurfaceAdapter.install(api,loader,AppGlassHook::materialApplied)
             XposedEntry.PACKAGE_ASSISTANT_SCREEN -> AssistantSurfaceAdapter.install(api,loader,AppGlassHook::materialApplied)
             else -> emptyList()

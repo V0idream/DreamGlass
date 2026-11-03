@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026-10-30. GPL-3.0. Native GPU texture adapter. */
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.Prefs
+
 import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.os.Looper
@@ -78,7 +80,7 @@ internal object NativeAppBackdropHook {
                 val drawable=chain.getThisObject() as? Drawable ?: return@intercept chain.proceed()
                 val canvas=chain.getArg(0) as? Canvas ?: return@intercept chain.proceed()
                 RuntimeDiagnostics.mark("app-glass-native-draw","${drawable.javaClass.simpleName}; main=${Looper.myLooper()==Looper.getMainLooper()}")
-                if(!canvas.isHardwareAccelerated || SystemClock.uptimeMillis()<retryAt)
+                if(!Prefs.memberAllowed(api) || !canvas.isHardwareAccelerated || SystemClock.uptimeMillis()<retryAt)
                     return@intercept chain.proceed()
                 var target:Paint?=null;var original:Shader?=null
                 try {

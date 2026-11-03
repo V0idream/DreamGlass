@@ -75,12 +75,15 @@ object ParticleDissolveHook {
         private var speed = DEFAULT_SPEED
         private var readAt = -1L
         private var retryAt = 0L
+        private var interfaceApi: XposedInterface? = null
+        private fun membershipGranted(): Boolean = Prefs.memberAllowed(interfaceApi)
         private val worker = ThreadPoolExecutor(0, 1, 15, TimeUnit.SECONDS,
             ArrayBlockingQueue<Runnable>(MAX_ACTIVE), { task ->
                 Thread(task, "LiquidGlass-particle-snapshot").apply { isDaemon = true }
             }, ThreadPoolExecutor.AbortPolicy())
 
         fun install(api: XposedInterface, loader: ClassLoader) {
+            interfaceApi = api
             if (installed) return
             val row = Class.forName(ROW, false, loader)
             val helper = Class.forName("com.android.systemui.SwipeHelper", false, loader)
@@ -225,6 +228,9 @@ object ParticleDissolveHook {
         }
         private fun allowed(api: XposedInterface, context: Context): Boolean {
             if (Looper.myLooper() != Looper.getMainLooper()) return false
+            if (!membershipGranted()) {
+                enabled = false; readAt = -1L; stopAll(); return false
+            }
             val now = SystemClock.uptimeMillis()
             if (now < retryAt) return false
             if (readAt < 0 || now - readAt >= 500) {
@@ -329,6 +335,7 @@ object ParticleDissolveHook {
         }
         private fun start(view: View, c: Capture) {
             if (c.cancelled || c.consumed || !c.committed) return
+            if (!membershipGranted()) { c.cancelled = true; captures.remove(view); stopAll(); return }
             val bitmap = c.bitmap ?: return
             val root = c.root.get() ?: return
             val power = root.context.getSystemService(PowerManager::class.java)
@@ -342,9 +349,11 @@ object ParticleDissolveHook {
                 val currentX=handoffX(c.x,c.rowTranslation,current)
                 if(current.isFinite() && (currentX-c.releaseX)*c.direction>=0f)c.releaseX=currentX
             }
-            val dust = Dust(root, bitmap, c.releaseX, c.releaseY, c.width, c.height, c.density, speed,c.direction,c.initialProgress) {
+            val dust = Dust(root, bitmap, c.releaseX, c.releaseY, c.width, c.height, c.density, speed,c.direction,c.initialProgress,
+                remainsAllowed = ::membershipGranted) {
                 c.hiddenAlpha?.let { old -> if(view.alpha==0f)view.alpha=old };c.hiddenAlpha=null
                 effects.remove(view)
+                if(!membershipGranted())ui.post { stopAll() } // Release deferred native shade close as well.
             }
             effects[view] = dust
             dust.start()
@@ -399,7 +408,8 @@ object ParticleDissolveHook {
 
         internal class Dust(private val root: View, bitmap: Bitmap, x: Float, y: Float,
             width: Int, height: Int, density: Float, private val speed: Int, direction:Float=1f,
-            private val initialProgress:Float=0f,private val vertical:Boolean=false,private val ended: () -> Unit)
+            private val initialProgress:Float=0f,private val vertical:Boolean=false,
+            private val remainsAllowed: (() -> Boolean)? = null, private val ended: () -> Unit)
             : Drawable(), Choreographer.FrameCallback, View.OnAttachStateChangeListener {
             private val shader = RuntimeShader(SHADER)
             private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = this@Dust.shader }
@@ -436,6 +446,7 @@ object ParticleDissolveHook {
             override fun doFrame(time: Long) {
                 try {
                     if (stopped) return
+                    if (remainsAllowed?.invoke() == false) { stop();return }
                     val now = SystemClock.uptimeMillis()
                     val elapsed = now-born
                     if (now-lastPowerCheck >= 200L) {
@@ -452,6 +463,7 @@ object ParticleDissolveHook {
             }
             override fun draw(canvas: Canvas) {
                 if (stopped || !canvas.isHardwareAccelerated) return
+                if (remainsAllowed?.invoke() == false) { ui.post { stop() };return }
                 val saved=canvas.save()
                 try { canvas.translate(bounds.left.toFloat(),bounds.top.toFloat())
                     canvas.drawRect(0f,0f,bounds.width().toFloat(),bounds.height().toFloat(),paint)

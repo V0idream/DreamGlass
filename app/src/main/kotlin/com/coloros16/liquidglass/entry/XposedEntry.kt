@@ -12,7 +12,6 @@ import com.coloros16.liquidglass.hook.SystemUiLifecycle
 import com.coloros16.liquidglass.hook.SystemUiInstallGate
 import io.github.libxposed.api.XposedInterface.ExceptionMode
 import com.coloros16.liquidglass.hook.Cos17Contract
-import com.coloros16.liquidglass.hook.LauncherAnimHook
 import com.coloros16.liquidglass.hook.LauncherHook
 import com.coloros16.liquidglass.hook.LauncherTiltCompat
 import com.coloros16.liquidglass.hook.KeyguardGlassHook
@@ -75,7 +74,7 @@ class XposedEntry : XposedModule() {
         // [2026-08-13 spec/10] Launcher 进程（com.android.launcher）加入：桌面文件夹背景液态玻璃化，
         // 与 SystemUI 共用同一套 posteffect drawBlurShader hook（FQCN 相同，两份独立 hook 实例）。
         if (param.packageName != PACKAGE_SYSTEMUI && param.packageName != PACKAGE_LAUNCHER &&
-            param.packageName != PACKAGE_GALLERY && param.packageName != PACKAGE_CALCULATOR &&
+            param.packageName != PACKAGE_GALLERY &&
             param.packageName != PACKAGE_SMART_SIDEBAR && param.packageName != PACKAGE_ASSISTANT_SCREEN
         ) return
         val classLoader = param.getDefaultClassLoader() ?: return
@@ -150,7 +149,7 @@ class XposedEntry : XposedModule() {
             return
         }
         if (pkg != PACKAGE_SYSTEMUI && pkg != PACKAGE_LAUNCHER &&
-            pkg != PACKAGE_GALLERY && pkg != PACKAGE_CALCULATOR && pkg != PACKAGE_SMART_SIDEBAR &&
+            pkg != PACKAGE_GALLERY && pkg != PACKAGE_SMART_SIDEBAR &&
             pkg != PACKAGE_ASSISTANT_SCREEN
         ) {
             // 非目标进程：按框架语义卸掉旧 hook（这些进程本就不该有模块 hook）
@@ -212,26 +211,15 @@ class XposedEntry : XposedModule() {
                 installHooks(classLoader)
             }
             // [spec/10] Launcher：桌面文件夹背景液态玻璃化（闭合文件夹图标 + 打开文件夹卡片）。
-            // [spec/64] Launcher：桌面动画参数调节（弹簧刚度/阻尼 + 图标透明度时长，默认全关）。
-            // [spec/65] Launcher：iOS 动态倾斜/透视（实验性，默认关）。
-            // [spec/116 P0/P2] 版本门控：<17.3.12（或读取失败 -1）三 hook 全装、tilt 走 16.x 现状路径；
-            // >=17.3.12 禁用旧 anim hook；仅使用当前原生矩阵叠加的兼容倾斜。
+            // COS17 keeps native spring animation; only verified icon-directed tilt is added.
             PACKAGE_LAUNCHER -> {
-                val hostVer = HostVersion.hostVersionCode(PACKAGE_LAUNCHER)
-                if (hostVer >= VERSION_LAUNCHER_17_3_12 || Cos17Contract.launcherInline(classLoader)) {
-                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=17.3.12+: skip LauncherAnimHook; windowTilt=affine-composition")
-                    LauncherHook.install(this, classLoader)
-                    LauncherTiltCompat.install(this, classLoader)
-                } else {
-                    Lg.i(TAG, "host version: pkg=$PACKAGE_LAUNCHER versionCode=$hostVer, branch=<17.3.12 (or unknown -1): legacy animation tuning; tilt requires verified COS17 callback")
-                    LauncherHook.install(this, classLoader)
-                    LauncherAnimHook.install(this, classLoader)
-                    LauncherTiltCompat.install(this, classLoader)
-                }
+                LauncherHook.install(this, classLoader)
+                com.coloros16.liquidglass.hook.LauncherFolderGlassSurfaceHook.install(this,classLoader)
+                LauncherTiltCompat.install(this, classLoader)
             }
-            // 第三方 App（相册/计算器/智能侧边栏/速览）：A/B 族模糊挂载点登记（组件清单 + 预设按组件命中）。
+            // 第三方 App（相册/智能侧边栏/速览）：A/B 族模糊挂载点登记（组件清单 + 预设按组件命中）。
             // OEM 背景输入通道使用统一 GPU 光学材质；不需要向第三方进程开放抓屏权限。
-            PACKAGE_GALLERY, PACKAGE_CALCULATOR, PACKAGE_SMART_SIDEBAR, PACKAGE_ASSISTANT_SCREEN -> {
+            PACKAGE_GALLERY, PACKAGE_SMART_SIDEBAR, PACKAGE_ASSISTANT_SCREEN -> {
                 AppGlassHook.install(this, classLoader, packageName)
             }
         }
@@ -298,8 +286,6 @@ class XposedEntry : XposedModule() {
         const val PACKAGE_LAUNCHER = "com.android.launcher"
         /** 相册进程：照片页/按钮的视图背景模糊组件登记（AppGlassHook A 族）。 */
         const val PACKAGE_GALLERY = "com.coloros.gallery3d"
-        /** 计算器进程：对话框/弹出菜单窗口模糊组件登记（AppGlassHook B 族）。 */
-        const val PACKAGE_CALCULATOR = "com.coloros.calculator"
         /** 智能侧边栏进程：侧边栏面板窗口模糊组件登记（AppGlassHook B 族）。 */
         const val PACKAGE_SMART_SIDEBAR = "com.coloros.smartsidebar"
         /** 速览（负一屏）进程：卡片/控件窗口模糊组件登记（AppGlassHook B 族）。 */
@@ -308,8 +294,6 @@ class XposedEntry : XposedModule() {
         private val cachedLoaders = java.util.concurrent.ConcurrentHashMap<String, ClassLoader>()
         /** [doc/spec/110] 模块版本标记（热重载完成日志用，便于 daemon 侧对账 loaded version）。 */
         private const val MODULE_VERSION = BuildConfig.VERSION_NAME
-        /** [spec/116 P0] 桌面 17.3.12 versionCode：达到该版本后禁用 LauncherAnimHook（弹簧字段全灭）。 */
-        private const val VERSION_LAUNCHER_17_3_12 = 170030012L
         private const val TAG = "LiquidGlass"
     }
 }

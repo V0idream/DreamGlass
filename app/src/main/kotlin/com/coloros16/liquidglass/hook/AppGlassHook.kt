@@ -31,7 +31,6 @@ import java.util.WeakHashMap
 object AppGlassHook {
     private const val BRIDGE="com.oplus.view.OplusViewBackgroundRenderEffect"
     private val keys=mapOf(XposedEntry.PACKAGE_GALLERY to Prefs.KEY_GALLERY_GLASS,
-        XposedEntry.PACKAGE_CALCULATOR to Prefs.KEY_CALCULATOR_GLASS,
         XposedEntry.PACKAGE_SMART_SIDEBAR to Prefs.KEY_SMART_SIDEBAR_GLASS,
         XposedEntry.PACKAGE_ASSISTANT_SCREEN to Prefs.KEY_ASSISTANT_SCREEN_GLASS)
     private val states=WeakHashMap<View,State>()
@@ -44,7 +43,8 @@ object AppGlassHook {
     private var enabled=false
     private var snapshot:SharedGlassParams.Snapshot?=null
     fun install(api:XposedInterface,classLoader:ClassLoader,packageName:String) {
-        this.api=api;this.packageName=packageName;switchKey=keys[packageName] ?: return
+        val key=keys[packageName] ?: return
+        this.api=api;this.packageName=packageName;switchKey=key
         GlassRegistry.attach { Prefs.read(api) }
         NativeAppBackdropHook.install(api,classLoader)
         try {
@@ -97,6 +97,7 @@ object AppGlassHook {
         }
     }
     private fun preferences() {
+        if(!Prefs.memberAllowed(api)) {enabled=false;readAt=-1000L;return}
         val now=SystemClock.uptimeMillis();if(now-readAt<500)return
         readAt=now
         val p=api?.let(Prefs::read) ?: return
@@ -104,7 +105,7 @@ object AppGlassHook {
         RuntimeDiagnostics.update("app-glass-enabled",if(enabled)"开启" else "关闭")
         if(enabled)snapshot=SharedGlassParams.read(p)
     }
-    internal fun materialApplied(view:View):Boolean = states[view]?.applied==true
+    internal fun materialApplied(view:View):Boolean = states[view]?.applied==true && Prefs.memberAllowed(api)
     internal fun nativeParams(view:View,width:Float,height:Float):com.coloros16.liquidglass.liquidglass.LiquidGlassShader.Params? {
         preferences();if(!enabled || role(view)==AppGlassSurfacePolicy.NONE)return null
         val s=snapshot ?: return null
@@ -137,16 +138,17 @@ object AppGlassHook {
         return false
     }
     private fun canObserve(view:View)=when(packageName) {
-        XposedEntry.PACKAGE_CALCULATOR,XposedEntry.PACKAGE_GALLERY,XposedEntry.PACKAGE_ASSISTANT_SCREEN ->
+        XposedEntry.PACKAGE_GALLERY,XposedEntry.PACKAGE_ASSISTANT_SCREEN ->
             Cos17AppSurfaceHooks.isTarget(view)
         else -> true
     }
     private fun role(view:View):Int {
         val dm=view.resources.displayMetrics
         // Vendor bridges may be called for both parent and child. Limit these
-        // three apps to proven material owners; never filter an icon twice.
+        // these apps to proven material owners; never filter an icon twice.
         if(!canObserve(view))return AppGlassSurfacePolicy.NONE
         if(view.width>=dm.widthPixels*.9f && view.height>=dm.heightPixels*.65f)return AppGlassSurfacePolicy.NONE
+        Cos17AppSurfaceHooks.nativeRole(view)?.let {return it}
         val hint=if(packageName==XposedEntry.PACKAGE_SMART_SIDEBAR)"/sidebar" else if(packageName==XposedEntry.PACKAGE_ASSISTANT_SCREEN)"/assistant" else ""
         return AppGlassSurfacePolicy.role(view.javaClass.name+hint,id(view),view.width.toFloat(),view.height.toFloat(),
             dm.widthPixels.toFloat(),dm.heightPixels.toFloat(),view is ViewGroup,view.isClickable,hasControl(view),

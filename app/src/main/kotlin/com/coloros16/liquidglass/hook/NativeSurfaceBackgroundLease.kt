@@ -20,7 +20,7 @@ import java.lang.ref.WeakReference
  * the wrapper's explicit owner reference is weak. Native replacements are adopted
  * on the next active sync, and cleanup never overwrites a newer native background.
  */
-internal object CalculatorBackgroundLease {
+internal object NativeSurfaceBackgroundLease {
     fun sync(host:View,active:Boolean):Boolean {
         val current=host.background
         val owned=current as? TransparentParentBackground

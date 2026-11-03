@@ -22,7 +22,7 @@ object ButtonBackdropBlur {
         return intArrayOf(floor(w * scale).toInt().coerceAtLeast(1), floor(h * scale).toInt().coerceAtLeast(1))
     }
 
-    /** Compatibility/test export only. The Android production path uses applyPremultiplied(). */
+    /** CPU reference retained for offline tests only. Android production filtering uses the GPU worker. */
     fun apply(pixels: IntArray, width: Int, height: Int, sigma: Float): IntArray {
         require(width > 0 && height > 0 && pixels.size == width * height)
         if (!sigma.isFinite() || sigma <= 0f) return pixels.copyOf()

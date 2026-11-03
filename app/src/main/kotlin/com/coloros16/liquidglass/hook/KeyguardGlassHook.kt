@@ -62,6 +62,7 @@ object KeyguardGlassHook {
     private var sourceKey=""
     private var loadedKey=""
     private var application:Context?=null
+    private fun membershipGranted():Boolean=Prefs.memberAllowed(api)
 
     fun install(api:XposedInterface,loader:ClassLoader) {
         if(mounted || Application.getProcessName()!="com.android.systemui")return
@@ -100,6 +101,7 @@ object KeyguardGlassHook {
                 val view=chain.getThisObject() as? View
                 val entry=entries[view]
                 val background=chain.getArg(0) as? Drawable
+                if(entry!=null && !membershipGranted())entry.restore()
                 if(entry!=null && entry.role!=KeyguardGlassPolicy.TEXT) {
                     entry.originalBackground=background;entry.dirty()
                     if(entry.applied) {
@@ -113,6 +115,7 @@ object KeyguardGlassHook {
                 .setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                     if(ownChange || Looper.myLooper()!=Looper.getMainLooper())return@intercept chain.proceed()
                     val entry=entries[chain.getThisObject() as? View]
+                    if(entry!=null && !membershipGranted())entry.restore()
                     if(entry?.attachment?.imageSlot==true) {
                         entry.attachment.originalImage=chain.getArg(0) as? Drawable;entry.dirty()
                         if(entry.applied) {
@@ -462,6 +465,11 @@ object KeyguardGlassHook {
         },filter,Context.RECEIVER_NOT_EXPORTED)
     }
     private fun preferences() {
+        if(!membershipGranted()) {
+            if(enabled) { epoch++;source=null }
+            enabled=false;text=false;cards=false;shortcuts=false;readAt=-1000L
+            return
+        }
         val now=SystemClock.uptimeMillis();if(now-readAt<700)return
         readAt=now
         val prefs=api?.let(Prefs::read) ?: return
@@ -570,9 +578,10 @@ object KeyguardGlassHook {
         private var previous=0
         val applied get()=attachment.applied
         fun dirty() { previous=0 }
-        fun compose(native:RenderEffect?):RenderEffect?=attachment.compose(native)
+        fun compose(native:RenderEffect?):RenderEffect?=if(membershipGranted())attachment.compose(native) else native
         private var blockedUntil=0L
         override fun onPreDraw():Boolean {
+            if(!membershipGranted()) { guarded {restore()};return true }
             if(SystemClock.uptimeMillis()<blockedUntil)return true
             try { refresh() } catch(error:Throwable) {
                 blockedUntil=SystemClock.uptimeMillis()+RuntimeWorkPolicy.failureDelayMs(error)

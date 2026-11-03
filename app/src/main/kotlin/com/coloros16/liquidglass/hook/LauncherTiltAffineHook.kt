@@ -23,6 +23,7 @@ internal object LauncherTiltAffineHook {
     @Volatile private var ready=false
 
     @Synchronized private fun config(api:XposedInterface):Config {
+        if(!Prefs.memberAllowed(api))return Config(false,1f,1f)
         val now=SystemClock.uptimeMillis()
         if(readAt<0 || now-readAt>=500) {
             // A failed refresh never suppresses native work or retains the last
@@ -63,7 +64,7 @@ internal object LauncherTiltAffineHook {
             // Catch only preparation failures. Do not retry chain.proceed if the
             // host throws; replaying native methods can double-advance animation.
             val replacement=runCatching {
-                if(!ready)return@runCatching null
+                if(!ready || !Prefs.memberAllowed(api))return@runCatching null
                 val self=chain.getThisObject() ?: return@runCatching null
                 val pose=scopes.pose(owner.get(self),surface.get(self)) ?: return@runCatching null
                 val input=chain.getArg(0) as? Matrix ?: return@runCatching null

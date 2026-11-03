@@ -1,7 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
     <activity android:name="com.dreamglass.cos17.AppSurfaceGeometryProbeActivity" android:exported="true" />
-    <activity android:name="com.dreamglass.cos17.CalculatorSurfaceProbeActivity" android:exported="true" />
     <activity android:name="com.dreamglass.cos17.NativeBackdropProbeActivity" android:exported="true" />
     <activity android:name="com.dreamglass.cos17.MenuBackgroundProbeActivity" android:exported="true" />
     <activity android:name="com.dreamglass.cos17.GlassBoundsProbeActivity" android:exported="true" />

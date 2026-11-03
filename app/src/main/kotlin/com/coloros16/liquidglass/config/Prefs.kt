@@ -451,18 +451,13 @@ object Prefs {
     /** 通知长按菜单玻璃默认值（false = 不干预，保持系统原样） */
     const val DEFAULT_NOTIFICATION_POPUP_GLASS = false
 
-    // ---------- 第三方 App 玻璃化（相册/计算器/智能侧边栏） ----------
+    // ---------- 其他 App 玻璃化（相册/智能侧边栏） ----------
     /** 相册玻璃化：拦截 App 内的视图背景模糊（RenderEffect / 窗口模糊 drawable）改画液态玻璃。
      *  默认 **false**；开启后需要进程内背景源（抓屏）通道可用，抓不到时保持系统原样模糊。
      *  改动即时生效（TTL 500ms 重读）。 */
     const val KEY_GALLERY_GLASS = "gallery_glass_enable"
     /** 相册玻璃化默认值（false = 不干预） */
     const val DEFAULT_GALLERY_GLASS = false
-
-    /** 计算器玻璃化（对话框/弹出菜单背景）。默认 **false**，语义同 [KEY_GALLERY_GLASS]。 */
-    const val KEY_CALCULATOR_GLASS = "calculator_glass_enable"
-    /** 计算器玻璃化默认值（false = 不干预） */
-    const val DEFAULT_CALCULATOR_GLASS = false
 
     /** 智能侧边栏玻璃化（侧边栏卡片/面板背景）。默认 **false**，语义同 [KEY_GALLERY_GLASS]。 */
     const val KEY_SMART_SIDEBAR_GLASS = "smart_sidebar_glass_enable"
@@ -561,100 +556,6 @@ object Prefs {
     /** 锁屏大时钟玻璃数字内部轻模糊半径默认值（6px 轻微磨砂） */
     const val DEFAULT_LOCKSCREEN_CLOCK_BLUR = 6f
 
-    // ---------- 桌面（Launcher）动画参数调节（doc/spec/64，2026-09-16） ----------
-    /** 动画参数分组：从桌面打开应用（对应 AnimType.OPEN_FROM_HOME） */
-    const val ANIM_GROUP_OPEN = "open"
-    /** 动画参数分组：应用退出返回桌面（SWIPE_TO_HOME / REMOTE_CLOSE_TO_HOME 系） */
-    const val ANIM_GROUP_CLOSE = "close"
-    /** 动画参数分组：打断动画（REVERSE_TO_OPEN 系） */
-    const val ANIM_GROUP_BREAK = "break"
-    /** 全部动画参数分组（UI 顺序 = 打开 / 关闭 / 打断） */
-    val ANIM_GROUPS = listOf(ANIM_GROUP_OPEN, ANIM_GROUP_CLOSE, ANIM_GROUP_BREAK)
-
-    /** 参数名：中心 X 轴刚度（→ CustomRectFSpringAnim.mCenterXStiffness） */
-    const val ANIM_PARAM_X_STIFFNESS = "x_stiffness"
-    /** 参数名：中心 X 轴阻尼（→ mCenterXDamping，运行时 ÷100） */
-    const val ANIM_PARAM_X_DAMPING = "x_damping"
-    /** 参数名：中心 Y 轴刚度（→ mRectYStiffness） */
-    const val ANIM_PARAM_Y_STIFFNESS = "y_stiffness"
-    /** 参数名：中心 Y 轴阻尼（→ mRectYDamping，运行时 ÷100） */
-    const val ANIM_PARAM_Y_DAMPING = "y_damping"
-    /** 参数名：宽度缩放刚度（→ mWidthStiffness） */
-    const val ANIM_PARAM_WIDTH_STIFFNESS = "width_stiffness"
-    /** 参数名：宽度缩放阻尼（→ mWidthDamping，运行时 ÷100） */
-    const val ANIM_PARAM_WIDTH_DAMPING = "width_damping"
-    /** 参数名：宽高比刚度（→ mRadioStiffness；修改版沿用 height_ 命名） */
-    const val ANIM_PARAM_HEIGHT_STIFFNESS = "height_stiffness"
-    /** 参数名：宽高比阻尼（→ mRadioDamping，运行时 ÷100；修改版沿用 height_ 命名） */
-    const val ANIM_PARAM_HEIGHT_DAMPING = "height_damping"
-    /** 参数名：图标透明度淡入淡出时长（ms，作用于 LauncherContentAnimManager） */
-    const val ANIM_PARAM_FADE_DURATION = "fade_duration"
-
-    /** 全部弹簧参数名（UI 展示顺序 = X / Y / 宽度 / 宽高比，每项先阻尼后刚度） */
-    val ANIM_SPRING_PARAMS = listOf(
-        ANIM_PARAM_X_DAMPING, ANIM_PARAM_X_STIFFNESS,
-        ANIM_PARAM_Y_DAMPING, ANIM_PARAM_Y_STIFFNESS,
-        ANIM_PARAM_WIDTH_DAMPING, ANIM_PARAM_WIDTH_STIFFNESS,
-        ANIM_PARAM_HEIGHT_DAMPING, ANIM_PARAM_HEIGHT_STIFFNESS,
-    )
-
-    /** 组开关键（`anim_<组>_enabled`），默认 false（不改原版动画） */
-    fun animEnabledKey(group: String): String = "anim_${group}_enabled"
-
-    /** 组内参数键（`anim_<组>_<参数>`） */
-    fun animKey(group: String, param: String): String = "anim_${group}_$param"
-
-    /** 组开关默认值（false = 默认关闭，与原版动画一致） */
-    const val DEFAULT_ANIM_GROUP_ENABLED = true
-    /** 刚度默认值（open/break：580） */
-    const val DEFAULT_ANIM_STIFFNESS_OPEN = 220
-    /** 刚度默认值（close：120） */
-    const val DEFAULT_ANIM_STIFFNESS_CLOSE = 220
-    /** 阻尼默认值（open/break：140 → 运行时 1.40） */
-    const val DEFAULT_ANIM_DAMPING_OPEN = 100
-    /** 阻尼默认值（close：87 → 运行时 0.87） */
-    const val DEFAULT_ANIM_DAMPING_CLOSE = 100
-    /** 图标透明度时长默认值（open/break：340ms） */
-    const val DEFAULT_ANIM_FADE_DURATION_OPEN = 420
-    /** 图标透明度时长默认值（close：510ms） */
-    const val DEFAULT_ANIM_FADE_DURATION_CLOSE = 420
-    /** 刚度可调范围下限（UI 滑杆） */
-    const val ANIM_STIFFNESS_UI_MIN = 1
-    /** 刚度可调范围上限（UI 滑杆；运行时 clamp 上限 5000） */
-    const val ANIM_STIFFNESS_UI_MAX = 3000
-    /** 阻尼可调范围下限（UI 滑杆；运行时 ÷100 后 clamp 0.05） */
-    const val ANIM_DAMPING_UI_MIN = 10
-    /** 阻尼可调范围上限（UI 滑杆；运行时 ÷100 后 clamp 5.0） */
-    const val ANIM_DAMPING_UI_MAX = 300
-    /** 图标透明度时长范围（ms） */
-    const val ANIM_FADE_DURATION_MIN = 50
-    /** 图标透明度时长范围（ms） */
-    const val ANIM_FADE_DURATION_MAX = 1500
-    /** 图标透明度时长步进（ms） */
-    const val ANIM_FADE_DURATION_STEP = 10
-    /** 刚度运行时 clamp 上限（照抄修改版 getFloat 的 5000f） */
-    const val ANIM_STIFFNESS_RUNTIME_MAX = 5000f
-    /** 阻尼运行时除以的倍数（照抄修改版：配置值 ÷100） */
-    const val ANIM_DAMPING_DIVISOR = 100f
-    /** 阻尼运行时 clamp 范围（照抄修改版 0.05~5.0） */
-    const val ANIM_DAMPING_RUNTIME_MIN = 0.05f
-    /** 阻尼运行时 clamp 范围（照抄修改版 0.05~5.0） */
-    const val ANIM_DAMPING_RUNTIME_MAX = 5.0f
-    /** 刚度运行时 clamp 下限（照抄修改版 1.0f） */
-    const val ANIM_STIFFNESS_RUNTIME_MIN = 1.0f
-
-    /** 组默认刚度（close 组与其他两组不同） */
-    fun animDefaultStiffness(group: String): Int =
-        if (group == ANIM_GROUP_CLOSE) DEFAULT_ANIM_STIFFNESS_CLOSE else DEFAULT_ANIM_STIFFNESS_OPEN
-
-    /** 组默认阻尼（close 组与其他两组不同） */
-    fun animDefaultDamping(group: String): Int =
-        if (group == ANIM_GROUP_CLOSE) DEFAULT_ANIM_DAMPING_CLOSE else DEFAULT_ANIM_DAMPING_OPEN
-
-    /** 组默认图标透明度时长（close 组与其他两组不同） */
-    fun animDefaultFadeDuration(group: String): Int =
-        if (group == ANIM_GROUP_CLOSE) DEFAULT_ANIM_FADE_DURATION_CLOSE else DEFAULT_ANIM_FADE_DURATION_OPEN
-
     // ---------- iOS 动态倾斜 / 透视（doc/spec/65，2026-09-16；实验性，默认关） ----------
     /** 兼容窗口倾斜：三维旋转的平行投影，合成当前原生仿射矩阵。
      * 实验性功能默认关闭。新 Hook 首次安装需重启桌面，随后配置动态读取。 */
@@ -682,7 +583,10 @@ object Prefs {
     // 零调用方（SceneFilter.kt 尚处占位阶段，仅注释提及）。
 
     // ---------- 读取（hook 端，SystemUI 进程） ----------
-    fun read(api: XposedInterface): SharedPreferences = api.getRemotePreferences(PREFS_NAME)
+    fun memberAllowed(api: XposedInterface?): Boolean = api!=null && runCatching {
+        MemberFeaturePolicy.isConfirmed(api.getRemotePreferences(PREFS_NAME))
+    }.getOrDefault(false)
+    fun read(api: XposedInterface): SharedPreferences = MemberFeaturePolicy.wrap(api.getRemotePreferences(PREFS_NAME))
 
     /**
      * int 配置兼容读取：先 getInt；**存量数据可能是 Float**（2026-08-13 前 UI 用 bindFloatSeekBar 写
@@ -1198,14 +1102,15 @@ object Prefs {
 
     // ---------- 读写（模块 UI 进程，SettingsActivity） ----------
     /** 框架侧存储（与 hook 端 getRemotePreferences 同一份数据，可写）。 */
-    fun remote(service: XposedService): SharedPreferences = service.getRemotePreferences(PREFS_NAME)
+    internal fun raw(service: XposedService): SharedPreferences = service.getRemotePreferences(PREFS_NAME)
+    fun remote(service: XposedService): SharedPreferences = MemberFeaturePolicy.wrap(raw(service))
 
     /**
      * 本地 XML 存储兜底（仅 UI 回显/降级用，hook 端读不到）。
      * 正常路径应写 [remote]，仅在 [App.serviceRef] 不可用时降级本方法。
      */
-    fun read(context: Context): SharedPreferences =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    internal fun raw(context: Context): SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    fun read(context: Context): SharedPreferences = MemberFeaturePolicy.wrap(raw(context))
 
     fun write(context: Context): SharedPreferences.Editor = read(context).edit()
 

@@ -55,7 +55,6 @@ import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.log.Lg
 import com.coloros16.liquidglass.log.LogCapture
-import com.coloros16.liquidglass.hook.CosCompatibility
 
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -73,7 +72,7 @@ import kotlin.math.roundToInt
  *
  * 二级菜单结构：
  * - 一级 = 大类（总开关 / 液态玻璃材质 / 背景与抓屏 / 文字与可读性 / 遮罩 / 流体云 /
- *   锁屏时钟 / 追踪器 / 日志与诊断 / 场景过滤），列表页展示。
+ *   锁屏 / 粒子 / 空间效果 / 日志与诊断），由主界面分类进入。
  * - 二级 = 各类内具体配置（开关 / 滑杆 / 下拉），点进大类后切换子视图。
  *   全部配置清单与接线状态见 doc/spec/34-配置开关清单.md。
  *
@@ -102,31 +101,8 @@ class SettingsActivity : AppCompatActivity() {
     /** 当前所在二级大类（null = 正在一级列表页）。 */
     private var currentCategory: String? = null
 
-    /** [spec/64] 当前所在三级「桌面动画参数」组（null = 不在三级页）。 */
-    private var currentAnimGroup: String? = null
-
     /** [2026-09-17 升级提示] 本次启动是否已触发过检查（防重复起线程）。 */
     private var updateCheckStarted = false
-
-    /** [spec/64] 一键预设档位：刚度 / 阻尼 / 透明度时长（ms）；null = 取该组默认值。 */
-    private data class AnimPreset(val labelRes: Int, val stiffness: Int?, val damping: Int?, val fade: Int?)
-
-    /**
-     * [spec/64] 三档预设，阻尼一律取 100 = 临界阻尼（ζ=1.0），**数学上无过冲**，仅速度不同。
-     * 折算关系（与 SwiftUI 同模型）：刚度 = (2π/T)²，T = 感知时长（秒）；阻尼值 = 阻尼比 ζ × 100。
-     *
-     * 为何不用 ζ<1：欠阻尼必然过冲（`过冲量 = e^(-πζ/√(1-ζ²))`），
-     * 表现为「画面已铺满全屏仍在继续胀大再回缩」。小元件位移下 0.6% 过冲不可见，
-     * 但应用打开是「图标 → 全屏」的大位移放大，同样的 ζ 会被放大成肉眼可见的运动
-     * （ζ=0.70 时过冲 4.6%，1440px 下约 66px）—— 真机实测 ζ<1 的档位均被否决。
-     */
-    private val animPresets = listOf(
-        // 按组取 ZuyQA 原始默认值：打开/打断 580/140/340，关闭 120/87/510
-        AnimPreset(R.string.settings_anim_preset_default, null, null, null),
-        AnimPreset(R.string.settings_anim_preset_soft, 158, 100, 500),
-        AnimPreset(R.string.settings_anim_preset_mid, 220, 100, 420),
-        AnimPreset(R.string.settings_anim_preset_crisp, 320, 100, 350),
-    )
 
     /** 二级大类定义。 */
     private data class Category(val id: String, val titleRes: Int, val descRes: Int, val layoutRes: Int)
@@ -141,12 +117,10 @@ class SettingsActivity : AppCompatActivity() {
         Category("seedling", R.string.cat_seedling, R.string.cat_seedling_desc, R.layout.view_cat_seedling),
         Category("particles", R.string.cat_particles, R.string.cat_particles_desc, R.layout.view_cat_particles),
         Category("keyguard", R.string.cat_keyguard, R.string.cat_keyguard_desc, R.layout.view_cat_keyguard),
-        // [spec/64] 桌面动画参数（三组开关 + 三级参数页）
-        Category("anim", R.string.cat_anim, R.string.cat_anim_desc, R.layout.view_cat_anim),
         // [spec/65] iOS 动态倾斜/透视（实验性，默认关）
         Category("tilt", R.string.cat_tilt, R.string.cat_tilt_desc, R.layout.view_cat_tilt),
         Category("desktop", R.string.cat_desktop, R.string.cat_desktop_desc, R.layout.view_cat_desktop),
-        // 其他组件：音量条 + 第三方 App（相册/计算器/智能侧边栏）的组件级玻璃开关
+        // 其他组件：相册、智能侧边栏、负一屏与通知菜单
         Category("components", R.string.cat_components, R.string.cat_components_desc, R.layout.view_cat_components),
         // [2026-09-17] 追踪器分类页已删除（追踪器整体移除，无存活控件）
         Category("log", R.string.cat_log, R.string.cat_log_desc, R.layout.view_cat_log),
@@ -189,7 +163,6 @@ class SettingsActivity : AppCompatActivity() {
         }
         if (entryCategory != null && categories.any { it.id == entryCategory }) {
             openCategory(entryCategory)
-            savedInstanceState?.getString("dream_anim_group")?.let { openAnimParams(it) }
         } else {
             finish()
         }
@@ -207,7 +180,6 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("dream_category", currentCategory)
-        outState.putString("dream_anim_group", currentAnimGroup)
         super.onSaveInstanceState(outState)
     }
 
@@ -306,7 +278,6 @@ class SettingsActivity : AppCompatActivity() {
     /** 一级列表页：展示全部大类。 */
     private fun showCategories() {
         currentCategory = null
-        currentAnimGroup = null
         supportActionBar?.title = getString(R.string.app_name)
         val listView = layoutInflater.inflate(R.layout.view_categories, contentFrame, false)
         contentFrame.removeAllViews()
@@ -338,44 +309,18 @@ class SettingsActivity : AppCompatActivity() {
     private fun openCategory(catId: String) {
         val cat = categories.firstOrNull { it.id == catId } ?: return
         currentCategory = catId
-        currentAnimGroup = null
         supportActionBar?.title = getString(cat.titleRes)
         val view = layoutInflater.inflate(cat.layoutRes, contentFrame, false)
         presentParameters(view, getString(cat.titleRes), getString(cat.descRes))
         bindCategory(catId)
     }
 
-    /** [spec/64] 三级页：桌面动画参数（打开 / 关闭 / 打断）。 */
-    private fun openAnimParams(group: String) {
-        currentAnimGroup = group
-        supportActionBar?.title = getString(animGroupTitleRes(group))
-        val view = layoutInflater.inflate(R.layout.view_anim_params, contentFrame, false)
-        presentParameters(view, getString(animGroupTitleRes(group)), "微调动画的阻尼与弹性，按需应用。")
-        bindAnimParams(view, group)
-    }
+    /** 子页面返回 DreamGlass 主界面；不进入旧版分类列表。 */
+    private fun navigateUp() { finish() }
 
-    /**
-     * [spec/88] 统一返回动作：导航图标、扩大的热区（backHitOverlay）、手势/系统返回
-     * （onBackPressedDispatcher）三处共用，层级语义与原导航图标完全一致 ——
-     * 三级「桌面动画参数」→ 二级「桌面动画」→ 一级列表 → 结束。
-     */
-    private fun navigateUp() {
-        when {
-            // [spec/64] 三级参数页 → 回二级「桌面动画」
-            currentAnimGroup != null -> openCategory("anim")
-            currentCategory != null -> finish()
-            else -> finish()
-        }
-    }
-
-    /** 按当前层级（三级 / 二级 / 一级）重新绑定控件（首次进入 + 框架就绪后权威值刷新共用）。 */
+    /** 框架连接恢复后，重新绑定当前分类。 */
     private fun bindCurrentPage() {
-        val view = contentFrame.getChildAt(0) ?: return
-        val group = currentAnimGroup
-        if (group != null) {
-            bindAnimParams(view, group)
-            return
-        }
+        if (contentFrame.childCount == 0) return
         currentCategory?.let { bindCategory(it) }
     }
 
@@ -392,7 +337,6 @@ class SettingsActivity : AppCompatActivity() {
             "seedling" -> bindSeedling(view)
             "keyguard" -> bindKeyguard(view)
             "particles" -> bindParticles(view)
-            "anim" -> bindAnim(view)
             "tilt" -> bindTilt(view)
             "desktop" -> bindDesktop(view)
             "components" -> bindComponents(view)
@@ -1339,9 +1283,6 @@ class SettingsActivity : AppCompatActivity() {
             Prefs.KEY_SEEDLING_CARD_GLASS_ENABLE, Prefs.DEFAULT_SEEDLING_CARD_GLASS_ENABLE
         )
 
-        // [2026-09-16 用户需求变更] 小胶囊（小岛）也玻璃化（默认开）
-        view.findViewById<View>(R.id.switchSeedlingCapsuleGlass).visibility=View.GONE
-
         // 展开大卡片判定高度系数（0.5~3.0，默认 1.2）
         bindFloatSeekBar(
             seek = view.findViewById(R.id.seekSeedlingExpandRatio), valueText = view.findViewById(R.id.seedlingExpandRatioValue),
@@ -1370,9 +1311,6 @@ class SettingsActivity : AppCompatActivity() {
         )
     }
 
-    // [spec/81 2026-09-17] bindLockscreen 已删除：锁屏时钟 hook 真机未命中数字 View，
-    // 功能整体停用，「锁屏」分类页及其入口一并移除。
-
     /** [doc/spec/66] 桌面大类：Dock 栏液态玻璃化（默认关；Launcher 侧 TTL 500ms 重读，改动无需重启桌面）。 */
     private fun bindDesktop(view: View) {
         val switchDock = view.findViewById<Switch>(R.id.switchDockGlass)
@@ -1388,28 +1326,12 @@ class SettingsActivity : AppCompatActivity() {
         bindGlassSwitch(view, R.id.switchCardGlass, Prefs.KEY_CARD_GLASS_ENABLE, Prefs.DEFAULT_CARD_GLASS_ENABLE)
     }
 
-    /** 其他组件：音量条 + 相册 / 计算器 / 智能侧边栏 / 速览的组件级玻璃开关。 */
+    /** ColorOS 17 已适配组件，保留各宿主的独立开关。 */
     private fun bindComponents(view: View) {
-        val supportsVolume=try { CosCompatibility.supportsLegacyVolumeOverrides(
-            packageManager.getPackageInfo("com.android.systemui",0).versionName) } catch(_:Throwable) { false }
-        for(id in listOf(R.id.switchVolumeSeekBarGlass,R.id.switchVolumePanelClean,R.id.switchVolumePanelBackdrop)) {
-            view.findViewById<Switch>(id)?.apply { isEnabled=supportsVolume }
-        }
-        bindGlassSwitch(view, R.id.switchVolumeSeekBarGlass, Prefs.KEY_VOLUME_SEEKBAR_GLASS, Prefs.DEFAULT_VOLUME_SEEKBAR_GLASS)
-        bindGlassSwitch(view, R.id.switchVolumePanelClean, Prefs.KEY_VOLUME_PANEL_CLEAN, Prefs.DEFAULT_VOLUME_PANEL_CLEAN)
-        bindGlassSwitch(view, R.id.switchVolumePanelBackdrop, Prefs.KEY_VOLUME_PANEL_BACKDROP, Prefs.DEFAULT_VOLUME_PANEL_BACKDROP)
         bindGlassSwitch(view, R.id.switchNotificationPopupGlass, Prefs.KEY_NOTIFICATION_POPUP_GLASS, Prefs.DEFAULT_NOTIFICATION_POPUP_GLASS)
         bindGlassSwitch(view, R.id.switchGalleryGlass, Prefs.KEY_GALLERY_GLASS, Prefs.DEFAULT_GALLERY_GLASS)
-        bindGlassSwitch(view, R.id.switchCalculatorGlass, Prefs.KEY_CALCULATOR_GLASS, Prefs.DEFAULT_CALCULATOR_GLASS)
         bindGlassSwitch(view, R.id.switchSmartSidebarGlass, Prefs.KEY_SMART_SIDEBAR_GLASS, Prefs.DEFAULT_SMART_SIDEBAR_GLASS)
         bindGlassSwitch(view, R.id.switchAssistantScreenGlass, Prefs.KEY_ASSISTANT_SCREEN_GLASS, Prefs.DEFAULT_ASSISTANT_SCREEN_GLASS)
-        bindGlassSwitch(view, R.id.switchClearAllBtnGlass, Prefs.KEY_CLEAR_ALL_BTN_GLASS, Prefs.DEFAULT_CLEAR_ALL_BTN_GLASS)
-        val launcherVersion=try { packageManager.getPackageInfo("com.android.launcher",0).versionName } catch(_:Throwable) { null }
-        if(!com.coloros16.liquidglass.hook.CosCompatibility.supportsLegacyPressFeedback(launcherVersion)) {
-            view.findViewById<Switch>(R.id.switchClearAllBtnGlass).isEnabled=false
-            view.findViewById<TextView>(R.id.clearAllBtnCompatibilityDesc).setText(R.string.settings_clear_all_btn_unavailable)
-        }
-
     }
 
     /** 组件级玻璃开关绑定（写 Prefs + 按权威值刷新；hook 端 TTL 500ms 重读，改动即时生效）。 */
@@ -1420,155 +1342,6 @@ class SettingsActivity : AppCompatActivity() {
         }
         switch.setOnCheckedChangeListener(listener)
         refreshBooleanSwitch(switch, listener, key, default)
-    }
-
-    // ------------------------------------------------------------ [spec/64] 桌面动画参数 ------------------------------------------------------------
-
-    /** 桌面动画二级页：三组开关 + 三组参数入口。 */
-    private fun bindAnim(view: View) {
-        bindAnimGroupSwitch(view, R.id.switchAnimOpen, Prefs.ANIM_GROUP_OPEN)
-        bindAnimGroupSwitch(view, R.id.switchAnimClose, Prefs.ANIM_GROUP_CLOSE)
-        bindAnimGroupSwitch(view, R.id.switchAnimBreak, Prefs.ANIM_GROUP_BREAK)
-        view.findViewById<View>(R.id.rowAnimOpen).setOnClickListener { openAnimParams(Prefs.ANIM_GROUP_OPEN) }
-        view.findViewById<View>(R.id.rowAnimClose).setOnClickListener { openAnimParams(Prefs.ANIM_GROUP_CLOSE) }
-        view.findViewById<View>(R.id.rowAnimBreak).setOnClickListener { openAnimParams(Prefs.ANIM_GROUP_BREAK) }
-    }
-
-    /** 单个动画组的启用开关（默认 false = 沿用原版动画）。 */
-    private fun bindAnimGroupSwitch(view: View, switchId: Int, group: String) {
-        val switch = view.findViewById<Switch>(switchId)
-        val key = Prefs.animEnabledKey(group)
-        val listener = CompoundButton.OnCheckedChangeListener { _, checked ->
-            writePrefBoolean(key, checked)
-        }
-        switch.setOnCheckedChangeListener(listener)
-        refreshBooleanSwitch(switch, listener, key, Prefs.DEFAULT_ANIM_GROUP_ENABLED)
-    }
-
-    /** 三级参数页：启用开关 + 4 组（阻尼/刚度）+ 图标透明度时长。键名按组动态拼装。 */
-    private fun bindAnimParams(view: View, group: String) {
-        bindAnimGroupSwitch(view, R.id.switchAnimEnabled, group)
-        bindAnimPresets(view, group)
-        bindAnimDamping(view, R.id.seekAnimXDamping, R.id.animXDampingValue, group, Prefs.ANIM_PARAM_X_DAMPING)
-        bindAnimStiffness(view, R.id.seekAnimXStiffness, R.id.animXStiffnessValue, group, Prefs.ANIM_PARAM_X_STIFFNESS)
-        bindAnimDamping(view, R.id.seekAnimYDamping, R.id.animYDampingValue, group, Prefs.ANIM_PARAM_Y_DAMPING)
-        bindAnimStiffness(view, R.id.seekAnimYStiffness, R.id.animYStiffnessValue, group, Prefs.ANIM_PARAM_Y_STIFFNESS)
-        bindAnimDamping(view, R.id.seekAnimWidthDamping, R.id.animWidthDampingValue, group, Prefs.ANIM_PARAM_WIDTH_DAMPING)
-        bindAnimStiffness(view, R.id.seekAnimWidthStiffness, R.id.animWidthStiffnessValue, group, Prefs.ANIM_PARAM_WIDTH_STIFFNESS)
-        bindAnimDamping(view, R.id.seekAnimHeightDamping, R.id.animHeightDampingValue, group, Prefs.ANIM_PARAM_HEIGHT_DAMPING)
-        bindAnimStiffness(view, R.id.seekAnimHeightStiffness, R.id.animHeightStiffnessValue, group, Prefs.ANIM_PARAM_HEIGHT_STIFFNESS)
-        // 图标透明度时长：50~1500ms，步进 10（对应 anim_<组>_fade_duration）
-        bindIntSeekBarStep(
-            seek = view.findViewById(R.id.seekAnimFadeDuration), valueText = view.findViewById(R.id.animFadeDurationValue),
-            key = Prefs.animKey(group, Prefs.ANIM_PARAM_FADE_DURATION), default = Prefs.animDefaultFadeDuration(group),
-            max = (Prefs.ANIM_FADE_DURATION_MAX - Prefs.ANIM_FADE_DURATION_MIN) / Prefs.ANIM_FADE_DURATION_STEP,
-            step = Prefs.ANIM_FADE_DURATION_STEP, offset = Prefs.ANIM_FADE_DURATION_MIN,
-            format = { v -> getString(R.string.settings_anim_fade_value, v) },
-        )
-    }
-
-    /** 阻尼滑杆（10~300，默认按组；运行时 ÷100 → 0.05~5.0，显示实际生效值）。 */
-    private fun bindAnimDamping(view: View, seekId: Int, valueId: Int, group: String, param: String) {
-        bindIntSeekBarStep(
-            seek = view.findViewById(seekId), valueText = view.findViewById(valueId),
-            key = Prefs.animKey(group, param), default = Prefs.animDefaultDamping(group),
-            max = Prefs.ANIM_DAMPING_UI_MAX - Prefs.ANIM_DAMPING_UI_MIN, step = 1, offset = Prefs.ANIM_DAMPING_UI_MIN,
-            format = { v ->
-                val actual = (v / Prefs.ANIM_DAMPING_DIVISOR)
-                    .coerceIn(Prefs.ANIM_DAMPING_RUNTIME_MIN, Prefs.ANIM_DAMPING_RUNTIME_MAX)
-                getString(R.string.settings_anim_damping_value, v, actual)
-            },
-        )
-    }
-
-    /** 刚度滑杆（1~3000，默认按组；运行时 clamp 1~5000）。 */
-    private fun bindAnimStiffness(view: View, seekId: Int, valueId: Int, group: String, param: String) {
-        bindIntSeekBarStep(
-            seek = view.findViewById(seekId), valueText = view.findViewById(valueId),
-            key = Prefs.animKey(group, param), default = Prefs.animDefaultStiffness(group),
-            max = Prefs.ANIM_STIFFNESS_UI_MAX - Prefs.ANIM_STIFFNESS_UI_MIN, step = 1, offset = Prefs.ANIM_STIFFNESS_UI_MIN,
-            format = { v -> getString(R.string.settings_anim_stiffness_value, v) },
-        )
-    }
-
-    /** [spec/64] 一键预设 Chip + 「同步打开」按钮（后者仅打断组可见）。 */
-    private fun bindAnimPresets(view: View, group: String) {
-        val chips = view.findViewById<ChipGroup>(R.id.animPresetChips)
-        chips.removeAllViews()
-        animPresets.forEach { preset ->
-            chips.addView(Chip(view.context).apply {
-                text = getString(preset.labelRes)
-                isCheckable = false
-                setOnClickListener { applyAnimPreset(group, preset) }
-            })
-        }
-        // 打断动画大多与打开动画同参，提供手工「同步打开」按钮（不做自动联动）
-        val isBreak = group == Prefs.ANIM_GROUP_BREAK
-        val syncBtn = view.findViewById<View>(R.id.btnSyncFromOpen)
-        val syncDesc = view.findViewById<View>(R.id.txtSyncFromOpenDesc)
-        syncBtn.visibility = if (isBreak) View.VISIBLE else View.GONE
-        syncDesc.visibility = if (isBreak) View.VISIBLE else View.GONE
-        syncBtn.setOnClickListener {
-            if (copyAnimGroup(from = Prefs.ANIM_GROUP_OPEN, to = Prefs.ANIM_GROUP_BREAK)) {
-                bindCurrentPage()
-                Toast.makeText(this, R.string.settings_anim_sync_done, Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, R.string.settings_anim_sync_not_ready, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    /** 把预设档位写入本组全部 9 个参数，并刷新滑块回显。 */
-    private fun applyAnimPreset(group: String, preset: AnimPreset) {
-        val stiffness = preset.stiffness ?: Prefs.animDefaultStiffness(group)
-        val damping = preset.damping ?: Prefs.animDefaultDamping(group)
-        val fade = preset.fade ?: Prefs.animDefaultFadeDuration(group)
-        // ANIM_SPRING_PARAMS 顺序为「阻尼,刚度」交替，以 _stiffness 后缀区分
-        Prefs.ANIM_SPRING_PARAMS.forEach { param ->
-            writePrefInt(Prefs.animKey(group, param), if (param.endsWith("_stiffness")) stiffness else damping)
-        }
-        writePrefInt(Prefs.animKey(group, Prefs.ANIM_PARAM_FADE_DURATION), fade)
-        bindCurrentPage()
-        Toast.makeText(
-            this,
-            getString(R.string.settings_anim_preset_applied, getString(preset.labelRes)),
-            Toast.LENGTH_SHORT,
-        ).show()
-    }
-
-    /**
-     * 整组复制弹簧参数：读 [from] 已落盘的值写入 [to]，缺失项回退到 [from] 组的默认值。
-     *
-     * 框架未就绪时**返回 false 且不写入** —— 不可降级读 [xmlPrefs]：
-     * hook 端读不到 XML，且 `anim_*` 键只存在于框架侧存储，
-     * 降级读必然拿到默认值，再经 [writePrefInt] 排队落盘将**静默覆盖**用户配置。
-     */
-    private fun copyAnimGroup(from: String, to: String): Boolean {
-        val prefs = frameworkPrefs() ?: return false
-        Prefs.ANIM_SPRING_PARAMS.forEach { param ->
-            val def = if (param.endsWith("_stiffness")) {
-                Prefs.animDefaultStiffness(from)
-            } else {
-                Prefs.animDefaultDamping(from)
-            }
-            writePrefInt(Prefs.animKey(to, param), Prefs.readIntCompat(prefs, Prefs.animKey(from, param), def))
-        }
-        writePrefInt(
-            Prefs.animKey(to, Prefs.ANIM_PARAM_FADE_DURATION),
-            Prefs.readIntCompat(
-                prefs,
-                Prefs.animKey(from, Prefs.ANIM_PARAM_FADE_DURATION),
-                Prefs.animDefaultFadeDuration(from),
-            ),
-        )
-        return true
-    }
-
-    /** 动画组 → 标题资源。 */
-    private fun animGroupTitleRes(group: String): Int = when (group) {
-        Prefs.ANIM_GROUP_CLOSE -> R.string.settings_anim_close_enabled
-        Prefs.ANIM_GROUP_BREAK -> R.string.settings_anim_break_enabled
-        else -> R.string.settings_anim_open_enabled
     }
 
     // ------------------------------------------------------------ [spec/65] iOS 动态倾斜/透视（实验性） ------------------------------------------------------------

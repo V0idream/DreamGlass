@@ -83,17 +83,17 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets
         }
         ViewCompat.requestApplyInsets(root)
-        val head = column().apply { setPadding(dp(23), dp(14), dp(23), dp(10)) }
+        val head = column().apply { setPadding(dp(20), dp(9), dp(20), dp(6)) }
         root.addView(head)
         val brand = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        brand.addView(DreamMarkView(this), LinearLayout.LayoutParams(dp(37), dp(37)).apply { marginEnd = dp(10) })
-        brand.addView(text("DreamGlass", 20f, ink, true), LinearLayout.LayoutParams(0, -2, 1f))
+        brand.addView(DreamMarkView(this), LinearLayout.LayoutParams(dp(30), dp(30)).apply { marginEnd = dp(10) })
+        brand.addView(text("DreamGlass", 19f, ink, true), LinearLayout.LayoutParams(0, -2, 1f))
         brand.addView(text(BuildConfig.VERSION_NAME, 11f, accent).apply {
             background = bg(DreamUi.raised, 9); setPadding(dp(10), dp(5), dp(10), dp(5))
         })
         head.addView(brand)
-        head.addView(text(listOf("概览", "材质工作室", "运行状态", "设置")[selected], 20f, ink, true).apply { setPadding(0, dp(10), 0, dp(2)) })
-        frameworkLabel = text("正在读取框架状态…", 12f, muted)
+        head.addView(text(listOf("概览", "材质工作室", "运行状态", "设置")[selected], 18f, ink, true).apply { setPadding(0, dp(10), 0, dp(2)) })
+        frameworkLabel = text("正在读取框架状态…", 11f, muted).apply {maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END}
         head.addView(frameworkLabel)
         val scroll = ScrollView(this).apply { isFillViewport = true }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -103,7 +103,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         val nav = LinearLayout(this).apply { setPadding(dp(12), dp(7), dp(12), dp(7)) }
         listOf("主页", "材质", "状态", "设置").forEachIndexed { i, name ->
             nav.addView(TextView(this).apply {
-                gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); textSize = 13f; isClickable = true; isFocusable = true; setPadding(0, dp(14), 0, dp(14))
+                gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); textSize = 13f; isClickable = true; isFocusable = true; setPadding(0, dp(10), 0, dp(10))
                 text = name; minHeight = dp(48)
                 setTextColor(if (i == selected) DreamUi.canvas else muted)
                 background = bg(if (i == selected) accent else Color.TRANSPARENT, 16)
@@ -115,9 +115,8 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
     }
 
     private fun overview() {
-        val support = card()
-        support.addView(text("基础功能免费 · 自愿赞赏", 16f, accent, true))
-        support.addView(text("查看赞赏码与关于 DreamGlass；会员扩展采用五元诚信付款。  ›", 12f, muted))
+        val support = card().apply {setPadding(dp(14),dp(8),dp(14),dp(8))}
+        support.addView(text("基础功能免费 · 支持 DreamGlass  ›", 14f, accent, true))
         support.contentDescription = "基础功能免费，查看会员扩展与诚信付款说明"
         support.isFocusable = true
         support.setOnClickListener { startActivity(Intent(this, LicenseActivity::class.java)) }
@@ -148,9 +147,14 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         features.addView(text("界面与交互", 17f, ink, true))
         action(features, "通知与控制中心  ›", true) { advanced("master") }
         action(features, "桌面文件夹与 Dock  ›", true) { advanced("desktop") }
-        action(features, "动画与空间感  ›", true) { advanced("tilt") }
         action(features, "组件与圆角  ›", true) { advanced("corner") }
         action(features, "全部设置  ›", true) { selected = 3; showPage() }
+        val member=card()
+        member.addView(text("会员扩展",16f,accent,true))
+        member.addView(text("粒子飘散 · 动态倾斜 · 锁屏与组件玻璃",12f,muted))
+        action(member,if(MembershipState.confirmed(this))"管理当前版本会员功能  ›" else "诚信确认后开启扩展  ›",true) {
+            startActivity(Intent(this,MembershipActivity::class.java))
+        }
         val safe = card()
         safe.addView(text("回到系统原有质感", 17f, ink, true))
         safe.addView(text("暂停玻璃会还原系统材质。彻底停用请关闭总开关，并在 LSPosed 撤销作用域后手动重启。", 12f, muted))
@@ -241,7 +245,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         entry.addView(text("隐藏后仍可通过 LSPosed 的模块设置打开 DreamGlass。", 12f, muted))
         val groups = listOf(
             "系统外观" to listOf(Triple("master", "渲染开关", "管理模块入口与玻璃效果"), Triple("material", "材质参数", "折射、鲜艳度与边缘高光"), Triple("text", "文字与可读性", "颜色跟随与对比度"), Triple("mask", "背景压暗", "平衡通透感与文字可读性")),
-            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹、搜索栏和小组件"), Triple("corner", "独立圆角", "按组件单独设置形状"), Triple("tilt", "空间效果", "通知倾斜与透视"), Triple("anim", "桌面动画", "打开、关闭与打断参数")),
+            "场景与交互" to listOf(Triple("desktop", "桌面与 Dock", "文件夹、搜索栏和小组件"), Triple("corner", "独立圆角", "按组件单独设置形状")),
             "维护与数据" to listOf(Triple("background", "采样与性能", "背景刷新、质量及省电策略"), Triple("log", "运行日志", "查看和导出排查记录"), Triple("config", "配置备份", "导入、导出与恢复参数"))
         )
         for ((title, rows) in groups) {
@@ -249,7 +253,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             for ((id, label, detail) in rows) DreamUi.row(c, label, detail) { advanced(id) }
         }
         val member=card()
-        DreamUi.row(member,"会员功能","粒子飘散、锁屏和其他应用／组件玻璃 · 诚信付款") {
+        DreamUi.row(member,"会员功能","粒子、倾斜、锁屏与组件玻璃 · 每版本诚信确认") {
             startActivity(Intent(this,MembershipActivity::class.java))
         }
         performanceControls()
@@ -262,19 +266,8 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
 
     private fun performanceControls() {
         val c=card()
-        c.addView(text("渲染方式",18f,ink,true))
-        c.addView(text("硬件优先减少 CPU 计算；高精度保留更细色阶，但耗电较高。",12f,muted))
-        val p=remote()
-        val group=RadioGroup(this)
-        val current=p?.getInt(Prefs.KEY_BLUR_ENGINE,Prefs.DEFAULT_BLUR_ENGINE) ?: Prefs.DEFAULT_BLUR_ENGINE
-        for((value,label) in listOf(0 to "硬件优先 · 日常推荐",1 to "高精度 · CPU F16")) {
-            group.addView(RadioButton(this).apply { id=View.generateViewId();text=label;setTextColor(ink);tag=value;isChecked=current==value;isEnabled=p!=null })
-        }
-        group.setOnCheckedChangeListener { g,id ->
-            val value=g.findViewById<RadioButton>(id)?.tag as? Int ?: return@setOnCheckedChangeListener
-            write { it.putInt(Prefs.KEY_BLUR_ENGINE,value) }
-        }
-        c.addView(group)
+        c.addView(text("采样与性能",17f,ink,true))
+        c.addView(text("背景模糊交由 GPU 处理；可调整刷新策略与模糊程度。硬件不可用时保留当前有效背景。",12f,muted))
         action(c,"背景刷新与模糊强度  ›",true) { advanced("background") }
     }
 
@@ -318,7 +311,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         action(d, "刷新运行记录", true) { showPage() }
         for ((pkg, label) in listOf("com.android.launcher" to "系统桌面", "com.android.systemui" to "SystemUI",
             "com.coloros.smartsidebar" to "智能侧边栏","com.coloros.gallery3d" to "相册",
-            "com.coloros.assistantscreen" to "负一屏","com.coloros.calculator" to "计算器")) {
+            "com.coloros.assistantscreen" to "负一屏")) {
             val c = card(); c.addView(text(label, 18f, ink, true)); c.addView(text(pkg, 11f, muted))
             val report = readReport(pkg)
             val details=text(report,13f,muted).apply { visibility=View.GONE }

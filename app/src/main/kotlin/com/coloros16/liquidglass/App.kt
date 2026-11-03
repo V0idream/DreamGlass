@@ -26,6 +26,7 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
 
     override fun onCreate() {
         super.onCreate()
+        com.coloros16.liquidglass.ui.MembershipState.initialize(this)
         // logcat 详细度门控读「运行日志」开关（开=全量，关=仅 e 级）
         Lg.installGateReader { readEnableLogs() }
         Lg.e("lg-boot", "app pid=${android.os.Process.myPid()}")
@@ -48,7 +49,15 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
 
     override fun onServiceBind(service: XposedService) {
         Lg.i(TAG, "framework service bound: ${service.getFrameworkName()} v${service.getFrameworkVersion()}")
-        serviceRef = service
+        val synchronized=runCatching {com.coloros16.liquidglass.ui.MembershipState.synchronize(this,service)}
+            .onFailure {Lg.w(TAG,"membership state synchronization failed",it)}.getOrDefault(false)
+        if(!synchronized) {
+            serviceRef=null;serviceLost=true
+            Lg.w(TAG,"membership synchronization was not committed; writable UI service withheld")
+            listeners.forEach {it.onServiceStateChanged(null)}
+            return
+        }
+        serviceRef=service
         serviceLost = false
         listeners.forEach { it.onServiceStateChanged(service) }
     }

@@ -61,7 +61,7 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
         if(source.isRecycled || screen.width()<=0 || screen.height()<=0 || !radius.isFinite() || radius<=0)return null
         if(SystemClock.uptimeMillis()<retryAtMs)return null
         val geo=Geometry(source.width,source.height,screen.left,screen.top,screen.width(),screen.height())
-        val style=Style(geo,radius,if(engine()==1)1 else 0);val key=Key(source,source.generationId,style)
+        val style=Style(geo,radius,0);val key=Key(source,source.generationId,style)
         synchronized(lock) {
             if(geometry!=geo) { geometry=geo;epoch++;requested.clear();pending.clear();ready.clear() }
             if(requested[style]!=key) {
@@ -97,10 +97,10 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
     private fun drain() {
         RuntimeWorkPolicy.guarded({}) { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
         // Keep the last good image while coalescing new frames. The entire worker shares one
-        // job budget: hardware <= 41 jobs/s, CPU <= 10 jobs/s, never a budget per button.
+        // job budget: GPU <= 41 jobs/s; errors use the shared backoff, never a budget per button.
         try {
             while(true) {
-                val interval=if(engine()==0 && SystemClock.uptimeMillis()>=hardwareRetryAtMs)24L else RuntimeWorkPolicy.BLUR_INTERVAL_MS
+                val interval=if(SystemClock.uptimeMillis()>=hardwareRetryAtMs)24L else RuntimeWorkPolicy.BLUR_INTERVAL_MS
                 val wait=interval-(SystemClock.uptimeMillis()-lastComputeAtMs)
                 if(wait>0)Thread.sleep(wait)
                 val request=synchronized(lock) {
@@ -150,38 +150,19 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
 
     private fun compute(request:Request):Bitmap {
         val source=request.source;val style=request.key.style;val geo=style.geometry
-        if(style.engine==0 && SystemClock.uptimeMillis()>=hardwareRetryAtMs) {
-            try {
-                val size=ButtonBackdropBlur.workingSize(source.width,source.height,geo.screenWidth,geo.screenHeight,style.radius)
-                val sigma=style.radius*(size[0]/geo.screenWidth+size[1]/geo.screenHeight)*.5f
-                val image=hardware.render(source,size[0],size[1],sigma) { request.epoch!=epoch }
-                com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics.mark("blur_hardware", "硬件背景模糊已产出图像")
-                return image
-            } catch(cancel:java.util.concurrent.CancellationException) { throw cancel }
-              catch(error:Throwable) {
-                hardwareRetryAtMs=SystemClock.uptimeMillis()+30_000L
-                RuntimeWorkPolicy.guarded({}) { hardware.close() }
-                RuntimeWorkPolicy.guarded({}) { failed(error) }
-            }
-        }
-        var small=if(source.config==Bitmap.Config.HARDWARE)(source.copy(Bitmap.Config.ARGB_8888,false) ?: error("Hardware snapshot copy unavailable")) else source
+        if(SystemClock.uptimeMillis()<hardwareRetryAtMs)throw IllegalStateException("GPU backdrop is backing off")
         try {
             val size=ButtonBackdropBlur.workingSize(source.width,source.height,geo.screenWidth,geo.screenHeight,style.radius)
-            while(small.width/2>=size[0] && small.height/2>=size[1] && (small.width>size[0] || small.height>size[1])) {
-                val next=Bitmap.createScaledBitmap(small,(small.width/2).coerceAtLeast(1),(small.height/2).coerceAtLeast(1),true)
-                if(small!==source && small!==next)small.recycle();small=next
-            }
-            if(small.width!=size[0] || small.height!=size[1]) {
-                val next=Bitmap.createScaledBitmap(small,size[0],size[1],true)
-                if(small!==source && small!==next)small.recycle();small=next
-            }
-            val pixels=IntArray(small.width*small.height)
-            small.getPixels(pixels,0,small.width,0,0,small.width,small.height)
-            val sigma=style.radius*(small.width/geo.screenWidth+small.height/geo.screenHeight)*.5f
-            val output=FloatBackdropBitmap.create(ButtonBackdropBlur.applyPremultiplied(pixels,small.width,small.height,sigma) { request.epoch!=epoch },small.width,small.height)
-            com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics.mark("blur_cpu", "CPU F16 背景已产出图像")
-            return output
-        } finally { if(small!==source)small.recycle() }
+            val sigma=style.radius*(size[0]/geo.screenWidth+size[1]/geo.screenHeight)*.5f
+            val image=hardware.render(source,size[0],size[1],sigma) { request.epoch!=epoch }
+            com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics.mark("blur_hardware", "GPU 背景模糊已产出图像")
+            return image
+        } catch(cancel:java.util.concurrent.CancellationException) {throw cancel}
+          catch(error:Throwable) {
+            hardwareRetryAtMs=SystemClock.uptimeMillis()+30_000L
+            RuntimeWorkPolicy.guarded({}) {hardware.close()}
+            throw error // Keep the last valid input; never run CPU blur as fallback.
+        }
     }
 }
 

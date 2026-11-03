@@ -42,6 +42,7 @@ object RecentsParticleHook {
     }}
     private fun allowed(context:Context):Boolean {
         if(Looper.myLooper()!=Looper.getMainLooper() || SystemClock.uptimeMillis()<retryAt)return false
+        if(!membershipGranted()) {enabled=false;readAt=-1000L;stopAll();return false}
         if(SystemClock.uptimeMillis()-readAt>=500L) {
             readAt=SystemClock.uptimeMillis()
             val prefs=interfaceApi?.let(Prefs::read) ?: return false
@@ -56,6 +57,7 @@ object RecentsParticleHook {
         return power?.isInteractive==true && !power.isPowerSaveMode && android.animation.ValueAnimator.areAnimatorsEnabled()
     }
     private var interfaceApi:XposedInterface?=null
+    private fun membershipGranted():Boolean=Prefs.memberAllowed(interfaceApi)
     fun install(api:XposedInterface,loader:ClassLoader) {
         if(mounted || Build.VERSION.SDK_INT<33 || Application.getProcessName()!="com.android.launcher")return
         interfaceApi=api
@@ -215,7 +217,7 @@ object RecentsParticleHook {
             val image=bitmap
             ui.post {safe {
                 val view=t.view.get();val root=t.root.get()
-                if(image==null || t.cancelled || view==null || root==null || !view.isAttachedToWindow ||
+                if(image==null || t.cancelled || view==null || root==null || !membershipGranted() || !view.isAttachedToWindow ||
                     !root.isShown || !interactive(root.context) || SystemClock.uptimeMillis()-t.capturedAt>180L) {cancel(t);return@safe}
                 val matrix=Matrix();view.transformMatrixToGlobal(matrix)
                 val rootMatrix=Matrix();root.transformMatrixToGlobal(rootMatrix)
@@ -225,7 +227,7 @@ object RecentsParticleHook {
                 // Continue from the native card's current position, including a clipped top.
                 val x=t.x+now.left-t.rawX;val y=t.y+now.top-t.rawY
                 val dust=ParticleDissolveHook.Api33.Dust(root,image,x,y,t.width,t.height,
-                    view.resources.displayMetrics.density,t.effectSpeed,-1f,.20f,true) {finish(t)}
+                    view.resources.displayMetrics.density,t.effectSpeed,-1f,.20f,true,remainsAllowed=::membershipGranted) {finish(t)}
                 t.dust=dust;dust.start()
                 t.nativeAlpha=view.alpha;t.hidden=true
                 ownAlpha=true;try {view.alpha=0f} finally {ownAlpha=false}

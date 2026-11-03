@@ -20,10 +20,32 @@ import io.github.libxposed.api.XposedInterface.ExceptionMode
  * fill/stroke throat is skipped after that SAME owner's GPU material is mounted.
  */
 internal object AssistantSurfaceAdapter {
-    private data class Owner(val contract:AssistantOwnerContract.Resolved,@Volatile var ready:Boolean=false)
+    private data class Owner(val contract:AssistantOwnerContract.Resolved,@Volatile var ready:Boolean=false,
+        val radius:java.lang.reflect.Field?=runCatching {
+            contract.type.getDeclaredField("a").apply {check(type==Float::class.javaPrimitiveType);isAccessible=true}
+        }.getOrNull())
     private data class Frame(val owner:View,val painter:Any?,val path:Path?,val active:Boolean)
     private val scope=ScopedDrawOwner<Frame>()
     @Volatile private var owners:List<Owner> = emptyList()
+    private var headControl:Class<*>?=null
+    private var headContainer:Class<*>?=null
+    private fun id(view:View)=runCatching {view.resources.getResourceEntryName(view.id)}.getOrDefault("")
+    private fun header(view:View):Boolean {
+        var parent=view.parent
+        repeat(4) {
+            if(headContainer?.isInstance(parent)==true)return true
+            parent=(parent as? View)?.parent
+        }
+        return false
+    }
+    private fun isHeaderControl(view:View)=AssistantSpecificSurfacePolicy.headerControl(
+        headControl?.isInstance(view)==true,header(view),id(view))
+    private fun isServicesCard(view:View)=AssistantSpecificSurfacePolicy.servicesCard(
+        view.javaClass.name=="com.coloros.common.widget.HighlightShadowConstraintLayout",id(view))
+    /** Extra controls are selected by native class + resource ID + header owner,
+     * never by ImageView alone. The avatar and ordinary content images stay native.
+     */
+    fun isSpecificTarget(view:View)=isHeaderControl(view) || isServicesCard(view)
 
     fun isNativeCard(view:View):Boolean=owners.any {it.ready && it.contract.spec.card && it.contract.type.isInstance(view)}
     fun matches(view:View):Boolean=owners.any {it.ready && it.contract.type.isInstance(view)}
@@ -38,7 +60,8 @@ internal object AssistantSurfaceAdapter {
         val contract=owner(view)?.contract ?: return null
         return runCatching {
             val native=contract.path.get(view) as Path
-            if(native.isEmpty)return@runCatching null
+            if(native.isEmpty)return@runCatching if(isHeaderControl(view) && view.width>0 && view.height>0)
+                RectF(0f,0f,view.width.toFloat(),view.height.toFloat()) else null
             RectF().also {native.computeBounds(it,true)}.takeIf {
                 !it.isEmpty && listOf(it.left,it.top,it.right,it.bottom).all {v -> v.isFinite()}
             }
@@ -51,14 +74,37 @@ internal object AssistantSurfaceAdapter {
     fun nativeFillAlpha(view:View):Float? {
         if(!isUiThread())return null
         val contract=owner(view)?.contract ?: return null
+        // Header's preserveOrigin flag selects its ordinary background instead
+        // of t.c fill. We replace that background, so it is not a hidden surface.
+        if(isHeaderControl(view))return 1f
         return runCatching {
             if(!contract.enabled.getBoolean(view) || contract.blocked?.getBoolean(view)==true)0f
             else (contract.alpha?.getFloat(view) ?: 1f).takeIf {it.isFinite()}?.coerceIn(0f,1f) ?: 0f
         }.getOrNull()
     }
 
+    fun nativeRadius(view:View):Float? {
+        if(!isUiThread())return null
+        val field=owner(view)?.radius ?: return null
+        return runCatching {
+            field.getFloat(view).takeIf {it.isFinite() && it>=0f}
+        }.getOrNull()
+    }
+
+    /** The verified controls can also receive a normal Drawable background.
+     * Its opacity metadata must change through the setter, not drawBackground.
+     * ImageView.src, search text siblings and shortcut rows are never replaced.
+     */
+    fun onMaterialStateChanged(view:View,active:Boolean) {
+        if(!isUiThread())return
+        if(active && !isSpecificTarget(view) || !active && !matches(view))return
+        if(NativeSurfaceBackgroundLease.sync(view,active))
+            RuntimeDiagnostics.mark("assistant-specific-material",if(active)
+                "搜索框／操作按钮／我的服务底色已接入GPU材质，保留文字与图标" else "已还原负一屏原生底色")
+    }
+
     fun install(api:XposedInterface,loader:ClassLoader,materialApplied:(View)->Boolean):List<Class<*>> {
-        owners=emptyList()
+        owners=emptyList();headControl=null;headContainer=null
         return try {
             val painter=Class.forName("com.coloros.common.ui.t",false,loader)
             val painterInterface=Class.forName("com.coloros.common.ui.y",false,loader)
@@ -114,6 +160,15 @@ internal object AssistantSurfaceAdapter {
                 RuntimeDiagnostics.mark("assistant-glass-owner-missing-${item.contract.type.simpleName}",it.javaClass.simpleName)
             }
             owners=mounted
+            runCatching {
+                val control=Class.forName("com.oplus.assistantscreen.ui.header.HeadHighlightShadowImageView",false,loader)
+                val container=Class.forName("com.oplus.assistantscreen.ui.header.d",false,loader)
+                check(control.superclass.name=="com.coloros.common.widget.HighlightShadowImageView" &&
+                    View::class.java.isAssignableFrom(container))
+                check(mounted.any {it.contract.type==control.superclass})
+                headControl=control;headContainer=container
+                RuntimeDiagnostics.mark("assistant-specific-contract","搜索框与AI／添加按钮按精确ID选择；头像不加入目标")
+            }
             RuntimeDiagnostics.mark("assistant-glass-contract","已识别 ${mounted.size} 类真实底色宿主；不再将高光装饰当作背景")
             // Image owners still enter an inactive scope to shield their own
             // native fill from a parent card. Do not discover avatars/content

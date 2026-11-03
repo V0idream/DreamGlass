@@ -14,7 +14,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
 import com.coloros16.liquidglass.hook.AppGlassEffect
-import com.coloros16.liquidglass.hook.CalculatorBackgroundLease
+import com.coloros16.liquidglass.hook.NativeSurfaceBackgroundLease
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import java.io.File
 import java.lang.reflect.InvocationTargetException
@@ -149,7 +149,7 @@ class NativeBackdropProbeActivity : Activity() {
             if (scaled) { view.pivotX = 0f; view.pivotY = 0f; view.scaleX = .78f; view.scaleY = .78f }
             if (negative || glyph) view.background = ColorDrawable(Color.BLACK)
             if (glyph) {
-                CalculatorBackgroundLease.sync(view, true)
+                NativeSurfaceBackgroundLease.sync(view, true)
                 view.addView(View(this).apply { background = PlusGlyph() }, FrameLayout.LayoutParams(-1, -1))
             }
             container.addView(view, FrameLayout.LayoutParams(width, height).apply { leftMargin = left; topMargin = top })
@@ -440,7 +440,7 @@ class NativeBackdropProbeActivity : Activity() {
         destroyed = true; handler.removeCallbacksAndMessages(null)
         for (host in hosts) {
             runCatching { bridge?.invoke(null, null, host.view) }
-            if (host.glyphChild) CalculatorBackgroundLease.sync(host.view, false)
+            if (host.glyphChild) NativeSurfaceBackgroundLease.sync(host.view, false)
         }
         retainedEffects.clear(); baseline?.recycle(); baseline = null
         super.onDestroy()

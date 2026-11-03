@@ -12,25 +12,50 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.coloros16.liquidglass.R
 
-/** Local honor confirmation only. No payment SDK, transaction verification or
- * changes to saved host configuration are performed by this screen. */
+/** Local, per-version self-report only; no payment transaction is verified. */
 object MembershipState {
-    private fun prefs(c:Context)=c.getSharedPreferences("dreamglass_membership",Context.MODE_PRIVATE)
-    fun confirmed(c:Context)=prefs(c).getBoolean("honor_confirmed",false)
-    fun firstNotice(c:Context):Boolean {
-        val p=prefs(c)
-        if(p.getBoolean("notice_shown",false))return false
-        p.edit().putBoolean("notice_shown",true).apply();return true
+    private fun noticePrefs(c:Context)=c.getSharedPreferences("dreamglass_membership",Context.MODE_PRIVATE)
+    private fun localConfirmed(c:Context)=com.coloros16.liquidglass.config.MemberFeaturePolicy.isConfirmed(com.coloros16.liquidglass.config.Prefs.raw(c))
+    fun confirmed(c:Context):Boolean {
+        if(!localConfirmed(c))return false
+        val service=com.coloros16.liquidglass.App.serviceRef ?: return true
+        return runCatching {com.coloros16.liquidglass.config.MemberFeaturePolicy.isConfirmed(com.coloros16.liquidglass.config.Prefs.raw(service))}.getOrDefault(false)
     }
-    fun confirm(c:Context)=prefs(c).edit().putBoolean("honor_confirmed",true).commit()
-    val categories=setOf("particles","keyguard","components","seedling")
+    @Synchronized fun initialize(c:Context) {
+        com.coloros16.liquidglass.config.MemberFeaturePolicy.disableIfUnconfirmed(com.coloros16.liquidglass.config.Prefs.raw(c))
+    }
+    @Synchronized fun synchronize(c:Context,service:io.github.libxposed.service.XposedService):Boolean =
+        com.coloros16.liquidglass.config.MemberStoreCoordinator.synchronize(
+            com.coloros16.liquidglass.config.Prefs.raw(c),com.coloros16.liquidglass.config.Prefs.raw(service))
+    fun firstNotice(c:Context):Boolean {
+        val p=noticePrefs(c);val version=com.coloros16.liquidglass.config.MemberFeaturePolicy.currentVersion
+        if(p.getString("notice_version",null)==version)return false
+        p.edit().putString("notice_version",version).apply();return !confirmed(c)
+    }
+    @Synchronized fun confirm(c:Context):Boolean {
+        val policy=com.coloros16.liquidglass.config.MemberFeaturePolicy
+        val local=com.coloros16.liquidglass.config.Prefs.raw(c)
+        if(!policy.clearMemberSwitches(local) || !policy.confirm(local))return false
+        val service=com.coloros16.liquidglass.App.serviceRef ?: return true
+        val ok=runCatching {synchronize(c,service)}.getOrDefault(false)
+        if(!ok) {policy.lock(local);runCatching {policy.lock(com.coloros16.liquidglass.config.Prefs.raw(service))}}
+        return ok
+    }
+    @Synchronized fun decline(c:Context):Boolean {
+        val local=com.coloros16.liquidglass.config.Prefs.raw(c)
+        val service=com.coloros16.liquidglass.App.serviceRef
+        return if(service!=null)com.coloros16.liquidglass.config.MemberStoreCoordinator.revoke(local,
+            com.coloros16.liquidglass.config.Prefs.raw(service))
+        else runCatching {com.coloros16.liquidglass.config.MemberFeaturePolicy.lock(local)}.getOrDefault(false)
+    }
+    val categories=setOf("particles","tilt","keyguard","components","seedling")
 }
 
 class MembershipActivity:AppCompatActivity() {
     override fun onCreate(state:Bundle?) {
         super.onCreate(state)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() { if(!MembershipState.confirmed(this@MembershipActivity))finishAffinity() else finish() }
+            override fun handleOnBackPressed() { if(!MembershipState.confirmed(this@MembershipActivity)) {MembershipState.decline(this@MembershipActivity);finishAffinity()} else finish() }
         })
         show()
     }
@@ -47,22 +72,24 @@ class MembershipActivity:AppCompatActivity() {
         val scroll=ScrollView(this)
         val body=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(16),dp(20),dp(24)) }
         scroll.addView(body);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
-        body.addView(DreamUi.label(this,if(confirmed)"会员功能" else "诚信付款 · 会员扩展",25f,DreamUi.ink,true))
-        body.addView(DreamUi.label(this,"基础功能完全免费。粒子飘散、锁屏液态玻璃（实验性），以及其他应用与组件玻璃归入会员扩展。",14f,DreamUi.muted))
+        body.addView(DreamUi.label(this,if(confirmed)"会员功能" else "诚信付款 · 会员扩展",23f,DreamUi.ink,true))
+        body.addView(DreamUi.label(this,"基础材质完全免费。粒子飘散、应用与通知倾斜、锁屏玻璃，以及其他应用与组件玻璃属于会员扩展。",14f,DreamUi.muted))
         if(!confirmed) {
-            body.addView(DreamUi.label(this,"模块开发与持续适配存在一定成本，希望你支付 5 元支持开发后解锁这些扩展。采用诚信确认，不联网核验支付。",15f,DreamUi.ink).apply { setPadding(0,dp(14),0,dp(8)) })
+            body.addView(DreamUi.label(this,"模块开发与持续适配存在成本，希望你支付 5 元支持开发。这里只保存你的诚信确认，不核验支付记录。未确认前，所有会员效果保持关闭。",15f,DreamUi.ink).apply { setPadding(0,dp(14),0,dp(8)) })
             body.addView(ImageView(this).apply {
                 setImageDrawable(assets.open("appreciation/wechat.png").use { android.graphics.drawable.Drawable.createFromStream(it,null) });scaleType=ImageView.ScaleType.FIT_CENTER
                 contentDescription="微信赞赏码，建议支付五元"
-            },LinearLayout.LayoutParams(-1,dp(240)))
+            },LinearLayout.LayoutParams(-1,dp(210)))
+            body.addView(DreamUi.label(this,"每次版本更新需要重新点击确认；已经支持过的用户无需重复付款。确认后请自行开启所需功能。",13f,DreamUi.accent))
             body.addView(DreamUi.label(this,"当然你实在不想付费直接用我也不拦你，不强制你给钱所以也别骂我圈钱。",13f,DreamUi.muted))
         } else {
-            body.addView(DreamUi.label(this,"已完成诚信确认",12f,DreamUi.accent))
+            body.addView(DreamUi.label(this,"当前版本已确认 · ${com.coloros16.liquidglass.BuildConfig.VERSION_NAME}",12f,DreamUi.accent))
             val card=DreamUi.card(body)
             for((id,title,desc) in listOf(
-                Triple("particles","粒子飘散","通知删除与多任务卡片消散、速度设置"),
+                Triple("particles","粒子飘散","通知删除、多任务卡片消散与速度"),
+                Triple("tilt","动态倾斜","应用窗口与通知卡片的动画倾转"),
                 Triple("keyguard","锁屏液态玻璃","时钟、卡片与底部快捷按钮，实验性"),
-                Triple("components","其他应用与组件","相册、计算器、智能侧边栏与负一屏"),
+                Triple("components","其他应用与组件","相册、智能侧边栏与负一屏"),
                 Triple("seedling","流体云展开卡片","收起使用黑底，展开应用玻璃"))) {
                 DreamUi.row(card,title,desc) { openCategory(id) }
             }
@@ -80,7 +107,7 @@ class MembershipActivity:AppCompatActivity() {
                     else if(intent.getBooleanExtra("first_notice",false))finish() else show()
                 } else Toast.makeText(this,"确认未能保存，请重试",Toast.LENGTH_SHORT).show()
             }
-            DreamUi.action(actions,"暂不支付，退出",false) { finishAffinity() }
+            DreamUi.action(actions,"暂不支付，退出",false) { if(!MembershipState.decline(this))Toast.makeText(this,"关闭状态未能同步，请重新打开模块重试",Toast.LENGTH_LONG).show();finishAffinity() }
             root.addView(actions)
         } else {
             DreamUi.action(body,"查看赞赏码与关于页面",false) { startActivity(Intent(this,LicenseActivity::class.java)) }

@@ -53,6 +53,7 @@ object NotificationTiltCompat {
         var powerReadAt = -1L
         var powerAllowed = false
         fun allowed(view: View): Boolean {
+            if(!Prefs.memberAllowed(api))return false
             val now=SystemClock.uptimeMillis()
             if (readAt<0 || now-readAt>=500L) {
                 readAt=now;master=runCatching { Prefs.masterEnabled(api) }.getOrDefault(false)

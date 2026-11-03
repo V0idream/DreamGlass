@@ -2038,6 +2038,43 @@ object BlurDrawHook {
      *   install 读取以 Prefs.DEFAULT 为准覆盖本初值）。 */
     @Volatile
     private var seedlingCapsuleGlassEnabled = false
+    @Volatile private var seedlingRuntimeWasAllowed = false
+    private fun membershipGranted(): Boolean = Prefs.memberAllowed(api)
+
+    /** Recheck the current epoch at actual Seedling callbacks, before any old
+     * install-time boolean can paint or start a capture worker. Generic volume,
+     * popup and ordinary notification renderers are deliberately not gated here. */
+    private fun seedlingRuntimeAllowed(): Boolean {
+        val allowed = runCatching {
+            val activeApi = api ?: return@runCatching false
+            if (!Prefs.memberAllowed(activeApi)) return@runCatching false
+            Prefs.read(activeApi).getBoolean(Prefs.KEY_SEEDLING_CARD_GLASS_ENABLE, false)
+        }.getOrDefault(false)
+        if (allowed) seedlingRuntimeWasAllowed = true
+        else if (seedlingRuntimeWasAllowed) {
+            seedlingRuntimeWasAllowed = false
+            val host = cardBackgroundActiveHost?.get()
+            cardBackgroundActiveHost = null // Existing bounded worker exits its next active check.
+            for ((id, entry) in screenRegionMap) {
+                if (entry.hostViewName.startsWith("seedling-")) {
+                    screenRegionMap.remove(id, entry);appliedUniformsMap.remove(id)
+                }
+            }
+            host?.postInvalidate() // Re-record native background instead of retaining old glass.
+        }
+        return allowed
+    }
+
+    private fun memberNotifTiltEnabled(): Boolean {
+        if (!membershipGranted()) {
+            if (notifTiltAnims.isNotEmpty()) {
+                if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) zeroNotifFlyOffsets()
+                else mainHandler().post { zeroNotifFlyOffsets() }
+            }
+            return false
+        }
+        return Prefs.notifTiltEnabled(api)
+    }
     /** [2026-09-16] 上次渲染的小岛尺寸（仅用于尺寸变化去重，避免重复 register） */
     private var lastIslandW = -1
     private var lastIslandH = -1
@@ -2114,6 +2151,7 @@ object BlurDrawHook {
     @Volatile
     private var menuWrapperField: Field? = null
     private val notificationPopupOwners = java.util.WeakHashMap<View, NotificationPopupGlassDrawable>()
+    private var notificationPopupMemberRestorePending = false
     /** 菜单桥接目标（装饰中的菜单主体；show 时写、dismiss 时清） */
     private var menuBridgeHost: WeakReference<View>? = null
     @Volatile
@@ -6256,7 +6294,7 @@ object BlurDrawHook {
                             // 与位移逐帧严格同步的整卡 3D 翻转。scale 不写（ColorOS pre-draw 强制打回）。
                             // 拖拽时 f 在 holdY 附近 → p≈1 → rot≈0，天然无感（无需区分调用方）。
                             val targetY = mHeadsUpFlyTargetY
-                            if (targetY != null && Prefs.notifTiltEnabled(api) && !isPowerSaveGlassOff()) {
+                            if (targetY != null && memberNotifTiltEnabled() && !isPowerSaveGlassOff()) {
                                 val span = targetY - NOTIF_FLY_START_Y
                                 if (span > 1f) {
                                     val p = ((pureY - NOTIF_FLY_START_Y) / span).coerceIn(0f, 1f)
@@ -6345,7 +6383,7 @@ object BlurDrawHook {
         if (view == null) return
         if (mExpandableRowClass?.isInstance(view) != true) return  // 非通知行（磁贴/滑杆/容器）直接不驱动
         // [审查 V-112 M-2 修复] 开关关着就不建条目、不起帧泵（TTL 0.5s，开开关后下一条通知即生效）
-        if (!Prefs.notifTiltEnabled(api)) {
+        if (!memberNotifTiltEnabled()) {
             // [doc/spec/113 归零闭环路径②] 开关关 → 归零表内已有位移残留（防横幅永久飞在半空）
             zeroNotifFlyOffsets()
             return
@@ -6468,7 +6506,7 @@ object BlurDrawHook {
 
     /** [doc/spec/113] 查该 View 的活跃位移动画；开关关 / 省电 → null（= 透传零变化）。 */
     private fun findActiveNotifFlyAnim(view: View): NotifTiltAnim? {
-        if (!Prefs.notifTiltEnabled(api)) return null
+        if (!memberNotifTiltEnabled()) return null
         if (isPowerSaveGlassOff()) return null
         val now = SystemClock.uptimeMillis()
         var found: NotifTiltAnim? = null
@@ -6537,7 +6575,7 @@ object BlurDrawHook {
     private fun applyNotifFlyScale(a: NotifTiltAnim, now: Long) {
         val t = a.target.get() ?: return
         try {
-            if (!Prefs.notifTiltEnabled(api) || isPowerSaveGlassOff()) return
+            if (!memberNotifTiltEnabled() || isPowerSaveGlassOff()) return
             val dur = if (a.incoming) NOTIF_TILT_IN_MS else NOTIF_TILT_OUT_MS
             val p = ((now - a.startAtMs).toFloat() / dur).coerceIn(0f, 1f)
             val q = 1f - p
@@ -6575,7 +6613,7 @@ object BlurDrawHook {
                     try {
                         // [doc/spec/113 归零闭环路径②③] 动画期间开关关 / 省电开启 → 立即全表归零
                         // （位移不残留半空；清表后下方 isNotEmpty=false → 帧泵自然停）
-                        if (!Prefs.notifTiltEnabled(api) || isPowerSaveGlassOff()) {
+                        if (!memberNotifTiltEnabled() || isPowerSaveGlassOff()) {
                             zeroNotifFlyOffsets()
                         }
                         // 先清过期条目 → 本轮 draw 读到空表 = θ=0（归零帧）
@@ -6617,7 +6655,7 @@ object BlurDrawHook {
     private fun notifTiltAngleFor(host: View?): Float {
         val anims = notifTiltAnims
         if (anims.isEmpty() || host == null) return 0f
-        if (!Prefs.notifTiltEnabled(api)) return 0f
+        if (!memberNotifTiltEnabled()) return 0f
         if (isPowerSaveGlassOff()) return 0f
         // [用户 2026-10-13 拍板] 自由角度调整：直读 Prefs 角度（0~45°，clamp 在 Prefs.notifTiltDeg），
         // 废除原「3°基准 × 强度% 且硬夹 6°」换算（6° 安全档被否——"6度太小！自由调整！"）
@@ -7081,6 +7119,9 @@ object BlurDrawHook {
      * 绘制层次见 [mountSeedlingCardContainer]（玻璃在子 View 之下）。
      */
     private fun renderSeedlingCardGlass(canvas: Canvas, container: View) {
+        // Revocation removes expanded glass, while the collapsed pill keeps the
+        // native black rule below. It must never become a transparent leftover.
+        seedlingRuntimeAllowed()
         // [spec/85 省电模式] 省电开启 → 不注入胶囊玻璃（直接让系统原样绘制）
         if (isPowerSaveGlassOff()) return
         val containerView = container as? android.view.ViewGroup ?: return
@@ -7254,6 +7295,7 @@ object BlurDrawHook {
         source: String = "seedling-heuristic",
         cornerRadiusOverride: Float = 0f,
     ): Boolean {
+        if (source.startsWith("seedling-") && !seedlingRuntimeAllowed()) return false
         registerHostView(hostView)
         val cornerRadius = if (cornerRadiusOverride > 0f) {
             cornerRadiusOverride
@@ -8039,6 +8081,28 @@ object BlurDrawHook {
 
     /** 长按菜单玻璃开关（TTL [NOTIFICATION_POPUP_GLASS_TTL_MS] 重读，改动无需重启 SystemUI）。 */
     private fun notificationPopupGlassEnabled(): Boolean {
+        if (!membershipGranted()) {
+            cachedNotificationPopupGlass = false;cachedNotificationPopupGlassAtMs = 0L
+            // The current draw falls back to orig immediately. Restore the owned
+            // attachment after recording, rather than changing backgrounds while
+            // its Drawable is being drawn. Never overwrite a newer native theme.
+            if (!notificationPopupMemberRestorePending && notificationPopupOwners.isNotEmpty()) {
+                notificationPopupMemberRestorePending = true
+                mainHandler().post {
+                    try {
+                        if (!membershipGranted()) {
+                            for ((view, owner) in notificationPopupOwners.entries.toList().map { it.key to it.value }) {
+                                notificationPopupOwners.remove(view)
+                                if (view.background === owner) view.background = owner.orig
+                            }
+                        }
+                    } catch (error: Throwable) {
+                        Lg.w(TAG, "notif-popup: member revocation restore failed; native fallback retained", error)
+                    } finally { notificationPopupMemberRestorePending = false }
+                }
+            }
+            return false
+        }
         val now = SystemClock.uptimeMillis()
         if (now - cachedNotificationPopupGlassAtMs > NOTIFICATION_POPUP_GLASS_TTL_MS) {
             cachedNotificationPopupGlassAtMs = now
@@ -8217,6 +8281,7 @@ object BlurDrawHook {
         offsetX: Float = host.left.toFloat(),
         offsetY: Float = host.top.toFloat(),
     ):Boolean {
+        if (host.javaClass.name == CLASS_CARD_BACKGROUND_VIEW && !seedlingRuntimeAllowed()) return false
         // [spec/85 省电模式] 省电开启 → 不画 canvas 玻璃（覆盖 CardBackgroundView / Simple Banner 等
         // 所有走本函数的注入点）
         if (isPowerSaveGlassOff()) return false
@@ -8355,6 +8420,7 @@ object BlurDrawHook {
                         }
                         // [P2] 性能快路径：最高频方法，先字符串类名比较（跨 classloader 安全），未命中立即跳过
                         if (thisView != null && thisView.javaClass.name == CLASS_CARD_BACKGROUND_VIEW) {
+                            if (!seedlingRuntimeAllowed()) return@intercept chain.proceed()
                             // [P1] 惰性缓存：命中时缓存 thisView.javaClass（跨 classloader 实例），
                             // 后续同实例用 isInstance（比字符串比较更准）。
                             var cached = bgCls
@@ -8422,6 +8488,7 @@ object BlurDrawHook {
      * 资源），一次解析缓存（[roundCornerFluidCloudPx]），失败兜底 20dp×density；不是启发式 min(w,h)×ratio。
      */
     private fun renderCardBackgroundGlass(canvas: Canvas, bgView: View) {
+        if (!seedlingRuntimeAllowed()) return
         val w = bgView.width
         val h = bgView.height
         if (w <= 0 || h <= 0 || bgView.visibility != View.VISIBLE) return
@@ -8461,6 +8528,7 @@ object BlurDrawHook {
      *  停止否则 120Hz 空转耗电——收起由系统销毁窗口/隐藏宿主驱动（collapse 后 CardBackgroundView
      *  detach 或不可见，实测确认）。 */
     private fun isCardBackgroundHostActive(): Boolean {
+        if (!seedlingRuntimeAllowed()) return false
         val host = cardBackgroundActiveHost?.get() ?: return false
         return try {
             host.isAttachedToWindow && host.visibility == View.VISIBLE && host.width > 0 && host.height > 0
@@ -8732,6 +8800,7 @@ object BlurDrawHook {
                             null
                         }
                         if (thisView != null && thisView.javaClass.name == CLASS_CARD_BACKGROUND_VIEW) {
+                            if (!seedlingRuntimeAllowed()) return@intercept chain.proceed()
                             // 展开大卡 attach → 登记宿主 + 启动持续抓屏（不等绘制）
                             if (cardBackgroundActiveHost?.get() !== thisView) {
                                 cardBackgroundActiveHost = WeakReference(thisView)
