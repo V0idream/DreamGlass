@@ -15,7 +15,11 @@ internal class AppGlassEffect {
     """.trimIndent())
     fun create(params:LiquidGlassShader.Params,
         bounds:RectF=RectF(0f,0f,params.viewportWidth,params.viewportHeight),opacity:Float=1f):RenderEffect {
-        LiquidGlassShader.setUniforms(shader,params.copy(sourcePreblurred=true),empty,empty,
+        // Native widgets already own their position. The common shader's
+        // parallax offsets move its SDF, which would displace/crop this fixed
+        // button mask relative to the native foreground. Keep QS optics intact;
+        // anchor only this OEM-background adapter to the actual native bounds.
+        LiquidGlassShader.setUniforms(shader,NativeSurfaceOptics.anchor(params),empty,empty,
             sourceRect=bounds,maskRect=bounds,maskOffsetX=bounds.left,maskOffsetY=bounds.top)
         val optical=RenderEffect.createRuntimeShaderEffect(shader,"uSource")
         val blurred=if(params.blurRadius>0f)RenderEffect.createChainEffect(optical,

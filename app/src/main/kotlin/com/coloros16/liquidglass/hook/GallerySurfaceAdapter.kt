@@ -44,6 +44,21 @@ internal object GallerySurfaceAdapter {
     private fun isWrapper(view:View)=contract?.wrapper?.isInstance(view)==true
     fun matches(view:View)=isWrapper(view) || GalleryNativeSurfaceContract.matches(view)
     fun nativeRole(view:View):Int?=if(isWrapper(view))AppGlassSurfacePolicy.CONTROL else GalleryNativeSurfaceContract.role(view)
+    private fun usesStateLayer(view:View)=GalleryNativeSurfaceContract.isDialogButton(view) || GalleryStateLayerBackgroundLease.isStateBackground(view)
+    fun canAssign(view:View):Boolean {
+        if(!matches(view))return true
+        return if(usesStateLayer(view))GalleryStateLayerBackgroundLease.canMount(view)
+            else NativeSurfaceBackgroundLease.owns(view) || NativeSurfaceBackgroundLease.canMount(view)
+    }
+    private fun leaseBackground(view:View):Boolean {
+        if(usesStateLayer(view))return GalleryStateLayerBackgroundLease.sync(view,true)
+        NativeSurfaceBackgroundLease.sync(view,true)
+        return !view.isOpaque
+    }
+    private fun restoreBackground(view:View) {
+        if(usesStateLayer(view))GalleryStateLayerBackgroundLease.restore(view)
+        else NativeSurfaceBackgroundLease.sync(view,false)
+    }
 
     private inline fun <T> nativeMutation(block:()->T):T {
         val old=mutating.get();mutating.set(true)
@@ -99,6 +114,10 @@ internal object GallerySurfaceAdapter {
         if(!matches(view))return true
         if(!ui())return false
         if(!active) {onMaterialStateChanged(view,false);return true}
+        if(!canAssign(view)) {
+            RuntimeDiagnostics.mark("gallery-background-native","背景层或不透明标志未满足安全租用条件，当前控件保持原生")
+            return false
+        }
         val state=states[view] ?: State().also {states[view]=it}
         return try {
             if(isWrapper(view) && (delegate(view)==null || !state.requests.begin()))return false
@@ -113,7 +132,10 @@ internal object GallerySurfaceAdapter {
                 }
                 state.nativeCleared=true
             }
-            NativeSurfaceBackgroundLease.sync(view,true)
+            if(!leaseBackground(view)) {
+                onMaterialStateChanged(view,false)
+                return false
+            }
             true
         } catch(error:Throwable) {
             runCatching {onMaterialStateChanged(view,false)}
@@ -130,10 +152,10 @@ internal object GallerySurfaceAdapter {
         if(!matches(view) || !ui())return
         val state=states[view]
         if(active) {
-            if(state?.active==true)NativeSurfaceBackgroundLease.sync(view,true)
+            if(state?.active==true && !leaseBackground(view))onMaterialStateChanged(view,false)
             return
         }
-        NativeSurfaceBackgroundLease.sync(view,false)
+        restoreBackground(view)
         if(state==null)return
         val restore=if(state.active)state.latest.values.toList() else emptyList()
         state.requests.end();state.active=false
@@ -175,6 +197,8 @@ internal object GallerySurfaceAdapter {
                     it.parameterTypes.firstOrNull()==View::class.java
             }
             check(setters.size==6 && clearBlur in setters && clearStroke in setters)
+            if(!GalleryStateLayerBackgroundLease.install(loader))
+                RuntimeDiagnostics.mark("gallery-state-layer","状态背景层接口未匹配，对应控件保持原生")
             GalleryNativeSurfaceContract.install(api,loader) {view -> states[view]?.active==true && materialApplied(view)}
             for(method in setters)api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 if(mutating.get()==true || !ui())return@intercept chain.proceed()

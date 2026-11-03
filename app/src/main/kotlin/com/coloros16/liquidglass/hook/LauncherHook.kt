@@ -1659,11 +1659,16 @@ object LauncherHook {
         }
         try {
             val clazz = hostForName(CLASS_CARD_BACKGROUND_BLUR_MANAGER)
-            val method = clazz.getDeclaredMethod(
-                METHOD_CREATE_BLUR_BACKGROUND,
-                View::class.java, Boolean::class.javaPrimitiveType, Int::class.javaPrimitiveType,
-            ).apply { isAccessible = true }
-            api.hook(method)
+            // COS16 uses (View, boolean, int); current COS17 moved type before
+            // the flag. Resolve exact alternatives, retaining the older ABI.
+            val methods = listOf(
+                arrayOf(View::class.java, Int::class.javaPrimitiveType!!, Boolean::class.javaPrimitiveType!!),
+                arrayOf(View::class.java, Boolean::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!),
+            ).mapNotNull { parameters ->
+                runCatching {clazz.getDeclaredMethod(METHOD_CREATE_BLUR_BACKGROUND,*parameters).apply {isAccessible=true}}.getOrNull()
+            }
+            check(methods.isNotEmpty()) {"No verified card background signature"}
+            for(method in methods)api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
                     val target = try {
@@ -1687,8 +1692,9 @@ object LauncherHook {
             Lg.i(
                 TAG,
                 "LauncherHook mounted: $CLASS_CARD_BACKGROUND_BLUR_MANAGER#$METHOD_CREATE_BLUR_BACKGROUND" +
-                    "(View, boolean, int) (card/group-card/widget map)",
+                    " ${methods.map {it.parameterTypes.joinToString {type -> type.simpleName}}} (card/group-card/widget map)",
             )
+            clazz.declaredMethods.filter {it.name=="createBackground"}.forEach {api.deoptimize(it)}
         } catch (t: Throwable) {
             Lg.e(TAG, "LauncherHook mount FAILED: $CLASS_CARD_BACKGROUND_BLUR_MANAGER#$METHOD_CREATE_BLUR_BACKGROUND", t)
         }

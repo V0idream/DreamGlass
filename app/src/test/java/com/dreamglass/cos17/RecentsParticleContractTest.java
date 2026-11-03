@@ -24,6 +24,27 @@ public class RecentsParticleContractTest {
   public void addDismissedTaskAnimations(View task,long duration,Batch batch) {}
   public void removeView(View unrelated) {}
  }
+ public static class StackUtil {
+  public static void c(Recents rv,View task,long duration,Batch pending) {}
+  public static void c(Recents rv,int unrelated,long duration,Batch pending) {}
+ }
+ public static class ChangedStackUtil {
+  public void c(Recents rv,View task,long duration,Batch pending) {}
+ }
+ @Test public void stackCardRouteRequiresExactStaticSignature() {
+  assertNotNull(RecentsParticleContract.INSTANCE.batchCard(StackUtil.class,Recents.class,View.class,Batch.class));
+  assertNull(RecentsParticleContract.INSTANCE.batchCard(ChangedStackUtil.class,Recents.class,View.class,Batch.class));
+ }
+ @Test public void confirmedBatchMayFinishSnapshotAfterNativeDetach() {
+  assertTrue(RecentsParticleContract.INSTANCE.frameReady(true,false,30L));
+  assertFalse(RecentsParticleContract.INSTANCE.frameReady(false,false,30L));
+  assertTrue(RecentsParticleContract.INSTANCE.frameReady(false,true,30L));
+ }
+ @Test public void staleSnapshotsAreDroppedEvenForBatchClears() {
+  assertFalse(RecentsParticleContract.INSTANCE.frameReady(true,true,181L));
+  assertFalse(RecentsParticleContract.INSTANCE.frameReady(true,false,-1L));
+  assertTrue(RecentsParticleContract.INSTANCE.frameReady(true,false,180L));
+ }
  @Test public void onlyConfirmedUpwardDeleteEmitsParticles() {
   assertTrue(RecentsParticleContract.INSTANCE.confirmed(true,true));
   assertFalse(RecentsParticleContract.INSTANCE.confirmed(true,false));

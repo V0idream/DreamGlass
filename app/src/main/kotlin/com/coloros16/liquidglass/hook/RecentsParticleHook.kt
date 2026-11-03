@@ -14,6 +14,7 @@ import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
 import java.lang.ref.WeakReference
 import java.lang.reflect.Method
+import java.lang.reflect.Modifier
 import java.util.WeakHashMap
 import java.util.concurrent.*
 
@@ -135,22 +136,12 @@ object RecentsParticleHook {
                                 val view=chain.getArg(0) as? View
                                 val relevant=if(route.name=="addDismissedTaskAnimations")clearAll>0 else
                                     explicitDismiss>0 && chain.getArg(2)==true && chain.getArg(4)==false
-                                if(relevant && view!=null && allowed(view.context))ticket=capture(view)
+                                if(relevant && view!=null && allowed(view.context))ticket=capture(view,clearAll>0)
                             }
                             val result=try {chain.proceed()} catch(error:Throwable) {ticket?.let(::cancel);throw error}
                             safe {ticket?.let {t->
                                 val animation=if(route.name=="addDismissedTaskAnimations")chain.getArg(2) else result
-                                if(animation!=null) {
-                                    val group=pending[animation] ?: ArrayList<Ticket>().also { list->
-                                        pending[animation]=list
-                                        addListener.invoke(animation,object:AnimatorListenerAdapter() {
-                                            override fun onAnimationStart(a:Animator) {list.toList().forEach(::accept)}
-                                            override fun onAnimationCancel(a:Animator) {list.toList().forEach(::cancel)}
-                                            override fun onAnimationEnd(a:Animator) {a.removeListener(this);list.clear()}
-                                        })
-                                    }
-                                    if(t !in group)group.add(t)
-                                } else cancel(t)
+                                if(animation!=null)bindPending(animation,t,addListener) else cancel(t)
                             } }
                             result
                         }
@@ -160,6 +151,38 @@ object RecentsParticleHook {
             }
             mark("batch-hook","原生单卡关闭／清空动画已接入；保留任务服务回调")
         }.onFailure {mark("batch-unavailable","${it.javaClass.simpleName}: ${it.message}")}
+        // COS17's stack delegate builds its batch in RecentsViewAnimUtil, never
+        // calling RecentsView.addDismissedTaskAnimations. This per-card entry is
+        // invoked AFTER the OEM locked/quick-start exclusions have been applied.
+        runCatching {
+            val task=Class.forName("com.android.quickstep.views.TaskView",false,loader)
+            val recents=Class.forName("com.android.quickstep.views.OplusRecentsViewImpl",false,loader)
+            val batch=Class.forName("com.android.launcher3.anim.PendingAnimation",false,loader)
+            val addListener=batch.getDeclaredMethod("addListener",Animator.AnimatorListener::class.java)
+            val util=Class.forName("com.oplus.quickstep.utils.k",false,loader)
+            val route=RecentsParticleContract.batchCard(util,recents,task,batch) ?: error("Unknown batch-card signature")
+            api.hook(route).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                var ticket:Ticket?=null
+                safe {
+                    val view=chain.getArg(1) as? View
+                    if(clearAll>0 && view!=null && allowed(view.context))ticket=capture(view,true)
+                }
+                val result=try {chain.proceed()} catch(error:Throwable) {ticket?.let(::cancel);throw error}
+                safe {ticket?.let {bindPending(chain.getArg(3)!!,it,addListener)}}
+                result
+            }
+            api.deoptimize(route)
+            // The delegate method is a verified caller of k.c; deopt it so a
+            // previously inlined helper cannot bypass this independent hook.
+            val delegate=Class.forName("lo.d",false,loader)
+            val factory=delegate.getDeclaredMethod("createAllTasksDismissAnimation",Long::class.javaPrimitiveType)
+            check(factory.returnType==batch)
+            api.hook(factory).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                clearAll++;try {chain.proceed()} finally {clearAll--}
+            }
+            api.deoptimize(factory)
+            mark("stack-batch-hook","COS17 堆叠清空逐卡动画已接入，锁定／快速启动任务仍由原生过滤")
+        }.onFailure {mark("stack-batch-unavailable","${it.javaClass.simpleName}: ${it.message}")}
         runCatching {
             api.hook(View::class.java.getDeclaredMethod("setAlpha",Float::class.javaPrimitiveType))
                 .setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain->
@@ -171,10 +194,25 @@ object RecentsParticleHook {
         mounted=true
     }
 
+    private fun bindPending(animation:Any,t:Ticket,addListener:Method) {
+        val group=pending[animation] ?: ArrayList<Ticket>().also { list ->
+            // Register before publishing: failed reflection must not leave a
+            // list which silently prevents the next card from adding a listener.
+            addListener.invoke(animation,object:AnimatorListenerAdapter() {
+                override fun onAnimationStart(a:Animator) {list.toList().forEach(::accept)}
+                override fun onAnimationCancel(a:Animator) {list.toList().forEach(::cancel)}
+                override fun onAnimationEnd(a:Animator) {a.removeListener(this);pending.remove(animation);list.clear()}
+            })
+            pending[animation]=list
+        }
+        if(t !in group)group.add(t)
+    }
+
     internal class Ticket(target:View,val root:WeakReference<View>,val node:RenderNode,
         val x:Float,val y:Float,val width:Int,val height:Int,val rawX:Float,val rawY:Float,
-        val capturedAt:Long=SystemClock.uptimeMillis()) {
+        val capturedAt:Long=SystemClock.uptimeMillis(),val batch:Boolean=false) {
         val view=WeakReference(target)
+        val taskIdentity=runCatching {target.javaClass.getMethod("getTask").invoke(target)}.getOrNull()
         @Volatile var cancelled=false
         var submitted=false;var hidden=false
         var effectSpeed=100
@@ -182,7 +220,7 @@ object RecentsParticleHook {
         var dust:ParticleDissolveHook.Api33.Dust?=null
         var deadline:Runnable?=null
     }
-    internal fun capture(view:View):Ticket? {
+    internal fun capture(view:View,batch:Boolean=false):Ticket? {
         tickets[view]?.let {return it}
         if(tickets.size>=MAX_ACTIVE || !view.isAttachedToWindow || !view.isShown || !view.isHardwareAccelerated)return null
         val root=view.rootView
@@ -198,7 +236,7 @@ object RecentsParticleHook {
         val node=RenderNode("DreamGlass dismissed recent task");node.setPosition(0,0,w,h)
         val canvas=node.beginRecording(w,h)
         try {canvas.translate(-rect.left,-rect.top);canvas.concat(matrix);view.draw(canvas)} finally {node.endRecording()}
-        val t=Ticket(view,WeakReference(root),node,rect.left,rect.top,w,h,rawX,rawY)
+        val t=Ticket(view,WeakReference(root),node,rect.left,rect.top,w,h,rawX,rawY,batch=batch)
         tickets[view]=t
         val deadline=Runnable {cancel(t)};t.deadline=deadline;ui.postDelayed(deadline,1800L)
         return t
@@ -206,6 +244,7 @@ object RecentsParticleHook {
     internal fun accept(t:Ticket) {
         if(t.cancelled || t.submitted)return
         t.submitted=true
+        val acceptedAt=SystemClock.uptimeMillis()
         t.effectSpeed=speed
         t.deadline?.let(ui::removeCallbacks)
         t.deadline=Runnable {cancel(t)}.also {ui.postDelayed(it,ParticleDissolveHook.durationMs(t.effectSpeed)+500L)}
@@ -217,20 +256,29 @@ object RecentsParticleHook {
             val image=bitmap
             ui.post {safe {
                 val view=t.view.get();val root=t.root.get()
-                if(image==null || t.cancelled || view==null || root==null || !membershipGranted() || !view.isAttachedToWindow ||
-                    !root.isShown || !interactive(root.context) || SystemClock.uptimeMillis()-t.capturedAt>180L) {cancel(t);return@safe}
-                val matrix=Matrix();view.transformMatrixToGlobal(matrix)
-                val rootMatrix=Matrix();root.transformMatrixToGlobal(rootMatrix)
-                val inverse=Matrix();if(!rootMatrix.invert(inverse)) {cancel(t);return@safe}
-                matrix.postConcat(inverse)
-                val now=RectF(0f,0f,view.width.toFloat(),view.height.toFloat());matrix.mapRect(now)
-                // Continue from the native card's current position, including a clipped top.
-                val x=t.x+now.left-t.rawX;val y=t.y+now.top-t.rawY
+                if(image==null || t.cancelled || root==null || !membershipGranted() ||
+                    !root.isShown || !interactive(root.context) || !RecentsParticleContract.frameReady(t.batch,
+                        view?.isAttachedToWindow==true,SystemClock.uptimeMillis()-acceptedAt)) {cancel(t);return@safe}
+                var x=t.x;var y=t.y
+                val attached=view!=null && view.isAttachedToWindow && view.rootView===root && sameTask(t,view)
+                if(attached) {
+                    val matrix=Matrix();view!!.transformMatrixToGlobal(matrix)
+                    val rootMatrix=Matrix();root.transformMatrixToGlobal(rootMatrix)
+                    val inverse=Matrix();if(!rootMatrix.invert(inverse)) {cancel(t);return@safe}
+                    matrix.postConcat(inverse)
+                    val now=RectF(0f,0f,view.width.toFloat(),view.height.toFloat());matrix.mapRect(now)
+                    x+=now.left-t.rawX;y+=now.top-t.rawY
+                }
+                // A batch may detach its card before the GPU fence returns.
+                // Its already recorded node can still dissolve at the captured
+                // root-local position. Never suppress a detached/reparented View.
                 val dust=ParticleDissolveHook.Api33.Dust(root,image,x,y,t.width,t.height,
-                    view.resources.displayMetrics.density,t.effectSpeed,-1f,.20f,true,remainsAllowed=::membershipGranted) {finish(t)}
+                    root.resources.displayMetrics.density,t.effectSpeed,-1f,.20f,true,remainsAllowed=::membershipGranted) {finish(t)}
                 t.dust=dust;dust.start()
-                t.nativeAlpha=view.alpha;t.hidden=true
-                ownAlpha=true;try {view.alpha=0f} finally {ownAlpha=false}
+                if(attached) {
+                    t.nativeAlpha=view!!.alpha;t.hidden=true
+                    ownAlpha=true;try {view.alpha=0f} finally {ownAlpha=false}
+                }
                 mark("playing","任务卡片 GPU 向上飘散；${image.width}x${image.height}")
             }}
         }} catch(error:Throwable) {t.node.discardDisplayList();cancel(t);throw error}
@@ -238,6 +286,7 @@ object RecentsParticleHook {
     internal fun nativeAlpha(view:View,requested:Float):Float {
         if(ownAlpha || Looper.myLooper()!=Looper.getMainLooper())return requested
         val ticket=tickets[view] ?: return requested
+        if(!sameTask(ticket,view)) {cancel(ticket);return requested}
         if(!ticket.hidden)return requested
         ticket.nativeAlpha=requested
         return 0f
@@ -246,7 +295,7 @@ object RecentsParticleHook {
         t.cancelled=true;t.deadline?.let(ui::removeCallbacks);t.deadline=null
         t.view.get()?.let {v->
             if(tickets[v]===t)tickets.remove(v)
-            if(t.hidden && v.alpha==0f) {ownAlpha=true;try {v.alpha=t.nativeAlpha} finally {ownAlpha=false}}
+            if(t.hidden && v.alpha==0f && sameTask(t,v)) {ownAlpha=true;try {v.alpha=t.nativeAlpha} finally {ownAlpha=false}}
         }
         t.hidden=false;t.dust=null
     }
@@ -256,10 +305,16 @@ object RecentsParticleHook {
         t.dust?.stop();finish(t)
     }
     internal fun stopAll() {tickets.values.toList().forEach(::cancel);pending.clear()}
+    private fun sameTask(t:Ticket,view:View)=t.taskIdentity==null ||
+        runCatching {view.javaClass.getMethod("getTask").invoke(view)===t.taskIdentity}.getOrDefault(false)
 }
 
 /** Verified ROM shapes, testable without instantiating vendor classes. */
 object RecentsParticleContract {
+    fun frameReady(batch:Boolean,attached:Boolean,age:Long)=age in 0L..180L && (batch || attached)
+    fun batchCard(type:Class<*>,recents:Class<*>,task:Class<*>,pending:Class<*>):Method?=
+        type.declaredMethods.singleOrNull {it.name=="c" && Modifier.isStatic(it.modifiers) &&
+            it.returnType==Void.TYPE && it.parameterTypes.contentEquals(arrayOf(recents,task,Long::class.javaPrimitiveType,pending))}
     fun confirmed(goingUp:Boolean,goingToEnd:Boolean)=goingUp && goingToEnd
     fun velocity(type:Class<*>):Method?=type.declaredMethods.singleOrNull {
         it.name=="startWithVelocity" && it.returnType==Void.TYPE && it.parameterTypes.contentEquals(

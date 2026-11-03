@@ -20,4 +20,11 @@ class AssistantSpecificSurfacePolicyTest {
         for(id in listOf("rv_shortcuts1","rv_shortcuts2","iv_internal_shortcut","nearby_services_container"))
             assertFalse(Policy.servicesCard(true,id))
     }
+    @Test fun onlyBackgroundPeersOfTheThreeAuditedControlsAreLeased() {
+        assertEquals("search_bar_blur",Policy.blurPeer("search_bar"))
+        assertEquals("ai_icon_blur",Policy.blurPeer("ai_icon"))
+        assertEquals("add_icon_blur",Policy.blurPeer("add_icon"))
+        for(id in listOf("head_icon","head_icon_blur","search_icon","shortcut_card",""))
+            assertNull(Policy.blurPeer(id))
+    }
 }

@@ -3,6 +3,7 @@ package com.coloros16.liquidglass.hook
 
 import android.graphics.Canvas
 import android.graphics.Outline
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.view.View
@@ -27,6 +28,10 @@ internal object GalleryNativeSurfaceContract {
     private const val DIALOG="com.coui.appcompat.dialog.widget.COUIAlertDialogMaxLinearLayout"
     private const val BUTTON="com.coui.appcompat.button.COUIButton"
     private data class Capsule(val type:Class<*>,val radius:Field,val bounds:Field?=null)
+    private var photoMenu:Capsule?=null
+    private var photoMenuBounds:Method?=null
+    private var photoMenuSync:Method?=null
+    private val photoButtonHosts=WeakHashMap<View,Boolean>()
     private var menu:Capsule?=null
     private var accessory:Capsule?=null
     private var pill:Capsule?=null
@@ -35,7 +40,7 @@ internal object GalleryNativeSurfaceContract {
     private var buttonRadius:Method?=null
     private var buttonBounds:Field?=null
     private val toolbarHosts=WeakHashMap<View,Boolean>()
-    private enum class Kind { MENU,ACCESSORY,PILL,DIALOG,BUTTON,TOOLBAR }
+    private enum class Kind { MENU,ACCESSORY,PILL,DIALOG,BUTTON,TOOLBAR,PHOTO_MENU,PHOTO_BUTTON }
     private fun id(view:View)=runCatching {view.resources.getResourceEntryName(view.id)}.getOrDefault("")
     private fun dialogAncestor(view:View):View? {
         var parent=view.parent
@@ -47,6 +52,8 @@ internal object GalleryNativeSurfaceContract {
         return null
     }
     private fun kind(view:View):Kind? = when {
+        photoButtonHosts[view]==true -> Kind.PHOTO_BUTTON
+        photoMenu?.type?.isInstance(view)==true -> Kind.PHOTO_MENU
         toolbarHosts[view]==true && view !is ViewGroup -> Kind.TOOLBAR
         menu?.type?.isInstance(view)==true -> Kind.MENU
         accessory?.type?.isInstance(view)==true -> Kind.ACCESSORY
@@ -58,14 +65,18 @@ internal object GalleryNativeSurfaceContract {
         else -> null
     }
     fun matches(view:View)=kind(view)!=null
+    fun isDialogButton(view:View)=kind(view)==Kind.BUTTON
     fun role(view:View):Int?=kind(view)?.let {
         if(it==Kind.DIALOG)AppGlassSurfacePolicy.PANEL else AppGlassSurfacePolicy.CONTROL
     }
     fun radius(view:View):Float?=runCatching {
         when(kind(view)) {
-            Kind.MENU -> menu!!.radius.getFloat(view).takeIf {it>0f}
-                ?: ((view.height-view.paddingTop-view.paddingBottom)/2f)
-            Kind.ACCESSORY -> accessory!!.radius.getFloat(view)
+            // Native mRadius is refreshed only in onDraw/onLayout. onPreDraw
+            // must use this frame's same formula, not a previous-size cache.
+            Kind.PHOTO_MENU -> photoMenu!!.radius.getFloat(view)
+            Kind.PHOTO_BUTTON -> minOf(view.width,view.height)/2f
+            Kind.MENU -> GalleryFloatingSurfaceGeometry.radius(view.height.toFloat(),view.paddingTop,view.paddingBottom)
+            Kind.ACCESSORY -> GalleryFloatingSurfaceGeometry.radius(view.measuredHeight.toFloat(),view.paddingTop,view.paddingBottom)
             Kind.PILL -> pill!!.radius.getFloat(view)
             Kind.DIALOG -> dialog!!.radius.getInt(view).toFloat()
             Kind.BUTTON -> (buttonRadius?.invoke(view) as? Number)?.toFloat()
@@ -76,13 +87,21 @@ internal object GalleryNativeSurfaceContract {
     fun bounds(view:View):RectF?=runCatching {
         if(view.width<=0 || view.height<=0)return@runCatching null
         val kind=kind(view) ?: return@runCatching null
-        val area=if(kind==Kind.MENU) {
-            // Exact native updateBackgroundBounds rule, using this frame's
-            // drawing bounds rather than the previous onDraw's cached outline.
+        val area=if(kind==Kind.PHOTO_MENU) {
+            // Called under AppGlassHook's nativeMutation guard. Native recalculates
+            // these bounds before painting, so inspect the same frame's geometry.
+            photoMenuSync!!.invoke(view)
+            RectF(photoMenuBounds!!.invoke(view) as RectF)
+        } else if(kind==Kind.MENU) {
             val drawing=menu!!.bounds!!.get(view) as RectF
-            if(view.layoutDirection==View.LAYOUT_DIRECTION_RTL)
-                RectF(view.width-drawing.width(),view.height-drawing.height(),view.width.toFloat(),view.height.toFloat())
-            else RectF(0f,0f,drawing.width(),drawing.height())
+            val local=GalleryFloatingSurfaceGeometry.menu(view.width.toFloat(),view.height.toFloat(),
+                drawing.left,drawing.top,drawing.right,drawing.bottom,view.layoutDirection==View.LAYOUT_DIRECTION_RTL)
+                ?: return@runCatching null
+            RectF(local.left,local.top,local.right,local.bottom)
+        } else if(kind==Kind.ACCESSORY) {
+            val local=GalleryFloatingSurfaceGeometry.accessory(view.width.toFloat(),view.height.toFloat())
+                ?: return@runCatching null
+            RectF(local.left,local.top,local.right,local.bottom)
         } else if(kind==Kind.BUTTON)RectF(buttonBounds!!.get(view) as RectF) else if(kind==Kind.DIALOG) {
             // The native InsetDrawable's outline excludes the dialog's outer
             // transparent margins. Never turn the whole dialog window into glass.
@@ -95,6 +114,7 @@ internal object GalleryNativeSurfaceContract {
     }.getOrNull()
 
     fun install(api:XposedInterface,loader:ClassLoader,active:(View)->Boolean) {
+        photoMenu=null;photoMenuBounds=null;photoMenuSync=null;photoButtonHosts.clear()
         menu=null;accessory=null;pill=null;dialog=null;button=null;buttonRadius=null;buttonBounds=null;toolbarHosts.clear()
         var mountedCount=0
         fun mounted(name:String,block:()->Unit) {
@@ -117,20 +137,6 @@ internal object GalleryNativeSurfaceContract {
                 else chain.proceed()
             }
             api.deoptimize(method)
-        }
-        fun omitShadowDuringNativeDraw(type:Class<*>,fieldName:String,owner:(View)->View?) {
-            val shadow=type.getDeclaredField(fieldName).apply {check(!this.type.isPrimitive);isAccessible=true}
-            val draw=type.getDeclaredMethod("onDraw",Canvas::class.java)
-            api.hook(draw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-                val view=chain.getThisObject() as View
-                val parent=owner(view)
-                val saved=if(parent!=null && active(parent) && (chain.getArg(0) as Canvas).isHardwareAccelerated)
-                    runCatching {shadow.get(view)?.also {shadow.set(view,null)}}.getOrNull() else null
-                try {chain.proceed()} finally {
-                    if(saved!=null)runCatching {if(shadow.get(view)==null)shadow.set(view,saved)}
-                }
-            }
-            api.deoptimize(draw)
         }
         mounted("navigation") {
             val base=Class.forName(BASE,false,loader);val type=Class.forName(MENU,false,loader)
@@ -155,8 +161,6 @@ internal object GalleryNativeSurfaceContract {
         mounted("dialog") {
             val type=Class.forName(DIALOG,false,loader)
             val capsule=Capsule(type,field(type,"mRadius",Int::class.javaPrimitiveType!!))
-            val root=Class.forName("com.coui.appcompat.dialog.widget.COUIAlertDialogRootLayout",false,loader)
-            omitShadowDuringNativeDraw(root,"mShadowEdgeDrawable",::dialogAncestor)
             dialog=capsule
         }
         mounted("dialog-buttons") {
@@ -165,8 +169,9 @@ internal object GalleryNativeSurfaceContract {
             check(radius.returnType==Float::class.javaPrimitiveType)
             val nativeBounds=field(type,"mTmpRectF",RectF::class.java)
             skipFill(type,"drawButtonBackground");skipFill(type,"drawMaskAndStroke")
-            omitShadowDuringNativeDraw(type,"mShadowEdgeDrawable") {if(matches(it))it else null}
-            deopt(type,setOf("applyBlurEffect","applyStrokeEffect","onAttachedToWindow","onMaterialStateChange"))
+            // Preserve native shadow fields. Suppress only the verified private
+            // fill routines; TextView/loading foreground always executes once.
+            deopt(type,setOf("onDraw","applyBlurEffect","applyStrokeEffect","onAttachedToWindow","onMaterialStateChange"))
             val loading=Class.forName("com.coui.appcompat.button.COUILoadingButton",false,loader)
             check(type.isAssignableFrom(loading));deopt(loading,setOf("onDraw"))
             button=type;buttonRadius=radius;buttonBounds=nativeBounds
@@ -189,6 +194,62 @@ internal object GalleryNativeSurfaceContract {
             }
             deopt(type,setOf("create","init","applyBlurEffect","applyStroke","clearBlurEffect","clearStroke",
                 "syncBlurAndBackground","onMaterialStateChange"))
+        }
+        mounted("photo-toolbar-menus") {
+            val type=Class.forName("com.coui.appcompat.bottomfloatingtoolbar.COUIBottomFloatingToolbarMenuView",false,loader)
+            val nativeRadius=field(type,"mRadius",Float::class.javaPrimitiveType!!)
+            val getBounds=type.getDeclaredMethod("getBounds").apply {check(returnType==RectF::class.java);isAccessible=true}
+            val sync=type.getDeclaredMethod("syncVisualState").apply {check(returnType==Void.TYPE);isAccessible=true}
+            skipFill(type,"drawPanelStroke")
+            // Keep the native foreground and touch animation. Only suppress this
+            // host's material decoration while our replacement is actually active.
+            val manager=type.getDeclaredField("mMaterialEffectManager").apply {isAccessible=true}
+            val draw=manager.type.getDeclaredMethod("drawMaterialEffects",Canvas::class.java,
+                RectF::class.java,Path::class.java,Float::class.javaPrimitiveType,Float::class.javaPrimitiveType)
+            check(draw.returnType==Void.TYPE)
+            val scope=ScopedDrawOwner<Any>()
+            val onDraw=type.getDeclaredMethod("onDraw",Canvas::class.java)
+            api.hook(onDraw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val view=chain.getThisObject() as View
+                val owner=if(active(view) && (chain.getArg(0) as Canvas).isHardwareAccelerated)manager.get(view) else null
+                scope.run(owner) {chain.proceed()}
+            }
+            api.hook(draw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                if(scope.current()!=null && scope.current()===chain.getThisObject())null else chain.proceed()
+            }
+            api.deoptimize(draw)
+            deopt(type,setOf("onDraw","onMaterialStateChange","onAttachedToWindow","updateBlurEffect",
+                "updateStrokeEffect","syncVisualState","updateAndDrawBackgroundRect"))
+            photoMenu=Capsule(type,nativeRadius)
+            photoMenuBounds=getBounds;photoMenuSync=sync
+        }
+        mounted("photo-top-menu-buttons") {
+            val type=Class.forName("com.oplus.aiunit.vision.n0q",false,loader)
+            val host=field(type,"a",View::class.java)
+            val factory=Class.forName("com.oplus.aiunit.vision.n0q\$b",false,loader)
+            val create=factory.getDeclaredMethod("a",View::class.java,Float::class.javaPrimitiveType,Boolean::class.javaPrimitiveType)
+            check(Modifier.isStatic(create.modifiers) && create.returnType==type)
+            api.hook(create).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val view=chain.getArg(0) as? View ?: return@intercept chain.proceed()
+                // This semantic factory receives the internal material host,
+                // including FrameLayout, not the entire PhotoTopToolbar.
+                val previous=photoButtonHosts.put(view,true)
+                try {
+                    val result=chain.proceed()
+                    if(result==null || host.get(result)!==view) {
+                        if(previous==null)photoButtonHosts.remove(view)
+                    }
+                    result
+                } catch(error:Throwable) {
+                    if(previous==null)photoButtonHosts.remove(view)
+                    throw error
+                }
+            }
+            api.deoptimize(create)
+            deopt(type,setOf("a","c","e","onMaterialStateChange"))
+            val controller=Class.forName("com.oplus.gallery.photo_page.ui.section.photoblur.PhotoMenuMaterialEffectController",false,loader)
+            api.deoptimize(controller.getDeclaredMethod("d",View::class.java,
+                Boolean::class.javaPrimitiveType,Boolean::class.javaPrimitiveType))
         }
         RuntimeDiagnostics.mark("gallery-native-surfaces","已匹配 $mountedCount 组精确材质宿主；按钮／导航胶囊／对话框已登记，画面仍待设备验证")
     }

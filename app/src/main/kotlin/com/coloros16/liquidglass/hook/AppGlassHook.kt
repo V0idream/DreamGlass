@@ -64,6 +64,7 @@ object AppGlassHook {
                     val args=chain.getArgs().toTypedArray();args[0]=replacement
                     if(!nativeMutation {Cos17AppSurfaceHooks.beforeAssign(view,true)})return@intercept chain.proceed()
                     try {
+                        state?.clip(view)
                         val result=chain.proceed(args)
                         state?.applied=true
                         nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,true)}
@@ -178,17 +179,20 @@ object AppGlassHook {
         private val material by lazy { AppGlassEffect() }
         private var blockedUntil=0L
         private var lastApplied:RenderEffect?=null
+        private var materialBounds:RectF?=null
+        private var materialRadius=0f
         fun effect():RenderEffect? {
           try {
             preferences()
             val view=target.get() ?: return null
             if(!enabled || SystemClock.uptimeMillis()<blockedUntil || !view.isHardwareAccelerated)return null
+            if(!GallerySurfaceAdapter.canAssign(view))return null
             val kind=role(view);if(kind==AppGlassSurfacePolicy.NONE) { cached=null;return null }
             val s=snapshot ?: return null
             val outline=Outline();view.background?.getOutline(outline)
             if(outline.isEmpty)view.outlineProvider?.getOutline(view,outline)
             val outlineRect=Rect()
-            val nativeBounds=Cos17AppSurfaceHooks.nativeBounds(view)
+            val nativeBounds=nativeMutation {Cos17AppSurfaceHooks.nativeBounds(view)}
             if(Cos17AppSurfaceHooks.isTarget(view) && nativeBounds==null)return null
             val area=nativeBounds ?: if(outline.getRect(outlineRect) && !outlineRect.isEmpty)RectF(outlineRect)
                 else RectF(0f,0f,view.width.toFloat(),view.height.toFloat())
@@ -200,6 +204,7 @@ object AppGlassHook {
                 if(kind==AppGlassSurfacePolicy.CONTROL)minOf(area.width(),area.height())*.5f else minOf(area.width(),area.height())*.22f
             val p=SharedGlassParams.resolve(s.values,s.preset,GlassRegistry.overridesFor(key),
                 area.width(),area.height(),radius.coerceIn(0f,minOf(area.width(),area.height())*.5f),kind==AppGlassSurfacePolicy.CONTROL,s.compactOptics,s.grayBaseLuma)
+            materialBounds=RectF(area);materialRadius=p.cornerRadius
             val hash=31*(31*p.hashCode()+area.hashCode())+opacity.hashCode()
             if(cached==null || paramsHash!=hash) { cached=material.create(p,area,opacity);paramsHash=hash }
             return cached
@@ -207,10 +212,16 @@ object AppGlassHook {
             blockedUntil=SystemClock.uptimeMillis()+30_000L;failure(error);return null
           }
         }
+        fun clip(view:View) {
+            if(GalleryNativeSurfaceContract.matches(view))materialBounds?.let {
+                NativeSurfaceClipLease.sync(view,it,materialRadius)
+            }
+        }
         fun restore(view:View) {
             try {if(applied)assign(view,nativeEffect)} finally {
                 // Always release native channels even when the OEM bridge fails.
                 applied=false;cached=null;paramsHash=0;lastApplied=null
+                runCatching {NativeSurfaceClipLease.restore(view)}.onFailure(::failure)
                 runCatching {nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,false)}}.onFailure(::failure)
             }
         }
@@ -221,11 +232,12 @@ object AppGlassHook {
                 if(effect==null)restore(view)
                 else if(!applied || lastApplied!==effect) {
                     if(nativeMutation {Cos17AppSurfaceHooks.beforeAssign(view,true)}) {
+                        clip(view)
                         assign(view,effect);lastApplied=effect;applied=true
                         RuntimeDiagnostics.mark("app-glass-material","组件已使用统一预设；未添加工具栏外框")
                     } else restore(view)
                 }
-                if(applied)nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,true)}
+                if(applied)nativeMutation {clip(view);Cos17AppSurfaceHooks.onMaterialStateChanged(view,true)}
             } catch(error:Throwable) {
                 blockedUntil=SystemClock.uptimeMillis()+30_000L
                 runCatching { restore(view) };failure(error)

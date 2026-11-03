@@ -1,0 +1,49 @@
+{
+  "version": "1.1.9-debug2",
+  "versionCode": 1001009,
+  "date": "2026-11-03",
+  "unitTests": {
+    "tests": 248,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Warning": 350
+  },
+  "debugBuild": true,
+  "releaseBuild": true,
+  "apkSha256": "a1a858670633743f48404f9c41fe3e1f749ab091fe64c57d22ede6dabea16c4f",
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "newAdapterClassesPresent": [
+    "GalleryStateLayerBackgroundLease",
+    "GalleryFloatingSurfaceGeometry",
+    "NativeSurfaceOptics",
+    "NativeSurfaceClipLease",
+    "LauncherSuggestionGlassSurfaceHook",
+    "AssistantHeaderClipLease",
+    "RecentsParticleHook"
+  ],
+  "calculatorRuntimeClassesAndKeyAbsentFromDex": true,
+  "calculatorScopeRemoved": true,
+  "legacySpringHookRemovedFromDex": true,
+  "legalAssetsMatchSource": true,
+  "appreciationAssetUnmodified": true,
+  "sharedAgslChangedThisRound": false,
+  "offlineShaderRaster": {
+    "skiaVersion": "144.1",
+    "cases": 8,
+    "status": "PASS_OFFLINE_SHADER_INVARIANTS_PARALLAX_GEOMETRY_DISPLACEMENT_REPRODUCED",
+    "originAlphaTranslationMaxError": 5.960464477539063e-08,
+    "androidGpuTested": false,
+    "oemBackdropTested": false
+  },
+  "galleryCrashDeviceStackAvailable": false,
+  "gallerySaveCrashPhysicalFixAccepted": false,
+  "recentsBatchPhysicalVisualAccepted": false,
+  "adbConnectionPerformed": false,
+  "physicalInstallSucceeded": false,
+  "physicalVisualAccepted": false,
+  "gpuProbesExecuted": false,
+  "uiRenderedOnDevice": false
+}

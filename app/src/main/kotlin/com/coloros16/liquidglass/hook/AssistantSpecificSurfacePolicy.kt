@@ -9,4 +9,10 @@ internal object AssistantSpecificSurfacePolicy {
     fun headerControl(exactHeaderClass:Boolean,underHeader:Boolean,id:String):Boolean =
         exactHeaderClass && underHeader && id in headerIds
     fun servicesCard(exactCardClass:Boolean,id:String):Boolean=exactCardClass && id=="shortcut_card"
+    fun blurPeer(id:String):String?=when(id) {
+        "search_bar" -> "search_bar_blur"
+        "ai_icon" -> "ai_icon_blur"
+        "add_icon" -> "add_icon_blur"
+        else -> null
+    }
 }

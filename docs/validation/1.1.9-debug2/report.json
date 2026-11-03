@@ -1,0 +1,380 @@
+{
+  "scope": "OFFLINE desktop Skia raster/F32 reference using actual shared AGSL. Synthetic procedural source only.",
+  "skiaVersion": "144.1",
+  "androidGpuTested": false,
+  "oemBackdropTested": false,
+  "fullAndroidFilterChainTested": false,
+  "runtimeShaderImageFilterExposed": false,
+  "blurReferenceLimit": "Gaussian ImageFilter is rasterized first to a fixed whole-host F32 image. Runtime shader samples that image; Android filter expansion/origin metadata is NOT reproduced.",
+  "sourceFile": "app\\src\\main\\kotlin\\com\\coloros16\\liquidglass\\liquidglass\\LiquidGlassShader.kt",
+  "shaderSha256": "a0fb1828c081cbe5742c53ee80b06020b8bf59c305806a587c5f1319b6e94364",
+  "hostPixels": [
+    440,
+    260
+  ],
+  "nativeBoundsLTRB": [
+    73,
+    41,
+    367,
+    219
+  ],
+  "actualShaderCases": [
+    {
+      "alphaBboxAt01": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "alphaMass": 49637.671875,
+      "alphaCentroidPx": [
+        220.00001178989692,
+        130.00000696172708
+      ],
+      "finite": true,
+      "maximumRgbMinusAlpha": 0.0,
+      "maximumAlphaOutsideMaskRectangle": 0.0,
+      "maximumAbsRgbAtZeroAlpha": 0.0,
+      "case": "blur0-parallax0_0",
+      "parallaxPx": [
+        0,
+        0
+      ],
+      "separateSourcePreblurSigma": 0,
+      "nativeMaskRect": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "unclippedBodyCenterFromEquation": [
+        220.0,
+        130.0
+      ]
+    },
+    {
+      "alphaBboxAt01": [
+        73,
+        57,
+        343,
+        219
+      ],
+      "alphaMass": 42374.24609375,
+      "alphaCentroidPx": [
+        206.66513414479826,
+        138.56925527519348
+      ],
+      "finite": true,
+      "maximumRgbMinusAlpha": 0.0,
+      "maximumAlphaOutsideMaskRectangle": 0.0,
+      "maximumAbsRgbAtZeroAlpha": 0.0,
+      "case": "blur0-parallax24_-16",
+      "parallaxPx": [
+        24,
+        -16
+      ],
+      "separateSourcePreblurSigma": 0,
+      "nativeMaskRect": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "unclippedBodyCenterFromEquation": [
+        196.0,
+        146.0
+      ]
+    },
+    {
+      "alphaBboxAt01": [
+        97,
+        41,
+        367,
+        203
+      ],
+      "alphaMass": 42374.24609375,
+      "alphaCentroidPx": [
+        233.33487699232967,
+        121.43075129626898
+      ],
+      "finite": true,
+      "maximumRgbMinusAlpha": 0.0,
+      "maximumAlphaOutsideMaskRectangle": 0.0,
+      "maximumAbsRgbAtZeroAlpha": 0.0,
+      "case": "blur0-parallax-24_16",
+      "parallaxPx": [
+        -24,
+        16
+      ],
+      "separateSourcePreblurSigma": 0,
+      "nativeMaskRect": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "unclippedBodyCenterFromEquation": [
+        244.0,
+        114.0
+      ]
+    },
+    {
+      "alphaBboxAt01": [
+        73,
+        41,
+        303,
+        171
+      ],
+      "alphaMass": 28787.533203125,
+      "alphaCentroidPx": [
+        186.5598587460835,
+        105.24955716993291
+      ],
+      "finite": true,
+      "maximumRgbMinusAlpha": 0.0,
+      "maximumAlphaOutsideMaskRectangle": 0.0,
+      "maximumAbsRgbAtZeroAlpha": 0.0,
+      "case": "blur0-parallax64_48",
+      "parallaxPx": [
+        64,
+        48
+      ],
+      "separateSourcePreblurSigma": 0,
+      "nativeMaskRect": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "unclippedBodyCenterFromEquation": [
+        156.0,
+        82.0
+      ]
+    },
+    {
+      "alphaBboxAt01": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "alphaMass": 49637.671875,
+      "alphaCentroidPx": [
+        220.0000136248509,
+        130.00000805144433
+      ],
+      "finite": true,
+      "maximumRgbMinusAlpha": 0.0,
+      "maximumAlphaOutsideMaskRectangle": 0.0,
+      "maximumAbsRgbAtZeroAlpha": 0.0,
+      "case": "blur20-parallax0_0",
+      "parallaxPx": [
+        0,
+        0
+      ],
+      "separateSourcePreblurSigma": 20,
+      "nativeMaskRect": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "unclippedBodyCenterFromEquation": [
+        220.0,
+        130.0
+      ]
+    },
+    {
+      "alphaBboxAt01": [
+        73,
+        57,
+        343,
+        219
+      ],
+      "alphaMass": 42374.25,
+      "alphaCentroidPx": [
+        206.66511734475915,
+        138.56924404742017
+      ],
+      "finite": true,
+      "maximumRgbMinusAlpha": 0.0,
+      "maximumAlphaOutsideMaskRectangle": 0.0,
+      "maximumAbsRgbAtZeroAlpha": 0.0,
+      "case": "blur20-parallax24_-16",
+      "parallaxPx": [
+        24,
+        -16
+      ],
+      "separateSourcePreblurSigma": 20,
+      "nativeMaskRect": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "unclippedBodyCenterFromEquation": [
+        196.0,
+        146.0
+      ]
+    },
+    {
+      "alphaBboxAt01": [
+        97,
+        41,
+        367,
+        203
+      ],
+      "alphaMass": 42374.25,
+      "alphaCentroidPx": [
+        233.33485808730543,
+        121.43074143756365
+      ],
+      "finite": true,
+      "maximumRgbMinusAlpha": 0.0,
+      "maximumAlphaOutsideMaskRectangle": 0.0,
+      "maximumAbsRgbAtZeroAlpha": 0.0,
+      "case": "blur20-parallax-24_16",
+      "parallaxPx": [
+        -24,
+        16
+      ],
+      "separateSourcePreblurSigma": 20,
+      "nativeMaskRect": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "unclippedBodyCenterFromEquation": [
+        244.0,
+        114.0
+      ]
+    },
+    {
+      "alphaBboxAt01": [
+        73,
+        41,
+        303,
+        171
+      ],
+      "alphaMass": 28787.533203125,
+      "alphaCentroidPx": [
+        186.55986119495594,
+        105.24955855522774
+      ],
+      "finite": true,
+      "maximumRgbMinusAlpha": 0.0,
+      "maximumAlphaOutsideMaskRectangle": 0.0,
+      "maximumAbsRgbAtZeroAlpha": 0.0,
+      "case": "blur20-parallax64_48",
+      "parallaxPx": [
+        64,
+        48
+      ],
+      "separateSourcePreblurSigma": 20,
+      "nativeMaskRect": [
+        73,
+        41,
+        367,
+        219
+      ],
+      "unclippedBodyCenterFromEquation": [
+        156.0,
+        82.0
+      ]
+    }
+  ],
+  "nonzeroOriginAlphaTranslationMaxError": 5.960464477539063e-08,
+  "sourceCoordinateIdentitySamples": [
+    {
+      "windowPixelXY": [
+        160,
+        110
+      ],
+      "maxRgbaDelta": 0.0
+    },
+    {
+      "windowPixelXY": [
+        200,
+        130
+      ],
+      "maxRgbaDelta": 0.0
+    },
+    {
+      "windowPixelXY": [
+        250,
+        155
+      ],
+      "maxRgbaDelta": 1.7881393432617188e-07
+    },
+    {
+      "windowPixelXY": [
+        300,
+        110
+      ],
+      "maxRgbaDelta": 0.0
+    }
+  ],
+  "preblurCoverageChecks": [
+    {
+      "parallaxPx": [
+        0,
+        0
+      ],
+      "maxAlphaDeltaPreblur0Versus20": 5.364418029785156e-07
+    },
+    {
+      "parallaxPx": [
+        24,
+        -16
+      ],
+      "maxAlphaDeltaPreblur0Versus20": 5.364418029785156e-07
+    },
+    {
+      "parallaxPx": [
+        -24,
+        16
+      ],
+      "maxAlphaDeltaPreblur0Versus20": 4.76837158203125e-07
+    },
+    {
+      "parallaxPx": [
+        64,
+        48
+      ],
+      "maxAlphaDeltaPreblur0Versus20": 5.364418029785156e-07
+    }
+  ],
+  "parallaxCoverageChanges": [
+    {
+      "parallaxPx": [
+        24,
+        -16
+      ],
+      "meanAbsAlphaDeltaFromAnchored": 0.07297017425298691,
+      "alphaMassRatioFromAnchored": 0.853671102876438,
+      "maximumAlphaDeltaFromAnchored": 1.0
+    },
+    {
+      "parallaxPx": [
+        -24,
+        16
+      ],
+      "meanAbsAlphaDeltaFromAnchored": 0.07297017425298691,
+      "alphaMassRatioFromAnchored": 0.853671102876438,
+      "maximumAlphaDeltaFromAnchored": 1.0
+    },
+    {
+      "parallaxPx": [
+        64,
+        48
+      ],
+      "meanAbsAlphaDeltaFromAnchored": 0.1904863715171814,
+      "alphaMassRatioFromAnchored": 0.5799533321308696,
+      "maximumAlphaDeltaFromAnchored": 1.0
+    }
+  ],
+  "equation": "centeredCoord=(coord+uParallax-uMaskOffset)-uViewport/2, so unmasked shape center=maskOffset+viewport/2-parallax; fixed uMaskRect then clips the displaced shape.",
+  "recommendation": "AppGlassEffect adapter only: pass params.copy(parallaxX=0f,parallaxY=0f) for native fixed-shape controls. Preserve maskOffset/sourceRect; do not alter shared AGSL or SystemUI/QS uniforms. Native helper must still enforce actual Outline/rounded clip. Android full-filter-chain bounds remain a separate unverified hypothesis.",
+  "status": "PASS_OFFLINE_SHADER_INVARIANTS_PARALLAX_GEOMETRY_DISPLACEMENT_REPRODUCED"
+}

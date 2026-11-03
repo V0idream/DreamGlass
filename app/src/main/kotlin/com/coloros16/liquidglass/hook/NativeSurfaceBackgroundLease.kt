@@ -21,11 +21,26 @@ import java.lang.ref.WeakReference
  * on the next active sync, and cleanup never overwrites a newer native background.
  */
 internal object NativeSurfaceBackgroundLease {
-    fun sync(host:View,active:Boolean):Boolean {
+    /** A forwarding setter can store W(original=S) INSIDE S itself. Never use a
+     * whole-background lease on such widgets (COUIButton has exactly this API).
+     * Those controls need a separate, verified base-layer lease instead. */
+    fun canMount(host:View,allowAppCompatImageBackground:Boolean=false):Boolean = runCatching {
+        val type=host.javaClass
+        val drawableSetter=type.getMethod("setBackgroundDrawable",Drawable::class.java).declaringClass
+        type.getMethod("setBackground",Drawable::class.java).declaringClass==View::class.java &&
+            (drawableSetter==View::class.java || allowAppCompatImageBackground &&
+                drawableSetter.name=="androidx.appcompat.widget.AppCompatImageView") &&
+            host.background?.javaClass?.name!="com.coui.appcompat.state.COUIStateEffectDrawable"
+    }.getOrDefault(false)
+
+    fun owns(host:View):Boolean=(host.background as? TransparentParentBackground)?.belongsTo(host)==true
+
+    fun sync(host:View,active:Boolean,allowAppCompatImageBackground:Boolean=false):Boolean {
         val current=host.background
         val owned=current as? TransparentParentBackground
         if(active) {
             if(owned?.belongsTo(host)==true)return false
+            check(canMount(host,allowAppCompatImageBackground)) {"Native forwarding background setter requires a verified layer lease"}
             host.background=TransparentParentBackground(host,current)
             return true
         }

@@ -91,6 +91,18 @@ internal object AssistantSurfaceAdapter {
         }.getOrNull()
     }
 
+    private fun headerPath(view:View):Path? {
+        if(!isHeaderControl(view))return null
+        val contract=owner(view)?.contract ?: return null
+        return runCatching {
+            val native=contract.path.get(view) as Path
+            if(!native.isEmpty)return@runCatching native // Outline lease copies before transforming; UI thread only.
+            val bounds=nativeBounds(view) ?: return@runCatching null
+            val radius=nativeRadius(view) ?: return@runCatching null
+            Path().apply {addRoundRect(bounds,radius,radius,Path.Direction.CW)}
+        }.getOrNull()
+    }
+
     /** The verified controls can also receive a normal Drawable background.
      * Its opacity metadata must change through the setter, not drawBackground.
      * ImageView.src, search text siblings and shortcut rows are never replaced.
@@ -98,7 +110,14 @@ internal object AssistantSurfaceAdapter {
     fun onMaterialStateChanged(view:View,active:Boolean) {
         if(!isUiThread())return
         if(active && !isSpecificTarget(view) || !active && !matches(view))return
-        if(NativeSurfaceBackgroundLease.sync(view,active))
+        // Release without rechecking ancestry: detach can remove the native
+        // header parent before lifecycle cleanup is called.
+        if(isHeaderControl(view) || !active) {
+            if(AssistantHeaderClipLease.sync(view,active,::headerPath))
+                RuntimeDiagnostics.mark("assistant-header-clip",if(active)
+                    "原生路径已同时裁剪按钮GPU背景及配对模糊层，图标不变" else "已还原负一屏按钮原生裁剪")
+        }
+        if(NativeSurfaceBackgroundLease.sync(view,active,allowAppCompatImageBackground=isHeaderControl(view)))
             RuntimeDiagnostics.mark("assistant-specific-material",if(active)
                 "搜索框／操作按钮／我的服务底色已接入GPU材质，保留文字与图标" else "已还原负一屏原生底色")
     }
