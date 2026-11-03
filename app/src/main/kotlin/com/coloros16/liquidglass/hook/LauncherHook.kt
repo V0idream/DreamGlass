@@ -1278,10 +1278,33 @@ object LauncherHook {
         } catch (t: Throwable) {
             true
         }
-        if (!enable) return false
+        if (!enable) {NativeLauncherButtonMaterial.unavailable(drawable);return false}
+        if(NativeLauncherButtonMaterial.contains(drawable)) {
+            val nativePaint=getBlurShaderPaintOf(drawable) ?: return false
+            val nativePath=mDrawablePathField?.get(drawable) as? Path ?: return false
+            return NativeLauncherButtonMaterial.record(drawable,nativePaint,nativePath) {
+                recordPreparedGlass(drawable,nativePaint)
+            }
+        }
         // 门控 + 建玻璃 shader（与16.x 同一函数：省电/开关/映射/源全在这里判）
         if (!replaceShaderIfPossible(drawable)) return false
         val paint = getBlurShaderPaintOf(drawable) ?: return false
+        return recordPreparedGlass(drawable,paint)
+    }
+
+    internal fun registerNativeClearMaterial(view:View,params:LiquidGlassShader.Params):Boolean {
+        if(mInlineRecordMethod==null || mRenderNodeField==null || mDrawablePathField==null)return false
+        val inner=resolveCardInner(view) ?: return false
+        if(NativeLauncherButtonMaterial.register(inner,view,params)) {
+            mContentDirtyField?.setBoolean(inner,true);view.invalidate()
+        }
+        return true
+    }
+    internal fun removeNativeClearMaterial(view:View) {
+        for(inner in NativeLauncherButtonMaterial.remove(view))runCatching {mContentDirtyField?.setBoolean(inner,true)}
+        view.invalidate()
+    }
+    private fun recordPreparedGlass(drawable:Any,paint:Paint):Boolean {
         val rn = try {
             mRenderNodeField?.get(drawable) as? RenderNode
         } catch (t: Throwable) {

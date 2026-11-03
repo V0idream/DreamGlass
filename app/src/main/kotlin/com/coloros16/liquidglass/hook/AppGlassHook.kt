@@ -45,6 +45,7 @@ object AppGlassHook {
     fun install(api:XposedInterface,classLoader:ClassLoader,packageName:String) {
         val key=keys[packageName] ?: return
         this.api=api;this.packageName=packageName;switchKey=key
+        if(packageName==XposedEntry.PACKAGE_GALLERY)GalleryLiveBackdrop.install()
         GlassRegistry.attach { Prefs.read(api) }
         NativeAppBackdropHook.install(api,classLoader)
         try {
@@ -61,12 +62,13 @@ object AppGlassHook {
                 try { state=observe(view);state?.nativeEffect=original;replacement=state?.effect() }
                 catch(error:Throwable) { failure(error) }
                 if(replacement!=null) {
-                    val args=chain.getArgs().toTypedArray();args[0]=replacement
+                    val args=chain.getArgs().toTypedArray();args[0]=if(state?.liveContent==true)null else replacement
                     if(!nativeMutation {Cos17AppSurfaceHooks.beforeAssign(view,true)})return@intercept chain.proceed()
                     try {
                         state?.clip(view)
                         val result=chain.proceed(args)
                         state?.applied=true
+                        if(state?.liveContent==true)GalleryLiveBackdrop.activate(view)
                         nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,true)}
                         RuntimeDiagnostics.mark("app-glass-material","原生背景输入已接入统一 GPU 材质；前景保持原生")
                         return@intercept result
@@ -183,6 +185,7 @@ object AppGlassHook {
         private var lastApplied:RenderEffect?=null
         private var materialBounds:RectF?=null
         private var materialRadius=0f
+        var liveContent=false;private set
         fun effect():RenderEffect? {
           try {
             preferences()
@@ -208,6 +211,12 @@ object AppGlassHook {
                 area.width(),area.height(),radius.coerceIn(0f,minOf(area.width(),area.height())*.5f),kind==AppGlassSurfacePolicy.CONTROL,s.compactOptics,s.grayBaseLuma)
             materialBounds=RectF(area);materialRadius=p.cornerRadius
             val hash=31*(31*p.hashCode()+area.hashCode())+opacity.hashCode()
+            liveContent=packageName==XposedEntry.PACKAGE_GALLERY && GalleryLiveBackdrop.needs(view)
+            if(liveContent) {
+                cached=GalleryLiveBackdrop.prepare(view,area,p,opacity) ?: return null
+                paramsHash=hash
+                return cached
+            }
             if(cached==null || paramsHash!=hash) {
                 cached=material.create(p,area,opacity);paramsHash=hash
                 if(com.coloros16.liquidglass.BuildConfig.DEBUG && GalleryNativeSurfaceContract.matches(view))
@@ -220,7 +229,7 @@ object AppGlassHook {
           }
         }
         fun clip(view:View) {
-            if(GalleryNativeSurfaceContract.matches(view))materialBounds?.let {
+            if(!liveContent && GalleryNativeSurfaceContract.matches(view))materialBounds?.let {
                 NativeSurfaceClipLease.sync(view,it,materialRadius)
             }
         }
@@ -228,6 +237,7 @@ object AppGlassHook {
             try {if(applied)assign(view,nativeEffect)} finally {
                 // Always release native channels even when the OEM bridge fails.
                 applied=false;cached=null;paramsHash=0;lastApplied=null
+                runCatching {GalleryLiveBackdrop.release(view)}.onFailure(::failure)
                 runCatching {NativeSurfaceClipLease.restore(view)}.onFailure(::failure)
                 runCatching {nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,false)}}.onFailure(::failure)
             }
@@ -240,7 +250,8 @@ object AppGlassHook {
                 else if(!applied || lastApplied!==effect) {
                     if(nativeMutation {Cos17AppSurfaceHooks.beforeAssign(view,true)}) {
                         clip(view)
-                        assign(view,effect);lastApplied=effect;applied=true
+                        assign(view,if(liveContent)null else effect);lastApplied=effect;applied=true
+                        if(liveContent)GalleryLiveBackdrop.activate(view)
                         RuntimeDiagnostics.mark("app-glass-material","组件已使用统一预设；未添加工具栏外框")
                     } else restore(view)
                 }

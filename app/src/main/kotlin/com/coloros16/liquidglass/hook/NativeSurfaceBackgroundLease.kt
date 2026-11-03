@@ -54,7 +54,11 @@ internal object NativeSurfaceBackgroundLease {
     private class TransparentParentBackground(host:View,val original:Drawable?):Drawable() {
         private val owner=WeakReference(host)
         fun belongsTo(host:View)=owner.get()===host
-        override fun draw(canvas:Canvas) {} // The RenderNode backdrop supplies the parent surface.
+        override fun draw(canvas:Canvas) {
+            // Gallery's live content node is painted at the actual background
+            // draw point, where Android has already handled View scroll offsets.
+            owner.get()?.let {GalleryLiveBackdrop.draw(it,canvas)}
+        }
         @Deprecated("Deprecated in Java") override fun getOpacity()=PixelFormat.TRANSLUCENT
         override fun getPadding(padding:Rect):Boolean=original?.getPadding(padding) ?: super.getPadding(padding)
         override fun getOutline(outline:Outline) {original?.getOutline(outline) ?: outline.setEmpty()}

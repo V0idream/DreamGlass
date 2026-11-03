@@ -70,6 +70,7 @@ internal object GalleryNativeSurfaceContract {
     fun matches(view:View)=kind(view)!=null
     fun isDialogButton(view:View)=kind(view)==Kind.BUTTON
     fun isDialogPanel(view:View)=kind(view)==Kind.DIALOG
+    fun isHomeNavigation(view:View)=kind(view) in setOf(Kind.MENU,Kind.ACCESSORY)
     /** The native overlay is a dedicated non-content View beneath text/buttons.
      * Its gray ColorDrawable otherwise covers the replacement parent's backdrop.
      * Lease its background only; never filter the dialog subtree twice. */
