@@ -35,6 +35,10 @@ object RecentsParticleHook {
     private var release:Release?=null
     private var explicitDismiss=0
     private var clearAll=0
+    private val observer=NativeAnimationObserver({action->ui.post {action()};Unit}) {error ->
+        retryAt=SystemClock.uptimeMillis()+30_000L
+        mark("observer-error","${error.javaClass.simpleName}: ${error.message}")
+    }
     private class Release(val task:View,val playback:Any,val goingUp:Boolean)
     private fun mark(stage:String,value:String)=RuntimeDiagnostics.mark("recents-particles-$stage",value)
     private fun safe(action:()->Unit) {try {action()} catch(error:Throwable) {
@@ -100,8 +104,8 @@ object RecentsParticleHook {
                 safe { ticket?.let { t->
                     val animator=player.invoke(context!!.playback) as? Animator
                     animator?.addListener(object:AnimatorListenerAdapter() {
-                        override fun onAnimationCancel(a:Animator) {cancel(t)}
-                        override fun onAnimationEnd(a:Animator) {a.removeListener(this)}
+                        override fun onAnimationCancel(a:Animator) {observer.invoke {cancel(t)}}
+                        override fun onAnimationEnd(a:Animator) {observer.finish({}, {a.removeListener(this)})}
                     })
                     accept(t)
                     mark("gesture","原生确认上划删除；当前卡片 GPU 接管")
@@ -199,9 +203,11 @@ object RecentsParticleHook {
             // Register before publishing: failed reflection must not leave a
             // list which silently prevents the next card from adding a listener.
             addListener.invoke(animation,object:AnimatorListenerAdapter() {
-                override fun onAnimationStart(a:Animator) {list.toList().forEach(::accept)}
-                override fun onAnimationCancel(a:Animator) {list.toList().forEach(::cancel)}
-                override fun onAnimationEnd(a:Animator) {a.removeListener(this);pending.remove(animation);list.clear()}
+                override fun onAnimationStart(a:Animator) {list.toList().forEach {t->observer.invoke {accept(t)}}}
+                override fun onAnimationCancel(a:Animator) {list.toList().forEach {t->observer.invoke {cancel(t)}}}
+                override fun onAnimationEnd(a:Animator) {
+                    observer.finish({pending.remove(animation);list.clear()}, {a.removeListener(this)})
+                }
             })
             pending[animation]=list
         }

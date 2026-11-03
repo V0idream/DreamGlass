@@ -24,6 +24,7 @@ import android.view.ViewGroup
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.glass.GlassRegistry
+import com.coloros16.liquidglass.glass.SharedGlassParams
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.liquidglass.LowResTier
 import com.coloros16.liquidglass.liquidglass.ShaderInstancePool
@@ -254,6 +255,7 @@ object LauncherHook {
         val autoBounds: Rect,
         val hostViewName: String,
         val cornerRadius: Float,
+        val host:WeakReference<View>,
     )
 
     /** 整屏快照条目：captureDisplay 整屏（排除 Launcher 根 surface，0.5 降采样）干净壁纸背景，共享所有玻璃元素。 */
@@ -2197,7 +2199,7 @@ object LauncherHook {
         GlassRegistry.bind(key, inner, cardClass)
         val resolvedCorner = if (corner > 0f) corner else minOf(bw, bh) / 2f
         registerHostView(hostView)
-        val entry = RegionEntry(region, Rect(0, 0, bw, bh), hostName, resolvedCorner)
+        val entry = RegionEntry(region, Rect(0, 0, bw, bh), hostName, resolvedCorner,WeakReference(hostView))
         val previous = screenRegionMap[key]
         if (previous == null) {
             screenRegionMap[key] = entry
@@ -3341,6 +3343,22 @@ object LauncherHook {
 
     /** 材质参数重读间隔（毫秒）：热路径每帧调用改为每周期才读一次远程 Prefs。 */
     private const val MATERIAL_PREFS_CACHE_MS = 1000L
+    @Volatile private var commonCardSnapshot:SharedGlassParams.Snapshot?=null
+    @Volatile private var commonCardReadAt=-1000L
+    private fun sharedCardParams(width:Float,height:Float,corner:Float,id:Int):LiquidGlassShader.Params? {
+        val now=SystemClock.uptimeMillis()
+        if(commonCardSnapshot==null || now-commonCardReadAt>=MATERIAL_PREFS_CACHE_MS) {
+            val prefs=api?.let(Prefs::read) ?: return null
+            commonCardSnapshot=SharedGlassParams.read(prefs);commonCardReadAt=now
+        }
+        val s=commonCardSnapshot ?: return null
+        return SharedGlassParams.resolve(s.values,s.preset,GlassRegistry.overridesFor(id),width,height,
+            GlassRegistry.cornerOverrideFor(id)?.coerceIn(0f,minOf(width,height)/2f) ?: corner,
+            false,s.compactOptics,s.grayBaseLuma).copy(
+                // Only the legacy path samples an unblurred cached source. The
+                // new SuggestCompactBgView uses the live OEM backdrop instead.
+                sourcePreblurred=false,parallaxX=0f,parallaxY=0f)
+    }
 
     /** 读材质参数（时间节流缓存）；Prefs 不可用 / 读取失败 → 配置默认值。 */
     private fun readMaterialParams(): CachedMaterialParams {
@@ -3398,6 +3416,8 @@ object LauncherHook {
             blurRadius = Prefs.DEFAULT_BLUR_RADIUS,
         )
         return try {
+            if(screenRegionMap[elementId]?.hostViewName=="Card")
+                sharedCardParams(width,height,cornerRadius,elementId)?.let {return it}
             val m = readMaterialParams()
             // 预设逐键覆盖：该元素类被某个预设接管的键取预设值，其余键仍取全局值
             val ov = GlassRegistry.overridesFor(elementId)
@@ -3524,7 +3544,14 @@ object LauncherHook {
                 }
                 if (entry.lastX != loc[0] || entry.lastY != loc[1] || entry.lastW != w || entry.lastH != h) {
                     entry.lastX = loc[0]; entry.lastY = loc[1]; entry.lastW = w; entry.lastH = h
-                    // 移动/尺寸变化：invalidate 宿主 → 重录 → 映射更新（移动只更新 srcRect 折算，不重抓背景）
+                    // Card mapping used to be registered only once at creation.
+                    // Invalidating alone re-recorded the SAME stale source rect.
+                    // Update the immutable lookup on UI before native recording;
+                    // RenderThread never reads View geometry or captures a frame.
+                    if(w>0 && h>0)for((id,mapped) in screenRegionMap)if(mapped.host.get()===v) {
+                        screenRegionMap[id]=mapped.copy(region=RectF(loc[0].toFloat(),loc[1].toFloat(),
+                            (loc[0]+w).toFloat(),(loc[1]+h).toFloat()),autoBounds=Rect(0,0,w,h))
+                    }
                     try {
                         v.invalidate()
                     } catch (t: Throwable) {

@@ -28,9 +28,10 @@ import java.util.WeakHashMap
  * Only that exact background is leased. Engine icon siblings/input stay native.
  */
 internal object LauncherSuggestionGlassSurfaceHook {
+    private data class NativeOutline(val type:Class<*>,val radius:Field)
     private data class Contract(val background:Class<*>,val card:Class<*>,val wrapper:Field,
         val wrapperCard:Field,val wrapperBackground:Field,val info:Method,val itemType:Field,
-        val cardType:Field,val outline:Class<*>,val radius:Field)
+        val cardType:Field,val outlines:List<NativeOutline>)
     private var contract:Contract?=null
     private var api:XposedInterface?=null
     private var bridge:Method?=null
@@ -86,8 +87,20 @@ internal object LauncherSuggestionGlassSurfaceHook {
             check(info.returnType.name=="com.android.launcher3.card.LauncherCardInfo")
             val itemType=info.returnType.getField("itemType").apply {check(type==Int::class.javaPrimitiveType)}
             val cardType=info.returnType.getDeclaredField("mCardType").apply {check(type==Int::class.javaPrimitiveType);isAccessible=true}
-            val outline=Class.forName("pantanal.app.groupcard.defaultImpl.ClipSmoothOutlineProvider",false,loader)
-            val radius=outline.getDeclaredField("cardRadius").apply {check(type==Float::class.javaPrimitiveType);isAccessible=true}
+            // Current SuggestNoPaddingViewWrapper calls LauncherCardUtil.clipCardView,
+            // whose own provider captures $radius. Other COS17 card builds use the
+            // group-card provider. Verify each real ABI independently; requiring
+            // only the latter leaves the former waiting for geometry forever.
+            val outlines=listOf(
+                "com.android.launcher3.card.LauncherCardUtil\$clipCardView\$1" to "\$radius",
+                "pantanal.app.groupcard.defaultImpl.ClipSmoothOutlineProvider" to "cardRadius",
+            ).mapNotNull {(name,field) -> runCatching {
+                val type=Class.forName(name,false,loader)
+                check(android.view.ViewOutlineProvider::class.java.isAssignableFrom(type))
+                val radius=type.getDeclaredField(field).apply {check(this.type==Float::class.javaPrimitiveType);isAccessible=true}
+                NativeOutline(type,radius)
+            }.getOrNull()}
+            check(outlines.isNotEmpty()) {"No verified suggestion outline provider"}
             val bridgeType=Class.forName("com.oplus.view.OplusViewBackgroundRenderEffect",false,loader)
             val setter=bridgeType.getMethod("setBackgroundRenderEffect",RenderEffect::class.java,View::class.java)
             check(Modifier.isStatic(setter.modifiers));bridge=setter
@@ -115,7 +128,7 @@ internal object LauncherSuggestionGlassSurfaceHook {
             }
             // Native initCompactBgView calls the tiny default-background helper.
             api.deoptimize(wrapperType.getDeclaredMethod("initCompactBgView"))
-            contract=Contract(background,card,wrapper,wrapperCard,wrapperBackground,info,itemType,cardType,outline,radius)
+            contract=Contract(background,card,wrapper,wrapperCard,wrapperBackground,info,itemType,cardType,outlines)
             RuntimeDiagnostics.mark("launcher-suggestion-contract","已核对小布建议专用背景及82/83卡片身份；图标兄弟不作为渲染目标")
         }.onFailure {
             contract=null
@@ -138,8 +151,9 @@ internal object LauncherSuggestionGlassSurfaceHook {
             val provider=view.outlineProvider ?: return null
             // This is the exact native clipping provider assigned immediately
             // after creation, not a guessed min(width,height)/2 capsule.
-            if(!c.outline.isInstance(provider) || !view.clipToOutline)return null
-            val radius=c.radius.getFloat(provider).takeIf {it.isFinite() && it>=0f} ?: return null
+            val native=c.outlines.firstOrNull {it.type.isInstance(provider)} ?: return null
+            if(!view.clipToOutline)return null
+            val radius=native.radius.getFloat(provider).takeIf {it.isFinite() && it>=0f} ?: return null
             val outline=Outline();provider.getOutline(view,outline)
             if(outline.isEmpty)return null
             val rect=Rect()
@@ -181,6 +195,7 @@ internal object LauncherSuggestionGlassSurfaceHook {
                 check(NativeSurfaceBackgroundLease.owns(view)) {"Suggestion background lease was not installed"}
                 if(!active || dirty) {
                     assign(view,effect);active=true;dirty=false
+                    RuntimeDiagnostics.mark("launcher-suggestion-source","原生RenderNode实时背景输入；未使用壁纸位图或桌面截图缓存")
                     RuntimeDiagnostics.mark("launcher-suggestion-material","小布建议背景已提交统一GPU玻璃；四个图标、点击及原生圆角不变，待视觉验收")
                 }
             } catch(error:Throwable) {

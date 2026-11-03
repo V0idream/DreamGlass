@@ -41,7 +41,7 @@ android {
     }
 
     buildTypes {
-        debug { versionNameSuffix = "-debug2" }
+        debug { versionNameSuffix = "-debug3" }
         release {
             // 框架阶段先不开启 minify，避免 R8 误删 META-INF/xposed 清单文件；
             // 开启 minify 时需配合 proguard-rules.pro（见 LibXposed README 要求）。

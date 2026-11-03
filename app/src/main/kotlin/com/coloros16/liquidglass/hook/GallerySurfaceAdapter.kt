@@ -136,6 +136,10 @@ internal object GallerySurfaceAdapter {
                 onMaterialStateChanged(view,false)
                 return false
             }
+            if(!GalleryNativeSurfaceContract.syncDialogOverlay(view,true)) {
+                onMaterialStateChanged(view,false)
+                return false
+            }
             true
         } catch(error:Throwable) {
             runCatching {onMaterialStateChanged(view,false)}
@@ -152,9 +156,11 @@ internal object GallerySurfaceAdapter {
         if(!matches(view) || !ui())return
         val state=states[view]
         if(active) {
-            if(state?.active==true && !leaseBackground(view))onMaterialStateChanged(view,false)
+            if(state?.active==true && (!leaseBackground(view) || !GalleryNativeSurfaceContract.syncDialogOverlay(view,true)))
+                onMaterialStateChanged(view,false)
             return
         }
+        GalleryNativeSurfaceContract.syncDialogOverlay(view,false)
         restoreBackground(view)
         if(state==null)return
         val restore=if(state.active)state.latest.values.toList() else emptyList()

@@ -1,3 +1,9 @@
+# DreamGlass 1.1.9-debug3 验证记录
+
+262 项 JVM 测试、Debug／Release 构建和 Lint 通过（352 Warning，0 Error／Fatal）。用户反馈清理按钮背景消失、相册底栏错位、保存面板玻璃仍未完成；本版先按要求作为预发布上传，后续修复。自有 RenderNode 的模拟器几何报告不代表 OEM 背景或真机通过。详见 [验证记录](docs/validation/1.1.9-debug3/README.md)。
+
+---
+
 # DreamGlass 1.1.9-debug2 验证记录
 
 248 项 JVM 测试，Debug／Release 构建及 Lint 通过（0 Error／Fatal，350 Warning）。签名与既有升级证书一致。APK 审计确认新适配类存在、计算器相关运行类与旧弹簧 Hook 未回流，许可和赞赏图片与源文件一致。

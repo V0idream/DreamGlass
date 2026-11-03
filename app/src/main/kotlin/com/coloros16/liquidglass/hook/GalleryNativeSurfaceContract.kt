@@ -2,9 +2,7 @@
 package com.coloros16.liquidglass.hook
 
 import android.graphics.Canvas
-import android.graphics.Outline
 import android.graphics.Path
-import android.graphics.Rect
 import android.graphics.RectF
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +12,7 @@ import io.github.libxposed.api.XposedInterface.ExceptionMode
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 /** Gallery 17.10.41 resource/class contracts. These are the native material
@@ -36,6 +35,10 @@ internal object GalleryNativeSurfaceContract {
     private var accessory:Capsule?=null
     private var pill:Capsule?=null
     private var dialog:Capsule?=null
+    private data class DialogGeometry(val width:Method,val height:Method,val bottom:Method,
+        val horizontal:Field,val vertical:Field,val tiny:Field,val loading:Field,val root:Field,val overlay:Field)
+    private var dialogGeometry:DialogGeometry?=null
+    private val dialogOverlays=WeakHashMap<View,WeakReference<View>>()
     private var button:Class<*>?=null
     private var buttonRadius:Method?=null
     private var buttonBounds:Field?=null
@@ -66,6 +69,32 @@ internal object GalleryNativeSurfaceContract {
     }
     fun matches(view:View)=kind(view)!=null
     fun isDialogButton(view:View)=kind(view)==Kind.BUTTON
+    fun isDialogPanel(view:View)=kind(view)==Kind.DIALOG
+    /** The native overlay is a dedicated non-content View beneath text/buttons.
+     * Its gray ColorDrawable otherwise covers the replacement parent's backdrop.
+     * Lease its background only; never filter the dialog subtree twice. */
+    fun syncDialogOverlay(view:View,active:Boolean):Boolean {
+        if(!active) {
+            dialogOverlays.remove(view)?.get()?.let {NativeSurfaceBackgroundLease.sync(it,false)}
+            return true
+        }
+        if(!isDialogPanel(view))return true
+        val c=dialogGeometry ?: return false
+        val overlay=c.overlay.get(view) as? View
+        val previous=dialogOverlays[view]?.get()
+        if(previous!=null && previous!==overlay) {
+            NativeSurfaceBackgroundLease.sync(previous,false);dialogOverlays.remove(view)
+        }
+        if(overlay==null || overlay.visibility!=View.VISIBLE)return true
+        val root=c.root.get(view) as? View ?: return false
+        if(root.parent!==view || overlay.parent!==root || id(overlay)!="dialogOverlay" ||
+            overlay is ViewGroup || overlay.isClickable || overlay.isFocusable)return false
+        if(!NativeSurfaceBackgroundLease.owns(overlay) && !NativeSurfaceBackgroundLease.canMount(overlay))return false
+        NativeSurfaceBackgroundLease.sync(overlay,true)
+        if(!NativeSurfaceBackgroundLease.owns(overlay) || overlay.isOpaque)return false
+        dialogOverlays[view]=WeakReference(overlay)
+        return true
+    }
     fun role(view:View):Int?=kind(view)?.let {
         if(it==Kind.DIALOG)AppGlassSurfacePolicy.PANEL else AppGlassSurfacePolicy.CONTROL
     }
@@ -103,12 +132,13 @@ internal object GalleryNativeSurfaceContract {
                 ?: return@runCatching null
             RectF(local.left,local.top,local.right,local.bottom)
         } else if(kind==Kind.BUTTON)RectF(buttonBounds!!.get(view) as RectF) else if(kind==Kind.DIALOG) {
-            // The native InsetDrawable's outline excludes the dialog's outer
-            // transparent margins. Never turn the whole dialog window into glass.
-            val outline=Outline();view.background?.getOutline(outline)
-            val rect=Rect()
-            if(!outline.getRect(rect) || rect.isEmpty)return@runCatching null
-            RectF(rect)
+            // Read the same layout inputs as the native OutlineProvider, not the
+            // transparent placeholder Drawable installed by dialog-overlay mode.
+            val c=dialogGeometry ?: return@runCatching null
+            val b=GalleryDialogGeometry.bounds(c.width.invoke(view) as Int,c.height.invoke(view) as Int,
+                c.horizontal.getInt(view),c.vertical.getInt(view),c.bottom.invoke(view) as Int,
+                dialog!!.radius.getInt(view),c.tiny.getBoolean(view),c.loading.getBoolean(view)) ?: return@runCatching null
+            RectF(b.left,b.top,b.right,b.bottom)
         } else RectF(0f,0f,view.width.toFloat(),view.height.toFloat())
         area.takeIf {!it.isEmpty && listOf(it.left,it.top,it.right,it.bottom).all(Float::isFinite)}
     }.getOrNull()
@@ -116,6 +146,7 @@ internal object GalleryNativeSurfaceContract {
     fun install(api:XposedInterface,loader:ClassLoader,active:(View)->Boolean) {
         photoMenu=null;photoMenuBounds=null;photoMenuSync=null;photoButtonHosts.clear()
         menu=null;accessory=null;pill=null;dialog=null;button=null;buttonRadius=null;buttonBounds=null;toolbarHosts.clear()
+        dialogGeometry=null;dialogOverlays.clear()
         var mountedCount=0
         fun mounted(name:String,block:()->Unit) {
             runCatching {block();mountedCount++}.onFailure {
@@ -161,7 +192,33 @@ internal object GalleryNativeSurfaceContract {
         mounted("dialog") {
             val type=Class.forName(DIALOG,false,loader)
             val capsule=Capsule(type,field(type,"mRadius",Int::class.javaPrimitiveType!!))
-            dialog=capsule
+            fun integerMethod(name:String)=type.getDeclaredMethod(name).apply {check(returnType==Int::class.javaPrimitiveType);isAccessible=true}
+            val geometry=DialogGeometry(integerMethod("resolveOutlineViewWidth"),integerMethod("resolveOutlineViewHeight"),
+                integerMethod("getEffectiveBottomMargin"),field(type,"mDialogLayoutMarginHorizontal",Int::class.javaPrimitiveType!!),
+                field(type,"mDialogLayoutMarginVerticalTotal",Int::class.javaPrimitiveType!!),
+                field(type,"mIsTiny",Boolean::class.javaPrimitiveType!!),field(type,"mHasLoading",Boolean::class.javaPrimitiveType!!),
+                field(type,"mRootView",View::class.java),field(type,"mDialogOverlay",View::class.java))
+            dialog=capsule;dialogGeometry=geometry
+            deopt(type,setOf("onAttachedToWindow","onLayout","setUseDialogOverlayFeature","updateDialogOverlay"))
+        }
+        mounted("dialog-shadow") {
+            val root=Class.forName("com.coui.appcompat.dialog.widget.COUIAlertDialogRootLayout",false,loader)
+            val shadow=root.getDeclaredField("mShadowEdgeDrawable").apply {isAccessible=true}
+            val draw=shadow.type.getDeclaredMethod("draw",Canvas::class.java)
+            check(draw.returnType==Void.TYPE)
+            val scope=ScopedDrawOwner<Any>()
+            val onDraw=root.getDeclaredMethod("onDraw",Canvas::class.java)
+            api.hook(onDraw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val view=chain.getThisObject() as View
+                val parent=view.parent as? View
+                val owner=if(parent!=null && isDialogPanel(parent) && active(parent) &&
+                    (chain.getArg(0) as Canvas).isHardwareAccelerated)shadow.get(view) else null
+                scope.run(owner) {chain.proceed()}
+            }
+            api.hook(draw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                if(scope.current()!=null && scope.current()===chain.getThisObject())null else chain.proceed()
+            }
+            api.deoptimize(draw);api.deoptimize(onDraw)
         }
         mounted("dialog-buttons") {
             val type=Class.forName(BUTTON,false,loader)

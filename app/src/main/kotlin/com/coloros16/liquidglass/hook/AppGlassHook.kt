@@ -148,8 +148,10 @@ object AppGlassHook {
         // Vendor bridges may be called for both parent and child. Limit these
         // these apps to proven material owners; never filter an icon twice.
         if(!canObserve(view))return AppGlassSurfacePolicy.NONE
-        if(view.width>=dm.widthPixels*.9f && view.height>=dm.heightPixels*.65f)return AppGlassSurfacePolicy.NONE
+        // A verified dialog host may include native transparent outer margins.
+        // Its exact inner bounds, not the whole host size, define the material.
         Cos17AppSurfaceHooks.nativeRole(view)?.let {return it}
+        if(view.width>=dm.widthPixels*.9f && view.height>=dm.heightPixels*.65f)return AppGlassSurfacePolicy.NONE
         val hint=if(packageName==XposedEntry.PACKAGE_SMART_SIDEBAR)"/sidebar" else if(packageName==XposedEntry.PACKAGE_ASSISTANT_SCREEN)"/assistant" else ""
         return AppGlassSurfacePolicy.role(view.javaClass.name+hint,id(view),view.width.toFloat(),view.height.toFloat(),
             dm.widthPixels.toFloat(),dm.heightPixels.toFloat(),view is ViewGroup,view.isClickable,hasControl(view),
@@ -206,7 +208,12 @@ object AppGlassHook {
                 area.width(),area.height(),radius.coerceIn(0f,minOf(area.width(),area.height())*.5f),kind==AppGlassSurfacePolicy.CONTROL,s.compactOptics,s.grayBaseLuma)
             materialBounds=RectF(area);materialRadius=p.cornerRadius
             val hash=31*(31*p.hashCode()+area.hashCode())+opacity.hashCode()
-            if(cached==null || paramsHash!=hash) { cached=material.create(p,area,opacity);paramsHash=hash }
+            if(cached==null || paramsHash!=hash) {
+                cached=material.create(p,area,opacity);paramsHash=hash
+                if(com.coloros16.liquidglass.BuildConfig.DEBUG && GalleryNativeSurfaceContract.matches(view))
+                    RuntimeDiagnostics.mark("gallery-geometry-${view.javaClass.simpleName}",
+                        "host=${view.width}x${view.height}; local=$area; radius=${p.cornerRadius}; scroll=${view.scrollX},${view.scrollY}; fixed-mask; backdrop=OEM")
+            }
             return cached
           } catch(error:Throwable) {
             blockedUntil=SystemClock.uptimeMillis()+30_000L;failure(error);return null

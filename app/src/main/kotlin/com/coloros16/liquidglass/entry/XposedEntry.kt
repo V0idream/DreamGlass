@@ -216,6 +216,7 @@ class XposedEntry : XposedModule() {
                 LauncherHook.install(this, classLoader)
                 com.coloros16.liquidglass.hook.LauncherFolderGlassSurfaceHook.install(this,classLoader)
                 com.coloros16.liquidglass.hook.LauncherSuggestionGlassSurfaceHook.install(this,classLoader)
+                com.coloros16.liquidglass.hook.RecentsClearButtonGlassHook.install(this,classLoader)
                 LauncherTiltCompat.install(this, classLoader)
             }
             // 第三方 App（相册/智能侧边栏/速览）：A/B 族模糊挂载点登记（组件清单 + 预设按组件命中）。

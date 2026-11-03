@@ -1,0 +1,30 @@
+{
+  "version": "1.1.9-debug3",
+  "versionCode": 1001009,
+  "date": "2026-11-03",
+  "unitTests": {
+    "tests": 262,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Warning": 352
+  },
+  "debugBuild": true,
+  "releaseBuild": true,
+  "apkSha256": "ea4498aaf1779e2b01a97f6bb254011564755d07b8e3f77b523add32805f9ef3",
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "physicalInstallSucceeded": false,
+  "physicalVisualAccepted": false,
+  "knownUserReportedIssues": [
+    "Recents clear button background missing",
+    "Gallery homepage bottom material misaligned",
+    "Gallery save sheet background material incomplete"
+  ],
+  "emulatorGeometryReportReturned": true,
+  "emulatorGeometryVendorHookTested": false,
+  "oemBackdropAccepted": false,
+  "cpuBlurIntroduced": false,
+  "dependenciesChanged": false
+}
