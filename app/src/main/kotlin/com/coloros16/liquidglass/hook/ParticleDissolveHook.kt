@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.service.notification.StatusBarNotification
 import android.view.Choreographer
 import android.view.View
 import androidx.annotation.RequiresApi
@@ -131,7 +132,63 @@ object ParticleDissolveHook {
             runCatching { installClearAllClose(api,loader) }.onFailure {
                 report("clear_all_route","原生收起保留：${it.javaClass.simpleName}")
             }
+            runCatching {installMixedGroupCommit(api,loader,row)}.onFailure {
+                report("mixed_group_route","保留原生集合删除：${it.javaClass.simpleName}")
+            }
             installed = true
+        }
+
+        /** Collection-local commit covers visible ordinary children retained by
+         * an ongoing group. No candidate list, interception decision or native
+         * argument is changed; only the entries the system actually commits are
+         * animated, with the same bounds and dedupe as gesture particles. */
+        private fun installMixedGroupCommit(api:XposedInterface,loader:ClassLoader,row:Class<*>) {
+            val collection=Class.forName("com.android.systemui.statusbar.notification.collection.NotifCollection",false,loader)
+            val entry=Class.forName("com.android.systemui.statusbar.notification.collection.NotificationEntry",false,loader)
+            val route=NotificationLocalDismissContract.resolve(collection,entry,row) ?: error("Unknown local dismissal contract")
+            val getParent=row.getMethod("getNotificationParent").apply {check(returnType==row)}
+            val getChildren=row.getMethod("getAttachedChildren").apply {check(List::class.java.isAssignableFrom(returnType))}
+            val getAdapter=row.getMethod("getEntryAdapter")
+            val adapterType=getAdapter.returnType
+            val clearable=adapterType.getMethod("isClearable").apply {check(returnType==Boolean::class.javaPrimitiveType)}
+            val sbn=adapterType.getMethod("getSbn").apply {check(returnType==StatusBarNotification::class.java)}
+            fun ongoing(view:View):Boolean=runCatching {
+                val adapter=getAdapter.invoke(view) ?: return false
+                (sbn.invoke(adapter) as? StatusBarNotification)?.isClearable==false
+            }.getOrDefault(false)
+            api.hook(route.commit).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val candidates=ArrayList<Pair<Any,View>>(MAX_ACTIVE)
+                if(Looper.myLooper()==Looper.getMainLooper())safe {
+                    val entries=chain.getArg(0) as? List<*> ?: emptyList<Any>()
+                    for(item in entries) {
+                        if(candidates.size>=MAX_ACTIVE)break
+                        if(item==null || !entry.isInstance(item) || route.state.invoke(item).toString()!="NOT_DISMISSED" ||
+                            route.clearable.invoke(item)!=true)continue
+                        val view=route.row.invoke(item) as? View ?: continue
+                        if(!allowed(api,view.context))break
+                        val parent=getParent.invoke(view) as? View ?: continue
+                        val parentAdapter=getAdapter.invoke(parent) ?: continue
+                        val retained=clearable.invoke(parentAdapter)==false
+                        val siblings=getChildren.invoke(parent) as? List<*> ?: emptyList<Any>()
+                        val hasOngoing=ongoing(parent) || siblings.any {it is View && it!==view && ongoing(it)}
+                        if(retained && hasOngoing && request(view)!=null)candidates.add(item to view)
+                    }
+                }
+                val result=chain.proceed()
+                // Native interceptors have already filtered the list. Confirm the
+                // actual state change; attempts/cancels must not start particles.
+                for((item,view) in candidates)safe {
+                    val accepted=NotificationLocalDismissContract.accepted(true,true,true,"NOT_DISMISSED",route.state.invoke(item).toString())
+                    if(accepted && allowed(api,view.context)) {
+                        dismiss(view)
+                        report("mixed_group_commit","普通子通知已由集合确认删除；保留常驻通知与组容器")
+                    }
+                }
+                result
+            }
+            collection.declaredMethods.filter {it.name in setOf("dismissNotifications","locallyDismissNotifications")}
+                .forEach {runCatching {api.deoptimize(it)}}
+            report("mixed_group_route","已识别COS17集合级删除提交，补齐混合常驻通知子行")
         }
 
         private fun installClearAllClose(api:XposedInterface,loader:ClassLoader) {

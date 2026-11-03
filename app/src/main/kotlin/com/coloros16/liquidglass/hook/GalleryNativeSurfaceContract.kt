@@ -76,7 +76,7 @@ internal object GalleryNativeSurfaceContract {
      * Lease its background only; never filter the dialog subtree twice. */
     fun syncDialogOverlay(view:View,active:Boolean):Boolean {
         if(!active) {
-            dialogOverlays.remove(view)?.get()?.let {NativeSurfaceBackgroundLease.sync(it,false)}
+            dialogOverlays.remove(view)?.get()?.let {GalleryDialogBackgroundLease.sync(it,false)}
             return true
         }
         if(!isDialogPanel(view))return true
@@ -84,15 +84,13 @@ internal object GalleryNativeSurfaceContract {
         val overlay=c.overlay.get(view) as? View
         val previous=dialogOverlays[view]?.get()
         if(previous!=null && previous!==overlay) {
-            NativeSurfaceBackgroundLease.sync(previous,false);dialogOverlays.remove(view)
+            GalleryDialogBackgroundLease.sync(previous,false);dialogOverlays.remove(view)
         }
         if(overlay==null || overlay.visibility!=View.VISIBLE)return true
         val root=c.root.get(view) as? View ?: return false
         if(root.parent!==view || overlay.parent!==root || id(overlay)!="dialogOverlay" ||
             overlay is ViewGroup || overlay.isClickable || overlay.isFocusable)return false
-        if(!NativeSurfaceBackgroundLease.owns(overlay) && !NativeSurfaceBackgroundLease.canMount(overlay))return false
-        NativeSurfaceBackgroundLease.sync(overlay,true)
-        if(!NativeSurfaceBackgroundLease.owns(overlay) || overlay.isOpaque)return false
+        if(!GalleryDialogBackgroundLease.sync(overlay,true))return false
         dialogOverlays[view]=WeakReference(overlay)
         return true
     }
@@ -199,7 +197,21 @@ internal object GalleryNativeSurfaceContract {
                 field(type,"mDialogLayoutMarginVerticalTotal",Int::class.javaPrimitiveType!!),
                 field(type,"mIsTiny",Boolean::class.javaPrimitiveType!!),field(type,"mHasLoading",Boolean::class.javaPrimitiveType!!),
                 field(type,"mRootView",View::class.java),field(type,"mDialogOverlay",View::class.java))
+            // ViewGroup backgrounds may be skipped or replaced during COUI's
+            // own overlay transitions. Render at the guaranteed content pass,
+            // AFTER the leased transparent background but BEFORE text/buttons.
+            val dispatch=ViewGroup::class.java.getDeclaredMethod("dispatchDraw",Canvas::class.java)
+            api.hook(dispatch).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val host=chain.getThisObject() as? View
+                if(host!=null && type.isInstance(host) && id(host)=="parentPanel" && active(host))
+                    runCatching {GalleryLiveBackdrop.drawDialogPanel(host,chain.getArg(0) as Canvas)}.onFailure {
+                        RuntimeDiagnostics.mark("gallery-dialog-dispatch-error","保持原生子控件绘制：${it.javaClass.simpleName}")
+                    }
+                chain.proceed()
+            }
+            api.deoptimize(dispatch)
             dialog=capsule;dialogGeometry=geometry
+            GalleryLiveBackdrop.dialogDispatchInstalled()
             deopt(type,setOf("onAttachedToWindow","onLayout","setUseDialogOverlayFeature","updateDialogOverlay"))
         }
         mounted("dialog-shadow") {

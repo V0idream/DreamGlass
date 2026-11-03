@@ -15,27 +15,42 @@ internal class ClearButtonGlassSurface {
     private val optical=Paint(Paint.ANTI_ALIAS_FLAG)
     private var baseBounds=RectF()
     private var baseLuma=Float.NaN
+    private var rimStrength=Float.NaN
+    private var rimAngle=Float.NaN
+    /** Prepare the shared program during entering/preDraw, even while the
+     * native isolation flag still hides the button. Failure keeps the base. */
+    fun prepare() {runCatching {glass}}
     fun draw(canvas:Canvas,area:RectF,p:LiquidGlassShader.Params,source:Shader?,density:Float):Boolean {
         if(!canvas.isHardwareAccelerated || area.isEmpty ||
             !listOf(area.left,area.top,area.right,area.bottom).all(Float::isFinite))return false
         val radius=minOf(area.width(),area.height())*.5f
         val shade=if(p.grayBaseLuma>=0f)p.grayBaseLuma.coerceIn(0f,1f) else .6f
-        if(baseBounds!=area || baseLuma!=shade) {
+        val strength=p.highlight.coerceIn(0f,1f)
+        val angle=if(p.lightAngleDegrees.isFinite())p.lightAngleDegrees else 45f
+        if(baseBounds!=area || baseLuma!=shade || rimStrength!=strength || rimAngle!=angle) {
             val channel=(shade*255).toInt()
             fill.shader=LinearGradient(area.left,area.top,area.left,area.bottom,
-                Color.argb(54,channel,channel,channel),Color.argb(32,channel,channel,channel),Shader.TileMode.CLAMP)
-            rim.shader=LinearGradient(area.left,area.top,area.right,area.bottom,
-                Color.argb(92,255,255,255),Color.argb(36,255,255,255),Shader.TileMode.CLAMP)
-            baseBounds=RectF(area);baseLuma=shade
+                Color.argb(42,channel,channel,channel),Color.argb(26,channel,channel,channel),Shader.TileMode.CLAMP)
+            val radians=Math.toRadians(angle.toDouble())
+            val dx=(kotlin.math.cos(radians)*area.width()*.5).toFloat()
+            val dy=(kotlin.math.sin(radians)*area.height()*.5).toFloat()
+            rim.shader=LinearGradient(area.centerX()-dx,area.centerY()-dy,area.centerX()+dx,area.centerY()+dy,
+                Color.argb((96*strength).toInt(),255,255,255),Color.argb((28*strength).toInt(),255,255,255),Shader.TileMode.CLAMP)
+            baseBounds=RectF(area);baseLuma=shade;rimStrength=strength;rimAngle=angle
         }
         canvas.drawRoundRect(area,radius,radius,fill)
-        if(source!=null)runCatching {
+        val submitted=source!=null && runCatching {
             LiquidGlassShader.setUniforms(glass,p.copy(cornerRadius=radius,parallaxX=0f,parallaxY=0f,sourcePreblurred=true),
                 source,source,sourceRect=area,maskRect=area,maskOffsetX=area.left,maskOffsetY=area.top)
             optical.shader=glass
             canvas.drawRoundRect(area,radius,radius,optical)
-        }
-        rim.strokeWidth=density.coerceIn(.5f,4f)*.65f
+            true
+        }.getOrDefault(false)
+        // The shared shader already draws the preset's optical edge. A second
+        // fixed white stroke made native clear glass look like a plastic ring.
+        // Only the no-source/error base needs this soft, preset-scaled outline.
+        if(submitted)return true
+        rim.strokeWidth=density.coerceIn(.5f,4f)*.5f
         val inset=rim.strokeWidth*.5f
         val edge=RectF(area).apply {inset(inset,inset)}
         canvas.drawRoundRect(edge,(radius-inset).coerceAtLeast(0f),(radius-inset).coerceAtLeast(0f),rim)

@@ -6,6 +6,11 @@ import android.graphics.*
 import android.hardware.HardwareBuffer
 import android.media.ImageReader
 import android.widget.TextView
+import android.widget.FrameLayout
+import android.view.View
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.StateListDrawable
+import com.coloros16.liquidglass.hook.GalleryDialogBackgroundLease
 import com.coloros16.liquidglass.hook.LiveContentGlassNode
 import com.coloros16.liquidglass.hook.ClearButtonGlassSurface
 import com.coloros16.liquidglass.hook.NativePaintShaderLease
@@ -121,6 +126,39 @@ class LiveContentBackdropProbeActivity:Activity() {
             check(Color.red(cb.getPixel(170,115))-Color.red(ca.getPixel(170,115))>100) {"Clear live source frozen"}
             check(untouchedPaint.shader===nativeInput && untouchedPaint.alpha==0) {"Native Paint mutated"}
             ca.recycle();cb.recycle()
+            // Exercise the real View.draw/dispatchDraw path with a willNotDraw
+            // parent and a separate gray overlay, using the production leases.
+            // This is an owned scene, not an emulator imitation of COUI classes.
+            var panelMaterial=true
+            val panel=object:FrameLayout(this) {
+                override fun dispatchDraw(c:Canvas) {if(panelMaterial)live.draw(c);super.dispatchDraw(c)}
+            }
+            panel.setWillNotDraw(true)
+            val originalPanel=StateListDrawable().apply {addState(intArrayOf(),ColorDrawable(Color.DKGRAY))}
+            val overlay=View(this).apply {background=ColorDrawable(Color.DKGRAY)}
+            val originalOverlay=overlay.background
+            panel.background=originalPanel
+            panel.addView(overlay,FrameLayout.LayoutParams(360,300))
+            panel.addView(TextView(this).apply {text="Native foreground";setTextColor(Color.WHITE);textSize=16f},
+                FrameLayout.LayoutParams(180,42).apply {leftMargin=100;topMargin=35})
+            panel.measure(View.MeasureSpec.makeMeasureSpec(360,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(300,View.MeasureSpec.EXACTLY))
+            panel.layout(0,0,360,300)
+            source.translationY=0f;updateSource(0);live.update(source,Matrix(),area,params,1f,refreshContent=true)
+            val covered=render("dialog-original-overlay",draw={panel.draw(it)})
+            check(Color.red(covered.getPixel(180,150))==Color.red(Color.DKGRAY))
+            check(GalleryDialogBackgroundLease.sync(panel,true) && GalleryDialogBackgroundLease.sync(overlay,true))
+            panel.invalidate();val visible=render("dialog-leased-live",draw={panel.draw(it)})
+            check(near(Color.red(visible.getPixel(180,150)),45)) {"Dialog overlay still covers live source"}
+            updateSource(1);check(!live.update(source,Matrix(),area,params,1f,refreshContent=true))
+            panel.invalidate();val changedPanel=render("dialog-leased-updated",draw={panel.draw(it)})
+            check(near(Color.red(changedPanel.getPixel(180,150)),150)) {"Dialog content frozen"}
+            check(Color.alpha(changedPanel.getPixel(50,150))==0) {"Dialog leaked outside glass outline"}
+            panelMaterial=false
+            check(GalleryDialogBackgroundLease.sync(panel,false) && GalleryDialogBackgroundLease.sync(overlay,false))
+            check(panel.background===originalPanel && overlay.background===originalOverlay)
+            panel.invalidate();val restored=render("dialog-restored-native",draw={panel.draw(it)})
+            check(Color.red(restored.getPixel(180,150))==Color.red(Color.DKGRAY))
+            for(bitmap in listOf(covered,visible,changedPanel,restored))bitmap.recycle()
             val report=JSONObject().put("version",com.coloros16.liquidglass.BuildConfig.VERSION_NAME)
                 .put("status","PASS").put("liveContentChangedWithoutEffectRebuild",true)
                 .put("nativeSourceMotionWithoutEffectRebuild",true).put("nonzeroHostOriginAligned",true)
@@ -129,6 +167,8 @@ class LiveContentBackdropProbeActivity:Activity() {
                 .put("outsideMaskTransparent",true).put("nativePaintRestoredAfterException",true)
                 .put("clearVisibleWithoutNativeInput",true).put("clearVisibleWithTransparentNativeInput",true)
                 .put("clearLiveInputChanges",true).put("clearNativePaintUntouched",true)
+                .put("dialogViewDispatchPaintsBehindChildren",true).put("dialogGrayOverlayLeased",true)
+                .put("dialogLeasedLiveContentUpdates",true).put("dialogNativeBackgroundsRestored",true)
                 .put("oemViewSourceResolverTested",false).put("physicalDeviceTested",false)
             File(output,"report.json").writeText(report.toString(2))
             android.util.Log.i("LiveContentBackdropProbe","PASS $report");return report

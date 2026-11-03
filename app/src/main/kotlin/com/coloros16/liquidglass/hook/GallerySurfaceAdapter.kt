@@ -47,15 +47,28 @@ internal object GallerySurfaceAdapter {
     private fun usesStateLayer(view:View)=GalleryNativeSurfaceContract.isDialogButton(view) || GalleryStateLayerBackgroundLease.isStateBackground(view)
     fun canAssign(view:View):Boolean {
         if(!matches(view))return true
+        if(GalleryNativeSurfaceContract.isDialogPanel(view)) {
+            val route=GalleryLiveBackdrop.canDrawDialog()
+            val setter=GalleryDialogBackgroundLease.canMount(view)
+            if(!route || !setter)RuntimeDiagnostics.update("gallery-dialog-mount-state",
+                "保持原生：dispatch=$route; ordinaryViewSetter=$setter; background=${view.background?.javaClass?.name}")
+            return route && setter
+        }
         return if(usesStateLayer(view))GalleryStateLayerBackgroundLease.canMount(view)
             else NativeSurfaceBackgroundLease.owns(view) || NativeSurfaceBackgroundLease.canMount(view)
     }
     private fun leaseBackground(view:View):Boolean {
+        if(GalleryNativeSurfaceContract.isDialogPanel(view)) {
+            val assigned=GalleryDialogBackgroundLease.sync(view,true)
+            RuntimeDiagnostics.update("gallery-dialog-mount-state","parentPanel背景租用=$assigned; opaque=${view.isOpaque}; before-children-dispatch")
+            return assigned
+        }
         if(usesStateLayer(view))return GalleryStateLayerBackgroundLease.sync(view,true)
         NativeSurfaceBackgroundLease.sync(view,true)
         return !view.isOpaque
     }
     private fun restoreBackground(view:View) {
+        if(GalleryNativeSurfaceContract.isDialogPanel(view)) {GalleryDialogBackgroundLease.sync(view,false);return}
         if(usesStateLayer(view))GalleryStateLayerBackgroundLease.restore(view)
         else NativeSurfaceBackgroundLease.sync(view,false)
     }

@@ -33,18 +33,20 @@ internal object RecentsClearButtonGlassHook {
     private var api:XposedInterface?=null
     private val states=WeakHashMap<View,State>()
     private val nativeDraw=ScopedDrawOwner<View>()
-    private var readAt=-1000L
+    private val readCadence=ClearButtonReadCadence()
     private var enabled=false
     private var snapshot:SharedGlassParams.Snapshot?=null
     private fun ui()=Looper.myLooper()==Looper.getMainLooper()
     private fun mark(stage:String,value:String)=RuntimeDiagnostics.mark("recents-clear-glass-$stage",value)
-    private fun preferences() {
-        val now=SystemClock.uptimeMillis();if(now-readAt<500L)return
-        readAt=now
+    private fun preferences(entering:Boolean=false) {
+        val now=SystemClock.uptimeMillis();if(!readCadence.shouldRead(now,entering))return
         val p=api?.let(Prefs::read) ?: return
+        // A missing framework response is NOT a successful cache refresh. The
+        // first onDraw may retry in this same frame instead of waiting 500ms.
         // A basic control, like QS buttons: free and follows the shared switches.
         enabled=p.getBoolean(Prefs.KEY_MASTER,false) && p.getBoolean(Prefs.KEY_GLASS_ENABLE,Prefs.DEFAULT_GLASS_ENABLE)
         if(enabled)snapshot=SharedGlassParams.read(p)
+        readCadence.succeeded(now)
     }
     private fun exact(view:View)=contract?.button==view.javaClass
     private fun eligible(view:View):Boolean {
@@ -97,7 +99,12 @@ internal object RecentsClearButtonGlassHook {
             api.hook(onDraw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 val view=chain.getThisObject() as View
                 val canvas=chain.getArg(0) as Canvas
-                val drawn=ui() && runCatching {states[view]?.draw(canvas)==true}.getOrDefault(false)
+                val drawn=ui() && runCatching {
+                    // Also attach lazily when a ROM reuses a button whose
+                    // attach/inflate callbacks preceded the panel slot setup.
+                    val state=states[view] ?: if(eligible(view))observe(view) else null
+                    state?.draw(canvas)==true
+                }.getOrDefault(false)
                 nativeDraw.run(if(drawn)view else null) {chain.proceed()}
             }
             api.hook(useBlur).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
@@ -119,8 +126,12 @@ internal object RecentsClearButtonGlassHook {
         private val surface=ClearButtonGlassSurface()
         private var area=RectF()
         private var params:LiquidGlassShader.Params?=null
+        private var wasShown=false
         fun draw(canvas:Canvas):Boolean {
             val view=target.get() ?: return false
+            // clearEnterIsolation can release forceBlockDraw after preDraw.
+            // Prepare on this Canvas too; never wait for another invalidation.
+            sync(requestFrame=false)
             if(!active || !view.isShown || contract?.forceBlocked?.invoke(view)==true)return false
             val p=params ?: return false
             val source=LauncherHook.nativeClearSource(view)
@@ -129,14 +140,18 @@ internal object RecentsClearButtonGlassHook {
                 if(source==null)"缺少原生GPU输入；保留可见胶囊底色，不删除背景" else "在按钮文字前直接绘制原生实时shader；不依赖背景RenderNode透明度")
             return drawn
         }
-        private fun sync() {
+        private fun sync(requestFrame:Boolean=true) {
             val view=target.get() ?: return
             try {
-                preferences()
+                val shown=view.isShown
+                preferences(entering=shown && !wasShown)
+                wasShown=shown
                 val c=contract ?: return
-                if(!enabled || !eligible(view) || !view.isShown || !view.isHardwareAccelerated ||
-                    view.width<=0 || view.height<=0 ||
-                    c.forceBlocked.invoke(view)==true || SystemClock.uptimeMillis()<blockedUntil) {restore(view);return}
+                if(!enabled || !eligible(view) || !shown || !view.isHardwareAccelerated ||
+                    view.width<=0 || view.height<=0 || SystemClock.uptimeMillis()<blockedUntil) {restore(view);return}
+                // Native entering isolation intentionally skips visible drawing.
+                // It must NOT discard prepared geometry/material: the native
+                // animation may release it later in this same frame.
                 val b=RectF(c.bounds.invoke(view) as RectF)
                 val radius=RecentsClearButtonPolicy.radius(b.left,b.top,b.right,b.bottom) ?: run {restore(view);return}
                 val config=snapshot ?: return
@@ -146,7 +161,8 @@ internal object RecentsClearButtonGlassHook {
                 LauncherHook.registerNativeClearMaterial(view,p)
                 val changed=!active || area!=b || params!=p
                 area=b;params=p;active=true
-                if(changed)view.invalidate()
+                if(changed)surface.prepare()
+                if(changed && requestFrame)view.invalidate()
                 mark("material","直接绘制可见胶囊与共用玻璃；缺少LayerBlurDrawable也保留底色")
 
             } catch(error:Throwable) {

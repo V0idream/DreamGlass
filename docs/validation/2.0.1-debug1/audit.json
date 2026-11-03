@@ -1,0 +1,50 @@
+{
+  "version": "2.0.1-debug1",
+  "versionCode": 2000001,
+  "date": "2026-11-04",
+  "unitTests": {
+    "tests": 275,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Warning": 354
+  },
+  "debugBuild": true,
+  "releaseBuild": true,
+  "apkSha256": "5afd79063e10e93c9c34fc1a88163f4fa1e284bbc0e305094f3b8bfa93853be2",
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "emulatorLiveNodeProbe": {
+    "version": "2.0.1-debug1",
+    "status": "PASS",
+    "liveContentChangedWithoutEffectRebuild": true,
+    "nativeSourceMotionWithoutEffectRebuild": true,
+    "nonzeroHostOriginAligned": true,
+    "hostAndSourceOriginsIndependent": true,
+    "contentRefreshDoesNotRequestAnotherFrame": true,
+    "outsideMaskTransparent": true,
+    "nativePaintRestoredAfterException": true,
+    "clearVisibleWithoutNativeInput": true,
+    "clearVisibleWithTransparentNativeInput": true,
+    "clearLiveInputChanges": true,
+    "clearNativePaintUntouched": true,
+    "dialogViewDispatchPaintsBehindChildren": true,
+    "dialogGrayOverlayLeased": true,
+    "dialogLeasedLiveContentUpdates": true,
+    "dialogNativeBackgroundsRestored": true,
+    "oemViewSourceResolverTested": false,
+    "physicalDeviceTested": false
+  },
+  "backgroundRefreshLogicIdenticalTo2_0": true,
+  "withdrawnAdmissionClassAbsentFromDex": true,
+  "physicalInstallSucceeded": false,
+  "physicalVisualAccepted": false,
+  "physicalAdbOperationsThisRound": false,
+  "oemMixedGroupCallbackAccepted": false,
+  "oemGallerySourceResolverAccepted": false,
+  "productionBlurGpuOnly": true,
+  "dependenciesChanged": false,
+  "legalAssetsMatchSource": true,
+  "probeAbsentFromReleaseDex": true
+}

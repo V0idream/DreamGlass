@@ -1,3 +1,9 @@
+# DreamGlass 2.0.1-debug1 验证记录
+
+275 项 JVM 测试、Debug／Release 构建与 Lint 通过（354 Warning，0 Error／Fatal）。15 项隔离 Android GPU 断言通过，包括真实 View 遍历的保存面板背景租用、内容更新与恢复。混合通知的集合删除契约及状态筛选回归通过，厂商事件／画面未验收。背景刷新源码与 v2.0 一致，撤回类不在 DEX 中。详见 [记录](docs/validation/2.0.1-debug1/README.md)。
+
+---
+
 # DreamGlass 2.0 验证记录
 
 正式 Release 构建、265 项 Release JVM 测试、Lint 通过（352 Warning，0 Error／Fatal）。正式 APK 版本 2.0／2000000，不可调试、无新增探针，升级证书及法律附件校验通过。实体设备未安装或验收，已知视觉和时序问题列入发布说明。详见 [发行验证](docs/validation/2.0/README.md)。

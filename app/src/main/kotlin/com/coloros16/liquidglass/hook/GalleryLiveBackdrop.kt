@@ -15,7 +15,6 @@ import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
-import java.lang.reflect.Method
 import java.util.WeakHashMap
 import java.lang.ref.WeakReference
 
@@ -50,15 +49,21 @@ internal object GalleryLiveBackdrop {
     private val frames=WeakHashMap<View,Frame>()
     private val firstFrameRetries=WeakHashMap<View,Int>()
     private val dialogOwners=WeakHashMap<View,WeakReference<Activity>>()
-    private var wrapper:Method?=null
-    private var renderNode:Method?=null
+    private var nativeAccessor:GalleryNativeNodeAccessor?=null
+    private var hasDialogDispatch=false
     private fun id(view:View)=runCatching {view.resources.getResourceEntryName(view.id)}.getOrDefault("")
     fun install():Boolean=runCatching {
-        val getter=View::class.java.getMethod("getViewWrapper")
-        val node=getter.returnType.getMethod("getRenderNode")
-        check(node.returnType==RenderNode::class.java)
-        wrapper=getter;renderNode=node;true
-    }.getOrElse {wrapper=null;renderNode=null;false}
+        nativeAccessor=GalleryNativeNodeAccessor(View::class.java,RenderNode::class.java)
+        check(nativeAccessor!!.available)
+        RuntimeDiagnostics.mark("gallery-live-node-contract","已注册运行时wrapper取值及精确View.mRenderNode通道")
+        true
+    }.getOrElse {
+        nativeAccessor=null
+        RuntimeDiagnostics.mark("gallery-live-node-contract-error","没有原生节点通道：${it.javaClass.simpleName}")
+        false
+    }
+    fun dialogDispatchInstalled() {hasDialogDispatch=true}
+    fun canDrawDialog()=hasDialogDispatch
     private data class Source(val view:View,val parent:View?,val dim:Float)
     private fun activity(context:Context):Activity? {
         var next=context
@@ -135,10 +140,16 @@ internal object GalleryLiveBackdrop {
         val v=from.view
         if(!LiveContentSourceGraph.independent(v,host) {it.parent as? View} ||
             !v.isAttachedToWindow || !v.isHardwareAccelerated || !v.isShown)return null
-        val native=renderNode?.invoke(wrapper?.invoke(v)) as? RenderNode ?: return null
+        val nodeResult=nativeAccessor?.read(v) ?: run {
+            RuntimeDiagnostics.update("gallery-live-node-state","未取得实际RenderNode；source=${v.javaClass.name}")
+            return null
+        }
+        val native=nodeResult.node as RenderNode
+        RuntimeDiagnostics.update("gallery-live-node-state","已取得实际RenderNode：${nodeResult.route}")
         if(!native.hasDisplayList()) {
             val count=firstFrameRetries[host] ?: 0
             if(count<2) {firstFrameRetries[host]=count+1;host.postOnAnimation {host.invalidate()}}
+            RuntimeDiagnostics.mark("gallery-live-source-waiting","等待原生源首个display list；不使用透明输入替代")
             return null
         }
         firstFrameRetries.remove(host)
@@ -159,8 +170,25 @@ internal object GalleryLiveBackdrop {
     fun activate(view:View) {frames[view]?.active=true}
     fun owns(view:View)=frames[view]?.active==true
     fun draw(view:View,canvas:Canvas) {
+        if(hasDialogDispatch && GalleryNativeSurfaceContract.isDialogPanel(view))return
+        drawContent(view,canvas)
+    }
+    fun drawDialogPanel(view:View,canvas:Canvas) {
+        if(!hasDialogDispatch)return
+        // dispatchDraw is in scrolled content coordinates; this is a background
+        // surface fixed to the panel, matching View.drawBackground's compensation.
+        val save=canvas.save()
+        try {canvas.translate(view.scrollX.toFloat(),view.scrollY.toFloat());drawContent(view,canvas)}
+        finally {canvas.restoreToCount(save)}
+    }
+    private fun drawContent(view:View,canvas:Canvas) {
         val frame=frames[view]?.takeIf {it.active && !it.failed} ?: return
-        try {frame.glass.draw(canvas)} catch(error:Throwable) {
+        if(!canvas.isHardwareAccelerated)return
+        try {
+            frame.glass.draw(canvas)
+            if(GalleryNativeSurfaceContract.isDialogPanel(view))
+                RuntimeDiagnostics.mark("gallery-live-dialog-painted","parentPanel.dispatchDraw实际提交GPU内容；位于原生文字/按钮之前")
+        } catch(error:Throwable) {
             frame.failed=true
             RuntimeDiagnostics.mark("gallery-live-draw-error","背景恢复原生：${error.javaClass.simpleName}")
             view.postInvalidateOnAnimation() // Let the normal preDraw restore native ownership.
