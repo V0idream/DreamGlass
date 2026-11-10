@@ -1,0 +1,27 @@
+{
+  "candidate": "2.0.1-debug7",
+  "versionCode": 2000007,
+  "apk": "DreamGlass-2.0.1-debug7.apk",
+  "sha256": "0167557d282957d934f074664ca35cb6cea5fa52d7de886846d145fbc12d141a",
+  "signingCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "unitTests": {
+    "tests": 338,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lintRelease": {
+    "Warning": 358,
+    "Error": 0,
+    "Fatal": 0
+  },
+  "androidGpuFallbackContracts": 27,
+  "oldCrashReproducedWithContractFixture": true,
+  "emulatorSerial": "emulator-5580",
+  "vendorBackgroundBlurDrawableExecuted": false,
+  "physicalDeviceOperated": false,
+  "physicalDeviceInstalled": false,
+  "physicalCrashStackCollected": false,
+  "uploaded": false,
+  "powerConsumptionMeasured": false
+}

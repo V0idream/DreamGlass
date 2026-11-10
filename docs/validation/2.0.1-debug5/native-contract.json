@@ -1,0 +1,37 @@
+{
+  "candidate": "2.0.1-debug5",
+  "checks": {
+    "native_cloud_overrides_draw_not_onDraw": true,
+    "native_cloud_animates_drawable_alpha": true,
+    "cloud_replaces_actual_background_instead_of_overlay": true,
+    "native_notifications_keep_onDrawListener": true,
+    "native_bp_bypasses_proxy_and_uses_original": true,
+    "native_proxy_identity_controls_clipping_branch": true,
+    "module_keeps_distinct_proxy_paint_identity": true,
+    "native_canvas_clipping_and_animated_bounds_retained": true,
+    "banner_basic_glass_independent_of_membership": true,
+    "fresh_frame_gate_for_cloud_and_banner": true,
+    "new_overlay_preserves_other_consumers_frame": true,
+    "capture_rechecks_visible_demand_and_keyguard": true,
+    "fallback_outside_gpu_alpha_layer": true,
+    "cloud_and_banner_forward_native_callbacks": true,
+    "gpu_material_pipeline_retained": true
+  },
+  "passed": true,
+  "unitTests": {
+    "tests": 334,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "sourceCommit": "42b4c374eedf500f218593bebc154f013521a31f plus current candidate changes",
+  "nativeSources": {
+    "systemUiApk": "a06bf8e0046a5e6a19347e09064e6ce8f79e0e963c78c8ce65f0fbf56d770e62",
+    "pluginApk": "43fc34f7d4aa9ce1882e454e449d84d610a9454cf36fe8c7c5fc97954b678372"
+  },
+  "staticContractOnly": true,
+  "physicalVisualVerified": false,
+  "deviceOperated": false,
+  "gpuProbeExecutedThisCandidate": false,
+  "powerConsumptionMeasured": false
+}

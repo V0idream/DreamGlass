@@ -1,0 +1,21 @@
+{
+  "offsetBoundsPassedToMaterial": true,
+  "canvasClippedToBounds": true,
+  "missingSourceKeepsNativeBackground": true,
+  "renderFailureKeepsNativeBackground": true,
+  "constantStateBackgroundIsolated": true,
+  "nativePaddingPreserved": true,
+  "alphaAndDisabledStatesPreserved": true,
+  "nativeCallbackNotReplayed": true,
+  "nativeFallbackAlphaAppliedOnce": true,
+  "nativeInvalidationForwarded": true,
+  "oldNullFilterCrashReproduced": true,
+  "unsupportedNullFilterNeverCalled": true,
+  "unsupportedFilterRetainsNativeDrawing": true,
+  "strictNativeEntranceAlphaAppliedOnce": true,
+  "nativeFallbackTransitionsToGlass": true,
+  "layeredNativeBlurCompatible": true,
+  "nativeDrawExceptionContained": true,
+  "physicalDeviceTested": false,
+  "vendorHookTested": false
+}

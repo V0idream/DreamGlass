@@ -1153,6 +1153,8 @@ object BlurDrawHook {
     @Volatile
     private var headsUpGlassForceView: WeakReference<View>? = null
     private val nativeHeadsUpMaterialHost = ThreadLocal<View>()
+    private val headsUpBackgroundPaint = ScopedBackgroundPaint<HeadsUpGlassDrawable>()
+    private val headsUpBackgroundOwners = java.util.WeakHashMap<View, HeadsUpGlassDrawable>()
     private val notificationMaterialMapped = ThreadLocal<Boolean>()
 
     // ---- [spec/51 2026-08-13] 通知（heads-up）首帧主线程抓屏 + 连抓 5~6 帧 + 持续期间兜底抓屏 ----
@@ -2324,6 +2326,9 @@ object BlurDrawHook {
 
     @Volatile private var captureRetryAtMs = 0L
     @Volatile private var captureEpoch = 0L
+    private val overlayFrameEpochs = OverlayFrameEpochs()
+    @Volatile private var cloudRequiredCaptureEpoch = Long.MIN_VALUE
+    @Volatile private var bannerRequiredCaptureEpoch = Long.MIN_VALUE
     private var lastCaptureStartMs = 0L
     private val captureExecutor = RuntimeWorkPolicy.executor("DreamGlass-capture")
     private val contrastExecutor = RuntimeWorkPolicy.executor("DreamGlass-contrast")
@@ -2750,13 +2755,11 @@ object BlurDrawHook {
         // OplusCustomRow 是锁屏流体云宿主（锁屏走 com.oplus.seedling.pluginapp 不同包），本 hook 命中
         // 锁屏（用户反馈"上错位置上到锁屏""遮住文字"）。整套函数保留注释停用，见文件 spec/44b 停用区。
         // mountOplusCustomRowGlass(api, classLoader)
-        // [spec/44c 2026-08-15 宿主侧 CardBackgroundView 方向] hook CardBackgroundView.onDraw 画玻璃
-        // （背景 blur 之上、内容层之下，不遮文字）。总开关沿用 KEY_SEEDLING_CARD_GLASS_ENABLE（默认 false）。
+        // Expanded Fluid Cloud replaces its native background paint; collapsed capsules stay black.
+        // Only this scene uses the optional KEY_SEEDLING_CARD_GLASS_ENABLE preference.
         mountCardBackgroundGlass(api, classLoader)
-        // [2026-08-15 轻打扰折叠横幅玻璃化 方案 B] hook FullScreenBanner.dispatchDraw 画玻璃
-        // （BlurProxy 替换路线已撤销——强制 PlatformStatic 后 ensurePlatformStaticBlurDrawable 失败背景
-        // 变白；改 dispatchDraw 玻璃盖在系统 Motion 模糊背景之上、内容之下不遮文字）。
-        // 总开关沿用 KEY_SEEDLING_CARD_GLASS_ENABLE（同 CardBackgroundView）。
+        // Incoming lightweight notifications use the basic glass preference, independently
+        // of member-only Fluid Cloud. Their native background is replaced, not overpainted.
         mountSimpleBannerGlass(api, classLoader)
         // [2026-08-15 强制刷新] 横幅一 attach 窗口即强制启动持续抓屏（比 dispatchDraw 绘制命中可靠：
         // attach 是必然事件、不受绘制频率影响；绘制稳定后 dispatchDraw 可能不再触发 → worker 永不启动）。
@@ -5375,6 +5378,36 @@ object BlurDrawHook {
         try {
             val clazz = Class.forName(CLASS_NBV_EXT_IMP, false, classLoader)
             val method = clazz.getMethod(METHOD_DRAW_NOTIF_BG, Canvas::class.java, Drawable::class.java)
+            // Preserve native clipping, animation callbacks, click handling and shadow
+            // geometry. Only its selected Drawable paint changes, even on the BP branch
+            // which bypasses ViewBlurProxy and draws the original argument directly.
+            mViewProxyGetBlurDrawable?.let { getter ->
+                api.hook(getter).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                    val selected = chain.proceed()
+                    val replacement = headsUpBackgroundPaint.current()
+                    val proxyHost = if (replacement != null) runCatching {
+                        mViewProxyGetView?.invoke(chain.getThisObject()) as? View
+                    }.getOrNull() else null
+                    if (replacement != null && proxyHost != null && replacement.host.get() === proxyHost) {
+                        // Preserve native selected.equals(argument): BP/fallback uses
+                        // the argument; a separate platform backdrop must stay distinct
+                        // so native appear translation and clipping retain their branch.
+                        if (selected === chain.getArg(0)) replacement
+                        else if (selected is Drawable && selected !is HeadsUpGlassDrawable) {
+                            val paint = replacement.proxyPaint ?: HeadsUpGlassDrawable(proxyHost, selected).also {
+                                replacement.proxyPaint = it
+                            }
+                            paint.orig = selected
+                            paint.proxy = replacement.proxy
+                            paint.alpha = selected.alpha
+                            paint.colorFilter = selected.colorFilter
+                            paint.state = selected.state
+                            paint.level = selected.level
+                            paint
+                        } else selected
+                    } else selected
+                }
+            }
             api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
@@ -5388,7 +5421,12 @@ object BlurDrawHook {
                         // [磨砂根因·修 1] proceed 前临时把 ViewBlurManager.currentMaterialColor 置透明 →
                         // 稳态分支 materialColorDrawable.setTint(透明) 不覆盖玻璃；suppress 内部
                         // try-finally 保证 proceed 后恢复原值（防状态污染）。反射失败 → proceed 原样（含磨砂）。
-                        if (notificationMaterialMapped.get() == true && Prefs.glassEnabled(api) && !isPowerSaveGlassOff())
+                        val replacement = headsUpBackgroundOverride(chain)
+                        if (replacement != null) {
+                            headsUpBackgroundPaint.with(replacement) {
+                                suppressNotificationMaterialColor(chain, replacement)
+                            }
+                        } else if (notificationMaterialMapped.get() == true && Prefs.glassEnabled(api) && !isPowerSaveGlassOff())
                             suppressNotificationMaterialColor(chain)
                         else chain.proceed()
                     } finally {
@@ -5402,6 +5440,54 @@ object BlurDrawHook {
         } catch (t: Throwable) {
             Lg.e(TAG, "Hook B mount FAILED: $CLASS_NBV_EXT_IMP#$METHOD_DRAW_NOTIF_BG", t)
         }
+    }
+
+    private fun headsUpBackgroundOverride(chain: XposedInterface.Chain): HeadsUpGlassDrawable? {
+        if (!Prefs.glassEnabled(api) || isPowerSaveGlassOff()) return null
+        return runCatching {
+            val host = mNbvGetBgView?.invoke(chain.getThisObject()) as? View ?: return@runCatching null
+            if (!isHeadsUpBgView(host) || !visibleCaptureHost(host)) return@runCatching null
+            val original = chain.getArg(1) as? Drawable ?: return@runCatching null
+            if (headsUpActiveHost?.get() !== host) triggerHeadsUpAppearanceCapture(host)
+            headsUpBackgroundOwners.getOrPut(host) { HeadsUpGlassDrawable(host, original) }.also {
+                if (original !is HeadsUpGlassDrawable) it.orig = original
+                it.proxy = runCatching { mNbvGetViewBlurProxy?.invoke(chain.getThisObject()) }.getOrNull()?.let(::WeakReference)
+                it.alpha = original.alpha
+                it.colorFilter = original.colorFilter
+                it.state = original.state
+                it.level = original.level
+            }
+        }.onFailure { Lg.e(TAG, "heads-up: background attachment failed", it) }.getOrNull()
+    }
+
+    private class HeadsUpGlassDrawable(target: View, original: Drawable) :
+        BoundedGlassDrawable(target, original,
+            enabled = { Prefs.glassEnabled(api) && !isPowerSaveGlassOff() },
+            render = { canvas, host, area -> renderHeadsUpGlass(canvas, host, area) },
+            rendered = { RuntimeDiagnostics.mark("heads_up_paint", "顶部通知已在实际背景出口绘制液态玻璃，保留原生动画与裁剪") },
+            failure = { Lg.e(TAG, "heads-up: glass failed; retain native background", it) }) {
+        val host = WeakReference(target)
+        var proxy: WeakReference<Any>? = null
+        var proxyPaint: HeadsUpGlassDrawable? = null
+    }
+
+    private fun renderHeadsUpGlass(canvas: Canvas, host: View, area: Rect): Boolean {
+        if (!isHeadsUpBgView(host) || !visibleCaptureHost(host)) return false
+        val w = area.width(); val h = area.height()
+        if (w <= 0 || h <= 0) return false
+        val loc = IntArray(2); host.getLocationOnScreen(loc)
+        val region = RectF((loc[0] + area.left).toFloat(), (loc[1] + area.top).toFloat(),
+            (loc[0] + area.right).toFloat(), (loc[1] + area.bottom).toFloat())
+        val id = System.identityHashCode(host)
+        val owner = headsUpBackgroundOwners[host]
+        val corner = resolveCornerRadius(owner?.proxy?.get(), area, host, owner?.orig).radius
+            .takeIf { it > 0f } ?: minOf(w, h) * 0.22f
+        registerSeedlingCardRegion(id, region, Rect(0, 0, w, h), host, "heads-up", corner)
+        // The native draw has already chosen actual/animated bounds and its Canvas
+        // clip. Do not reapply mClipTop/Bottom: native expansion deliberately omits
+        // those clips. The bounded Drawable retains the native geometry verbatim.
+        return drawSeedlingGlassOnCanvas(canvas, host, id, w, h, region,
+            offsetX = area.left.toFloat(), offsetY = area.top.toFloat())
     }
 
     /**
@@ -5421,15 +5507,19 @@ object BlurDrawHook {
      * 直接 proceed 原样（含磨砂），强兜底不崩。注意：early-return 路径必须显式 proceed，
      * 否则会拦截掉整条通知卡背景绘制。
      */
-    private fun suppressNotificationMaterialColor(chain: XposedInterface.Chain) {
+    private fun suppressNotificationMaterialColor(chain: XposedInterface.Chain, backgroundOverride: Drawable? = null) {
+        val nativeArgs = if (backgroundOverride != null) chain.getArgs().toTypedArray().also {
+            it[1] = backgroundOverride
+        } else null
+        val proceedNative = { if (nativeArgs != null) chain.proceed(nativeArgs) else chain.proceed() }
         val extImp = try {
             chain.getThisObject()
         } catch (t: Throwable) {
             Lg.e(TAG, "fuzzy: getThisObject failed", t)
-            chain.proceed(); return
+            proceedNative(); return
         }
         if (extImp == null) {
-            chain.proceed(); return
+            proceedNative(); return
         }
         val vbm = try {
             mNbvViewBlurManager?.get(extImp)
@@ -5465,7 +5555,7 @@ object BlurDrawHook {
             }
         }
         try {
-            chain.proceed()
+            proceedNative()
         } finally {
             if (original != null) {
                 try { mViewBlurManagerMaterialColor?.setInt(colorHost, original) } catch (t: Throwable) { Lg.e(TAG, "fuzzy: restore currentMaterialColor failed", t) }
@@ -8429,8 +8519,15 @@ object BlurDrawHook {
             }
             return false
         }
-        val srcRect = renderSource.srcRect
-        val source = renderSource.source
+        var srcRect = renderSource.srcRect
+        var source = renderSource.source
+        val requiredEpoch = when {
+            host.javaClass.name == CLASS_CARD_BACKGROUND_VIEW -> cloudRequiredCaptureEpoch
+            entry.hostViewName.startsWith("simple-banner:") -> bannerRequiredCaptureEpoch
+            else -> Long.MIN_VALUE
+        }
+        if (!isKeyguardLockedNow() && captureMode() != Prefs.BG_CAPTURE_MODE_STATIC &&
+            !overlayFrameEpochs.accepts(source, requiredEpoch)) return false
         val viewport = RectF(0f, 0f, w.toFloat(), h.toFloat())
         val cornerRadius = GlassRegistry.cornerOverrideFor(id)?.coerceAtMost(minOf(w, h) / 2f)
             ?: entry.cornerRadius.takeIf { it > 0f }
@@ -8447,6 +8544,12 @@ object BlurDrawHook {
                 params = params.copy(dispersion = params.dispersion * VOLUME_DISPERSION_DAMP)
             }
         }
+        // Use the same bounded GPU backdrop binding as shade cards. This path used
+        // to bypass it entirely after capture became demand-driven, leaving sparse
+        // raw sampling and the ROM's heavy dark blur as the apparent material.
+        val binding = bindQualityBackdrop(id, source, renderSource.screenRect, srcRect,
+            renderSource.isSnapshotSource, params)
+        source=binding.bitmap;srcRect=binding.sourceRect;params=binding.params
         val shader = obtainShader(id, metaball = entry.metaBall != null)
         val sourceShader = LiquidGlassShader.createSourceBitmapShader(source)
         // σ 分档三档源：命中绑档位 shader + 折算 rect，miss 回退现状源（本函数每帧全量重绑，无轻量分支）
@@ -8494,123 +8597,71 @@ object BlurDrawHook {
 
     // ------------------------------------------------------------ [spec/44c] 流体云展开卡片玻璃化（CardBackgroundView 宿主）
 
-    /**
-     * [spec/44c 2026-08-15] hook `CardBackgroundView.onDraw(Canvas)`（SystemUIPlugin.apk 反编译实锤的
-     * 展开大卡背景 View）画液态玻璃。
-     *
-     * 真机 View 树（tools/dump/SystemUIPlugin/sources/com/oplus/systemui/plugins/seedling/card/ui/view/）：
-     * - 宿主容器 `CardContainer`（extends COUIRecyclerView，id card_container）
-     * - 卡片根 `CardView`（FrameLayout，id seeding_card_view）
-     * - 背景 `CardBackgroundView`（extends View，id seedling_card_bg）：背景 = viewRootManager.
-     *   getBackgroundBlurDrawable()（BackgroundBlurDrawable，blurRadius 540，Oplus 材质 blend #ff585858 /
-     *   mix #b3262626，圆角 20dp）；draw(Canvas) → super.draw（仅硬件加速路径）；**不 override onDraw**
-     *   → hook 基类 View.onDraw(Canvas) + 拦截体判定 this 是 CardBackgroundView 实例（防全 View 影响）。
-     *   （锁屏流体云走 com.oplus.seedling.pluginapp 不同包，本 hook 天然不碰锁屏。）
-     *
-     * 绘制顺序（View.draw 步骤）：drawBackground（blur 背景）→ onDraw（本 hook：先 proceed 空实现，
-     * 再画玻璃盖在背景之上）→ CardView 内容子 View（index1 contentView）在玻璃之上 → 不遮文字。
-     * 玻璃 shader 半透明采样壁纸（[resolveRenderSource] 整屏快照），覆盖系统 blur 背景。
-     *
-     * 区域登记：CardBackgroundView bounds → [registerSeedlingCardRegion]（source="seedling-cardview"，
-     * CONIC=true，首现 triggerBackgroundCapture）；玻璃 = [drawSeedlingGlassOnCanvas]（自身作 host，
-     * offsetX/Y=0——onDraw canvas 原点本就是 view 左上角，再按 host.left/top 平移会下移/右移被裁掉）。
-     *
-     * 总开关 [seedlingCardGlassEnabled]（KEY_SEEDLING_CARD_GLASS_ENABLE，默认 false，用户手动开）。
-     * ExceptionMode.PROTECTIVE + 全 try-catch，挂载失败不影响其他 hook。
-     *
-     * [P1 2026-08-15] SystemUIPlugin.apk 是独立 system_ext APK（独立/惰性 classloader），install 时
-     * Class.forName 可能失败（同 mountSeedlingCardContainer 前车之鉴）→ 失败**不 return**：View.onDraw
-     * 无条件挂载，拦截体用 `javaClass.name == CLASS_CARD_BACKGROUND_VIEW` 字符串比较（跨 classloader
-     * 安全）命中后才进完整逻辑；命中时惰性缓存 thisView.javaClass，后续用 isInstance。
-     * [P2] 全局 View.onDraw 是 SystemUI 最高频框架方法 → 拦截体先字符串类名比较快路径，未命中立即跳过。
-     */
+    /** COS17's plugin owns draw()/native BackgroundBlurDrawable, but inherits the empty
+     * View.onDraw(). Replace the actual background paint instead of relying on that
+     * inlinable callback or stacking glass over the native 540px dark material.
+     * Match the runtime class name because the plugin is loaded lazily in its own loader. */
     private fun mountCardBackgroundGlass(api: XposedInterface, classLoader: ClassLoader) {
-        if (!seedlingCardGlassEnabled) {
-            Lg.i(TAG, "CardBackgroundView glass disabled by prefs, skip mount")
-            return
-        }
-        if (cardBgGlassMounted) return
-        // 仅作 install 时预加载尝试：成功则拦截体可直接 isInstance；失败走字符串类名兜底，不阻塞挂载。
-        var bgCls: Class<*>? = try {
-            Class.forName(CLASS_CARD_BACKGROUND_VIEW, false, classLoader)
-        } catch (t: Throwable) {
-            Lg.d(TAG, "CardBackgroundView glass: class not loaded yet (deferred), fallback to runtime name check: $CLASS_CARD_BACKGROUND_VIEW")
-            null
-        }
+        if (!seedlingCardGlassEnabled || cardBgGlassMounted) return
         try {
-            // CardBackgroundView 不 override onDraw → hook 基类 View.onDraw(Canvas)（protected →
-            // getDeclaredMethod + setAccessible，同 mountTextViewOnDraw 风格），拦截体快速判定 this。
-            val method = View::class.java.getDeclaredMethod(METHOD_ON_DRAW, Canvas::class.java).apply { isAccessible = true }
-            api.hook(method)
-                .setExceptionMode(ExceptionMode.PROTECTIVE)
-                .intercept { chain ->
-                    try {
-                        val thisView = try {
-                            chain.getThisObject() as? View
-                        } catch (t: Throwable) {
-                            null
+            val setter = View::class.java.getDeclaredMethod("setBackgroundDrawable", Drawable::class.java)
+            api.hook(setter).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val host = chain.getThisObject() as? View
+                val background = chain.getArg(0) as? Drawable
+                if (host?.javaClass?.name == CLASS_CARD_BACKGROUND_VIEW && background != null &&
+                    background !is ExpandedCloudGlassDrawable && seedlingRuntimeAllowed()) {
+                    val replacement = runCatching { expandedCloudBackground(host, background) }.getOrNull()
+                    if (replacement != null) {
+                        val args = chain.getArgs().toTypedArray()
+                        args[0] = replacement
+                        chain.proceed(args)
+                    } else chain.proceed()
+                } else chain.proceed()
+            }
+            // Native CardBackgroundView.draw updates its animation bounds before calling
+            // super.draw. This nonempty entry also repairs an inlined/replaced setter.
+            val draw = View::class.java.getDeclaredMethod("draw", Canvas::class.java)
+            api.hook(draw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val host = chain.getThisObject() as? View
+                if (host?.javaClass?.name == CLASS_CARD_BACKGROUND_VIEW && seedlingRuntimeAllowed()) {
+                    runCatching {
+                        val original = host.background
+                        if (original !is ExpandedCloudGlassDrawable) {
+                            host.background = expandedCloudBackground(host, original)
                         }
-                        // [P2] 性能快路径：最高频方法，先字符串类名比较（跨 classloader 安全），未命中立即跳过
-                        if (thisView != null && thisView.javaClass.name == CLASS_CARD_BACKGROUND_VIEW) {
-                            if (!seedlingRuntimeAllowed()) return@intercept chain.proceed()
-                            // [P1] 惰性缓存：命中时缓存 thisView.javaClass（跨 classloader 实例），
-                            // 后续同实例用 isInstance（比字符串比较更准）。
-                            var cached = bgCls
-                            if (cached == null) {
-                                cached = thisView.javaClass
-                                bgCls = cached
-                            }
-                            if (cached.isInstance(thisView)) {
-                                // [诊断] onDraw 命中计数（节流：每 120 帧打一条，防刷屏）
-                                if (moduleLogEnabled) {
-                                    val count = ++cardBgDrawCount
-                                    if (count % 120 == 1) {
-                                        Lg.i(TAG, "seedling-cardview: onDraw count=$count w=${thisView.width} h=${thisView.height}")
-                                    }
-                                }
-                                // [2026-08-15 持续抓屏对齐 heads-up] 命中期间主动持续抓屏：流体云展开大卡是
-                                // 持续显示窗口（非 heads-up/banner 瞬态），卡片显示期间以 panelCaptureHz 速率
-                                // 循环 scheduleElementCaptures(force=true) 入队主 worker（背景永远最新，移动
-                                // 下方背景立即抓屏）。**每次命中都重试启动**——首启失败（attach/root 未就绪）下帧
-                                // 自动重试，不依赖一次性 `!==` 门控（否则首启失败后持续抓屏永不启动）。
-                                if (cardBackgroundActiveHost?.get() !== thisView) {
-                                    cardBackgroundActiveHost = WeakReference(thisView)
-                                    if (moduleLogEnabled) {
-                                        Lg.i(TAG, "seedling-cardview: active host set (new instance) w=${thisView.width} h=${thisView.height}")
-                                    }
-                                }
-                                if (!cardBackgroundContinuousRunning) {
-                                    startCardBackgroundContinuousCapture()
-                                }
-                                val canvas = try {
-                                    chain.getArg(0) as? Canvas
-                                } catch (t: Throwable) {
-                                    null
-                                }
-                                // 先 proceed（View.onDraw 基类空实现），再画玻璃盖在 blur 背景之上；
-                                // 内容层（CardView 子 index1）在玻璃之上，不遮文字。
-                                val result = chain.proceed()
-                                if (canvas != null) {
-                                    try {
-                                        renderCardBackgroundGlass(canvas, thisView)
-                                    } catch (t: Throwable) {
-                                        Lg.e(TAG, "seedling-cardview: onDraw glass failed", t)
-                                    }
-                                }
-                                return@intercept result
-                            }
-                        }
-                    } catch (t: Throwable) {
-                        Lg.e(TAG, "seedling-cardview: onDraw intercept error", t)
-                    }
-                    chain.proceed()
+                        cardBackgroundActiveHost = WeakReference(host)
+                        if (!cardBackgroundContinuousRunning) startCardBackgroundContinuousCapture()
+                    }.onFailure { Lg.e(TAG, "seedling-cardview: background attachment failed", it) }
                 }
+                chain.proceed()
+            }
+            runCatching { api.deoptimize(View::class.java.getDeclaredMethod("setBackground", Drawable::class.java)) }
             cardBgGlassMounted = true
-            Lg.i(TAG, "Seedling card glass mounted: $CLASS_CARD_BACKGROUND_VIEW#$METHOD_ON_DRAW(Canvas)")
-        } catch (t: Throwable) {
-            Lg.e(TAG, "Seedling card glass mount FAILED: $CLASS_CARD_BACKGROUND_VIEW#$METHOD_ON_DRAW", t)
+            Lg.i(TAG, "Seedling card glass mounted at native background paint")
+        } catch (error: Throwable) {
+            Lg.e(TAG, "Seedling card background hook mount failed", error)
         }
     }
+
+    private fun expandedCloudBackground(host: View, original: Drawable?): ExpandedCloudGlassDrawable =
+        ExpandedCloudGlassDrawable(host, original).also {
+            // Native entrance/exit animates background alpha, independently of the View.
+            it.alpha = original?.alpha ?: 255
+            it.state = original?.state ?: host.drawableState
+            it.level = original?.level ?: 0
+        }
+
+    private class ExpandedCloudGlassDrawable(host: View, original: Drawable?) :
+        BoundedGlassDrawable(host, original,
+            enabled = { seedlingRuntimeAllowed() && Prefs.glassEnabled(api) && !isPowerSaveGlassOff() },
+            render = { canvas, target, _ ->
+                cardBackgroundActiveHost = WeakReference(target)
+                if (!cardBackgroundContinuousRunning) startCardBackgroundContinuousCapture()
+                renderCardBackgroundGlass(canvas, target)
+            },
+            rendered = { RuntimeDiagnostics.mark("seedling_card_paint", "展开流体云已在原生背景出口绘制液态玻璃，未叠加系统深色模糊") },
+            failure = { Lg.e(TAG, "seedling-cardview: glass failed; retain native background", it) },
+            forwardNativeCallbacks = true, hideNativeBlurOnGlass = true)
 
     /**
      * [spec/44c] CardBackgroundView「容器即元素」玻璃绘制路径：背景 View 自身 bounds 登记 + 画玻璃。
@@ -8619,16 +8670,16 @@ object BlurDrawHook {
      * [2026-08-15] 圆角 = 运行时读资源 dimen `round_corner_radius_fluid_cloud`（20dp，SystemUIPlugin.apk
      * 资源），一次解析缓存（[roundCornerFluidCloudPx]），失败兜底 20dp×density；不是启发式 min(w,h)×ratio。
      */
-    private fun renderCardBackgroundGlass(canvas: Canvas, bgView: View) {
-        if (!seedlingRuntimeAllowed()) return
+    private fun renderCardBackgroundGlass(canvas: Canvas, bgView: View): Boolean {
+        if (!seedlingRuntimeAllowed()) return false
         val w = bgView.width
         val h = bgView.height
-        if (w <= 0 || h <= 0 || bgView.visibility != View.VISIBLE) return
+        if (w <= 0 || h <= 0 || bgView.visibility != View.VISIBLE) return false
         val loc = IntArray(2)
         try {
             bgView.getLocationOnScreen(loc)
         } catch (t: Throwable) {
-            return
+            return false
         }
         val screenRegion = RectF(
             loc[0].toFloat(), loc[1].toFloat(),
@@ -8651,7 +8702,7 @@ object BlurDrawHook {
             }
         }
         registerSeedlingCardRegion(id, screenRegion, Rect(0, 0, w, h), bgView, "seedling-cardview", roundCornerFluidCloudPx)
-        drawSeedlingGlassOnCanvas(canvas, bgView, id, w, h, screenRegion, offsetX = 0f, offsetY = 0f)
+        return drawSeedlingGlassOnCanvas(canvas, bgView, id, w, h, screenRegion, offsetX = 0f, offsetY = 0f)
     }
 
     /** [2026-08-15 持续抓屏对齐 heads-up] CardBackgroundView 活跃判定：活跃宿主存在且仍 attach、可见
@@ -8689,10 +8740,12 @@ object BlurDrawHook {
         val session = if (banner) bannerCaptureSession else cardCaptureSession
         val token = session.begin(host) ?: return
         if (banner) simpleBannerContinuousRunning = true else cardBackgroundContinuousRunning = true
-        // A reveal is a new scene even if the native View instance is reused.
-        captureEpoch++;screenSnapshot=null;regionSnapshot=null
+        // Require a fresh scene for this overlay, without blanking other visible glass.
+        // Publication is atomic from the renderer's perspective: only a frame stamped
+        // after this reveal can replace its native fallback. Never recycle a previous app.
+        val revealEpoch = ++captureEpoch
+        if (banner) bannerRequiredCaptureEpoch = revealEpoch else cloudRequiredCaptureEpoch = revealEpoch
         lastSnapshotFingerprint=0;lastRegionSnapshotFingerprint=0
-        if (buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
         triggerBackgroundCapture(contentChange=true)
         try {
             safeThread {
@@ -8740,169 +8793,109 @@ object BlurDrawHook {
 
     // ------------------------------------------------------------ [2026-08-15 轻打扰折叠横幅玻璃化 方案 B] Simple Banner dispatchDraw 画玻璃
 
-    /**
-     * [2026-08-15 轻打扰折叠横幅玻璃化 方案 B] hook `FullScreenBanner.dispatchDraw(Canvas)` 画液态玻璃。
-     *
-     * 背景：BlurProxy 替换路线（方案 A）失败——强制 BlurTypePlatformStatic 后系统
-     * `ensurePlatformStaticBlurDrawable failed`（静态模糊 drawable 创建失败）→ 背景丢失变白（logcat
-     * 实证）→ **撤销**。本方案复用流体云 CardBackgroundView 已实证思路：不碰 BlurProxy，直接 hook
-     * 容器 dispatchDraw 画玻璃盖在系统原 Motion 模糊背景之上。
-     *
-     * View 树（逆向实证）：FullScreenBannerContainer（LinearLayout）→ FullScreenBanner（LinearLayout，
-     * 背景 setBackground(blurDrawable)）；窗口 type 2017 "Simple Banner Window"。
-     *
-     * 绘制顺序：**先画玻璃再 chain.proceed()**（dispatchDraw 前 drawBackground 已画系统 Motion 模糊背景
-     * → 玻璃盖在背景之上；proceed 画内容子 View → 内容在玻璃之上不遮文字）。
-     * 玻璃 = [drawSeedlingGlassOnCanvas]（FullScreenBanner 自身作 host，offsetX/Y=0——dispatchDraw
-     * canvas 原点本就是 view 左上角，再按 host.left/top 平移会下移/右移被裁掉）。
-     *
-     * 区域登记：FullScreenBanner bounds → [registerSeedlingCardRegion]（source="simple-banner"，
-     * CONIC=true，首现 triggerBackgroundCapture）；玻璃渲染 + 文字取色（isOverGlassRegion）都覆盖该区域。
-     * 快照 exclude：Simple Banner Window 根 surface 已由 [resolveSimpleBannerSfc] 排除（防玻璃自采样）。
-     *
-     * 总开关 [seedlingCardGlassEnabled]（同 CardBackgroundView；改动需重启 SystemUI 生效）。
-     * ExceptionMode.PROTECTIVE + 全 try-catch；挂载失败不影响其他 hook。
-     */
+    /** Light-interruption notifications use basic glass independently of Fluid Cloud.
+     * Replace only their native background paint; content and original blur fallback
+     * remain owned by the notification window. */
+    private fun simpleBannerGlassAllowed(): Boolean =
+        Prefs.glassEnabled(api) && !isPowerSaveGlassOff()
+
     private fun mountSimpleBannerGlass(api: XposedInterface, classLoader: ClassLoader) {
-        if (!seedlingCardGlassEnabled) {
-            Lg.i(TAG, "SimpleBanner glass disabled by prefs, skip mount")
-            return
-        }
+        // Ordinary incoming banners are a basic notification feature, independent of
+        // the optional/member-only expanded Fluid Cloud preference.
         if (simpleBannerGlassMounted) return
         try {
-            // FullScreenBanner 未 override dispatchDraw → hook 基类 ViewGroup.dispatchDraw(Canvas)，
-            // 拦截体字符串类名比较判定（跨 classloader 安全，同 mountCardBackgroundGlass 判实例模式）。
-            val vgCls = Class.forName(CLASS_VIEW_GROUP, false, classLoader)
-            val method = vgCls.getDeclaredMethod(METHOD_DISPATCH_DRAW, Canvas::class.java)
-            api.hook(method)
-                .setExceptionMode(ExceptionMode.PROTECTIVE)
-                .intercept { chain ->
-                    try {
-                        val thisView = try {
-                            chain.getThisObject() as? View
-                        } catch (t: Throwable) {
-                            null
+            val setter = View::class.java.getDeclaredMethod("setBackgroundDrawable", Drawable::class.java)
+            api.hook(setter).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val host = chain.getThisObject() as? View
+                val background = chain.getArg(0) as? Drawable
+                val replacement = if (host?.javaClass?.name == CLASS_FULL_SCREEN_BANNER &&
+                    background != null && background !is SimpleBannerGlassDrawable && simpleBannerGlassAllowed())
+                    runCatching { simpleBannerBackground(host, background) }.getOrNull() else null
+                if (replacement != null) {
+                    val args = chain.getArgs().toTypedArray(); args[0] = replacement
+                    chain.proceed(args)
+                } else chain.proceed()
+            }
+            // ViewGroup.dispatchDraw can bypass a base-class hook on optimized ROMs.
+            // Own only the actual background paint, leaving native content untouched.
+            val draw = View::class.java.getDeclaredMethod("draw", Canvas::class.java)
+            api.hook(draw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val host = chain.getThisObject() as? View
+                if (host?.javaClass?.name == CLASS_FULL_SCREEN_BANNER && simpleBannerGlassAllowed()) {
+                    runCatching {
+                        val original = host.background
+                        if (original !is SimpleBannerGlassDrawable)
+                            host.background = simpleBannerBackground(host, original)
+                        if (simpleBannerActiveHost?.get() !== host) {
+                            simpleBannerActiveHost = WeakReference(host)
+                            simpleBannerContinuousRunning = false
                         }
-                        if (thisView != null && thisView.javaClass.name == CLASS_FULL_SCREEN_BANNER) {
-                            // [诊断] 命中计数（节流：每 120 帧打一条，防刷屏）
-                            if (moduleLogEnabled) {
-                                val count = ++simpleBannerDispatchCount
-                                if (count % 120 == 1) {
-                                    Lg.i(TAG, "simple-banner: dispatch count=$count w=${thisView.width} h=${thisView.height}")
-                                }
-                            }
-                            // [2026-08-15 持续抓屏驱动] 命中期间主动持续抓屏（banner 短暂窗口动画/背景
-                            // 变化快照跟上；与 heads-up 持续源独立，复用 panelCaptureHz 速率/单通道调度）。
-                            // 新实例登记宿主；**每次命中都重试启动**——首启失败（attach/root 未就绪）下帧
-                            // 自动重试，不依赖一次性 `!==` 门控（否则首启失败后持续抓屏永不启动）。
-                            if (simpleBannerActiveHost?.get() !== thisView) {
-                                simpleBannerActiveHost = WeakReference(thisView)
-                                // [2026-08-15 自愈] 同 attach hook：新实例强制重置 running（防卡死假阳性）
-                                simpleBannerContinuousRunning = false
-                                if (moduleLogEnabled) {
-                                    Lg.i(TAG, "simple-banner: active host set (new instance) w=${thisView.width} h=${thisView.height}")
-                                }
-                            }
-                            // [2026-08-15 诊断] dispatch 触发 start 前后打 running 值（定位 worker 未启动原因：
-                            // 是 start 未被调用 / running 卡 true / start 内部 return）
-                            if (!simpleBannerContinuousRunning) {
-                                if (moduleLogEnabled) {
-                                    Lg.i(TAG, "simple-banner: dispatch trigger start, running=$simpleBannerContinuousRunning host=${simpleBannerActiveHost?.get() != null}")
-                                }
-                                startSimpleBannerContinuousCapture(force = true)
-                                if (moduleLogEnabled) {
-                                    Lg.i(TAG, "simple-banner: dispatch start returned, running now=$simpleBannerContinuousRunning")
-                                }
-                            } else if (moduleLogEnabled) {
-                                Lg.i(TAG, "simple-banner: dispatch skip start, already running")
-                            }
-                            val canvas = try {
-                                chain.getArg(0) as? Canvas
-                            } catch (t: Throwable) {
-                                null
-                            }
-                            // 先画玻璃（盖在系统 Motion 模糊背景之上），再 proceed 画内容子 View（不遮文字）
-                            if (canvas != null) {
-                                try {
-                                    renderSimpleBannerGlass(canvas, thisView)
-                                } catch (t: Throwable) {
-                                    Lg.e(TAG, "simple-banner: dispatchDraw glass failed", t)
-                                }
-                            }
-                            val result = chain.proceed()
-                            return@intercept result
-                        }
-                    } catch (t: Throwable) {
-                        Lg.e(TAG, "simple-banner: dispatchDraw intercept error", t)
-                    }
-                    chain.proceed()
+                        if (!simpleBannerContinuousRunning) startSimpleBannerContinuousCapture()
+                    }.onFailure { Lg.e(TAG, "simple-banner: background attachment failed", it) }
                 }
+                chain.proceed()
+            }
+            runCatching { api.deoptimize(View::class.java.getDeclaredMethod("setBackground", Drawable::class.java)) }
             simpleBannerGlassMounted = true
-            Lg.i(TAG, "Simple banner glass mounted: $CLASS_FULL_SCREEN_BANNER#$METHOD_DISPATCH_DRAW(Canvas)")
-        } catch (t: Throwable) {
-            Lg.e(TAG, "Simple banner glass mount FAILED: $CLASS_FULL_SCREEN_BANNER#$METHOD_DISPATCH_DRAW", t)
+            Lg.i(TAG, "Simple banner glass mounted at native background paint (basic notification)")
+        } catch (error: Throwable) {
+            Lg.e(TAG, "Simple banner background hook mount failed", error)
         }
     }
 
-    /**
-     * [2026-08-15 强制刷新] hook 基类 `View.onAttachedToWindow()`：横幅 View（FullScreenBanner）attach
-     * 窗口即触发——比 dispatchDraw 绘制命中可靠（attach 是必然事件，不受绘制频率影响；绘制稳定后
-     * dispatchDraw 可能不再触发 → 依赖它的持续抓屏 worker 可能永不启动）。命中 → 登记活跃宿主 +
-     * **强制**启动持续抓屏（force=true 跳过活跃/keyguard 判定：此刻就是横幅出现，立即刷新）。
-     * 字符串类名比较快路径（全局高频方法，未命中立即 proceed）；ExceptionMode.PROTECTIVE + try-catch。
-     */
+    private fun simpleBannerBackground(host: View, original: Drawable?): SimpleBannerGlassDrawable =
+        SimpleBannerGlassDrawable(host, original).also {
+            it.alpha = original?.alpha ?: 255
+            it.state = original?.state ?: host.drawableState
+            it.level = original?.level ?: 0
+        }
+
+    private class SimpleBannerGlassDrawable(host: View, original: Drawable?) :
+        BoundedGlassDrawable(host, original,
+            enabled = { simpleBannerGlassAllowed() },
+            render = { canvas, target, _ ->
+                if (simpleBannerActiveHost?.get() !== target) {
+                    simpleBannerActiveHost = WeakReference(target)
+                    simpleBannerContinuousRunning = false
+                }
+                if (!simpleBannerContinuousRunning) startSimpleBannerContinuousCapture()
+                renderSimpleBannerGlass(canvas, target)
+            },
+            rendered = { RuntimeDiagnostics.mark("simple_banner_paint", "顶部轻打扰通知已在背景出口绘制液态玻璃，不依赖流体云会员开关") },
+            failure = { Lg.e(TAG, "simple-banner: glass failed; retain native background", it) },
+            forwardNativeCallbacks = true, hideNativeBlurOnGlass = true)
+
+    /** Retry after native attachment/layout, then capture only a visible banner. */
     private fun mountSimpleBannerAttachHook(api: XposedInterface, classLoader: ClassLoader) {
-        // [2026-08-15 诊断] 无条件入口日志：确认函数被调用 + 提前 return 原因（enabled/mounted 值）。
-        // 此前真机 install 日志缺失「Simple banner attach hook mounted」且无 FAILED → 函数疑似未执行到
-        // mounted（被 enabled/mounted return 挡住）或 install 调用未生效——本条日志定论。
-        Lg.i(TAG, "simple-banner: attach hook mount enter, enabled=$seedlingCardGlassEnabled mounted=$simpleBannerAttachMounted")
-        if (!seedlingCardGlassEnabled) return
         if (simpleBannerAttachMounted) return
         try {
-            // onAttachedToWindow 是 protected → getDeclaredMethod + setAccessible（同 mountCardBackgroundGlass 风格）
             val method = View::class.java.getDeclaredMethod(METHOD_ON_ATTACHED_TO_WINDOW).apply { isAccessible = true }
-            api.hook(method)
-                .setExceptionMode(ExceptionMode.PROTECTIVE)
-                .intercept { chain ->
-                    try {
-                        val thisView = try {
-                            chain.getThisObject() as? View
-                        } catch (t: Throwable) {
-                            null
-                        }
-                        if (thisView != null && thisView.javaClass.name == CLASS_FULL_SCREEN_BANNER) {
-                            // 横幅 attach → 登记宿主 + 强制启动（立即刷新，不等绘制）
-                            if (simpleBannerActiveHost?.get() !== thisView) {
-                                simpleBannerActiveHost = WeakReference(thisView)
-                                // [2026-08-15 自愈] 新横幅实例 → 强制重置 running：防旧 worker 异常退出/卡死
-                                // 导致 running 卡 true → 新实例 start 被 `!running` 挡住 → 持续抓屏永不启动
-                                // （且旧版无 skip 日志，静默失败，现象 = attach host set 出现但 continuous 全无）
+            api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val result = chain.proceed()
+                val host = chain.getThisObject() as? View
+                if (host?.javaClass?.name == CLASS_FULL_SCREEN_BANNER && simpleBannerGlassAllowed()) {
+                    // The subclass completes native background setup after its super call.
+                    // Resolve visibility on the next UI turn, never start a hidden capture loop.
+                    val ref = WeakReference(host)
+                    host.post {
+                        val current = ref.get() ?: return@post
+                        if (!simpleBannerGlassAllowed() || !visibleCaptureHost(current)) return@post
+                        runCatching {
+                            if (simpleBannerActiveHost?.get() !== current) {
+                                simpleBannerActiveHost = WeakReference(current)
                                 simpleBannerContinuousRunning = false
-                                if (moduleLogEnabled) {
-                                    Lg.i(TAG, "simple-banner: attach host set (force refresh) w=${thisView.width} h=${thisView.height}")
-                                }
                             }
-                            if (!simpleBannerContinuousRunning) {
-                                if (moduleLogEnabled) {
-                                    Lg.i(TAG, "simple-banner: attach trigger start, running=$simpleBannerContinuousRunning host=${simpleBannerActiveHost?.get() != null}")
-                                }
-                                startSimpleBannerContinuousCapture(force = true)
-                                if (moduleLogEnabled) {
-                                    Lg.i(TAG, "simple-banner: attach start returned, running now=$simpleBannerContinuousRunning")
-                                }
-                            } else if (moduleLogEnabled) {
-                                Lg.i(TAG, "simple-banner: attach skip start, already running")
-                            }
-                        }
-                    } catch (t: Throwable) {
-                        Lg.e(TAG, "simple-banner: attach hook error", t)
+                            if (!simpleBannerContinuousRunning) startSimpleBannerContinuousCapture()
+                            current.postInvalidateOnAnimation()
+                        }.onFailure { Lg.e(TAG, "simple-banner: attached capture failed", it) }
                     }
-                    chain.proceed()
                 }
+                result
+            }
             simpleBannerAttachMounted = true
-            Lg.i(TAG, "Simple banner attach hook mounted: View#$METHOD_ON_ATTACHED_TO_WINDOW")
-        } catch (t: Throwable) {
-            Lg.e(TAG, "Simple banner attach hook mount FAILED: View#$METHOD_ON_ATTACHED_TO_WINDOW", t)
+            Lg.i(TAG, "Simple banner attach hook mounted for basic notification glass")
+        } catch (error: Throwable) {
+            Lg.e(TAG, "Simple banner attach hook mount failed", error)
         }
     }
 
@@ -8927,32 +8920,36 @@ object BlurDrawHook {
             api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
-                    try {
-                        val thisView = try {
-                            chain.getThisObject() as? View
-                        } catch (t: Throwable) {
-                            null
-                        }
-                        if (thisView != null && thisView.javaClass.name == CLASS_CARD_BACKGROUND_VIEW) {
-                            if (!seedlingRuntimeAllowed()) return@intercept chain.proceed()
-                            // 展开大卡 attach → 登记宿主 + 启动持续抓屏（不等绘制）
-                            if (cardBackgroundActiveHost?.get() !== thisView) {
-                                cardBackgroundActiveHost = WeakReference(thisView)
-                                // [审查建议 2026-08-23] 新实例强制重置 running（同 Simple Banner 自愈）：
-                                // 防旧 worker 异常退出/卡死导致 running 卡 true → 新实例 start 被挡住永不启动
-                                cardBackgroundContinuousRunning = false
-                                if (moduleLogEnabled) {
-                                    Lg.i(TAG, "seedling-cardview: attach host set (force refresh) w=${thisView.width} h=${thisView.height}")
+                    val result = chain.proceed()
+                    val host = chain.getThisObject() as? View
+                    if (host?.javaClass?.name == CLASS_CARD_BACKGROUND_VIEW) {
+                        // Native subclass installs ViewRootManager/background *after* super
+                        // attach. Wait until that work and layout finish before registering
+                        // demand. Never run an invisible pre-layout capture worker.
+                        host.post { safeModuleTask {
+                            if (!host.isAttachedToWindow || !seedlingRuntimeAllowed()) return@safeModuleTask
+                            val ready = {
+                                if (visibleCaptureHost(host)) {
+                                    val original = host.background
+                                    if (original !is ExpandedCloudGlassDrawable)
+                                        host.background = expandedCloudBackground(host, original)
+                                    cardBackgroundActiveHost = WeakReference(host)
+                                    registerHostView(host)
+                                    if (!cardBackgroundContinuousRunning) startCardBackgroundContinuousCapture()
+                                    host.postInvalidateOnAnimation()
                                 }
                             }
-                            if (!cardBackgroundContinuousRunning) {
-                                startCardBackgroundContinuousCapture()
-                            }
-                        }
-                    } catch (t: Throwable) {
-                        Lg.e(TAG, "seedling-cardview: attach hook error", t)
+                            if (host.width > 0 && host.height > 0) ready()
+                            else host.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+                                override fun onLayoutChange(v:View,l:Int,t:Int,r:Int,b:Int,ol:Int,ot:Int,or:Int,ob:Int) {
+                                    if (r <= l || b <= t) return
+                                    v.removeOnLayoutChangeListener(this)
+                                    safeModuleTask {ready()}
+                                }
+                            })
+                        } }
                     }
-                    chain.proceed()
+                    result
                 }
             cardBgAttachMounted = true
             Lg.i(TAG, "Seedling card attach hook mounted: View#$METHOD_ON_ATTACHED_TO_WINDOW")
@@ -9347,56 +9344,28 @@ object BlurDrawHook {
         }
     }
 
-    /** [2026-08-15] Simple Banner「容器即元素」玻璃绘制路径：FullScreenBanner 自身 bounds 登记 + 画玻璃。
-     *  dispatchDraw canvas 原点 = view 左上角 → drawSeedlingGlassOnCanvas offsetX/Y=0（不平移）。
-     *  首现：**先 registerSeedlingCardRegion（清 sfc 负缓存 + 进宿主表）再主线程同步抓屏**
-     *  （[triggerBackgroundCaptureOnMainThread]）——顺序见 [doc/spec/92 §5.4]；
-     *  registerSeedlingCardRegion 内部首现异步 triggerBackgroundCapture 被有效快照吸收（不再入队）。 */
-    private fun renderSimpleBannerGlass(canvas: Canvas, banner: View) {
+    /** Record the banner geometry before requesting GPU input; never capture on UI. */
+    private fun renderSimpleBannerGlass(canvas: Canvas, banner: View): Boolean {
+        if (!simpleBannerGlassAllowed()) return false
         val w = banner.width
         val h = banner.height
-        if (w <= 0 || h <= 0 || banner.visibility != View.VISIBLE) return
+        if (w <= 0 || h <= 0 || !visibleCaptureHost(banner)) return false
         val loc = IntArray(2)
-        try {
-            banner.getLocationOnScreen(loc)
-        } catch (t: Throwable) {
-            return
-        }
+        try { banner.getLocationOnScreen(loc) } catch (_: Throwable) { return false }
         val screenRegion = RectF(
             loc[0].toFloat(), loc[1].toFloat(),
             (loc[0] + w).toFloat(), (loc[1] + h).toFloat(),
         )
         val id = System.identityHashCode(banner)
-        // [doc/spec/92 §5.4 · 2026-10-10] **先登记、再抓屏**（原顺序相反）：registerSeedlingCardRegion
-        // 内部的 registerHostView 才是清 [simpleBannerSfcMissAt] 负缓存的地方；首帧若先抓，横幅宿主
-        // 还没进宿主表 → excludes 缺横幅层 → 首帧照样把横幅拍进快照。
-        // firstAppearance 必须**在登记前取**：screenRegionMap[id] 由登记写入，事后判空恒 false，
-        // 会丢掉横幅首帧的主线程同步连抓（横幅 5s 短暂窗口，不能等异步 worker）。
-        val firstAppearance = screenRegionMap[id] == null
-        registerSeedlingCardRegion(id, screenRegion, Rect(0, 0, w, h), banner, "simple-banner")
-        if (firstAppearance) {
-            try {
-                triggerBackgroundCaptureOnMainThread()
-            } catch (t: Throwable) {
-                Lg.e(TAG, "simple-banner: first sync capture failed", t)
-            }
-            if (moduleLogEnabled) {
-                Lg.i(TAG, "simple-banner: first appearance sync capture")
-            }
-        }
-        drawSeedlingGlassOnCanvas(canvas, banner, id, w, h, screenRegion, offsetX = 0f, offsetY = 0f)
+        // Registration precedes capture, so the banner's own window is excluded.
+        // GPU source arrival invalidates this host; never block UI on screen capture.
+        if (!registerSeedlingCardRegion(id, screenRegion, Rect(0, 0, w, h), banner, "simple-banner")) return false
+        return drawSeedlingGlassOnCanvas(canvas, banner, id, w, h, screenRegion, offsetX = 0f, offsetY = 0f)
     }
 
-    /** [2026-08-15] Simple Banner 活跃判定：活跃宿主存在且仍 attach。横幅消失（窗口销毁/detach）→ false。
-     *  供持续抓屏 worker 判断停止（不后台耗电）。
-     *  [2026-08-15 修复持续抓屏不生效] 原判定 `attach && isSimpleBannerRootView(rootView)` 再走 rootView
-     *  类名/窗口 type 反射/窗口标题——`dispatchDraw` 命中已用字符串类名精确匹配 CLASS_FULL_SCREEN_BANNER
-     *  （banner 本体），rootView 反射判定是**冗余防御**，且 `getWindowAttributes().type`（[reflectWindowType]）
-     *  在部分系统窗口上反射失败返回 -1 → 活跃恒 false → 持续抓屏 worker 永不启动（真机日志仅 active host
-     *  set + first sync capture，无 worker start）。放宽只判 attach：banner 窗口销毁即 detach → false →
-     *  worker 退出，停止语义不变。 */
+    /** The active window, not an optional membership preference, admits banner capture. */
     private fun isSimpleBannerHostActive(): Boolean {
-        if (!seedlingRuntimeAllowed()) return false
+        if (!simpleBannerGlassAllowed()) return false
         val host = simpleBannerActiveHost?.get() ?: return false
         return try {
             visibleCaptureHost(host)
@@ -13025,9 +12994,14 @@ object BlurDrawHook {
             }
         }
         if (!captureDemandActive()) return null
-        return if (id != null && region != null)
-            regionRenderSourceSnapshot(id, region) ?: requestScreenSnapshotAsync()
-        else requestScreenSnapshotAsync()
+        val requiredEpoch = if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) Long.MIN_VALUE else when {
+            id == null -> Long.MIN_VALUE
+            screenRegionMap[id]?.hostViewName?.startsWith(SEEDLING_CARDVIEW_TAG) == true -> cloudRequiredCaptureEpoch
+            screenRegionMap[id]?.hostViewName?.startsWith(SIMPLE_BANNER_TAG) == true -> bannerRequiredCaptureEpoch
+            else -> Long.MIN_VALUE
+        }
+        val regional = if (id != null && region != null) regionRenderSourceSnapshot(id, region) else null
+        return overlayFrameEpochs.select(regional, requestScreenSnapshotAsync(requiredEpoch), requiredEpoch) {it.bitmap}
     }
 
     private fun resolveRenderSource(id: Int, screenRegion: RectF): RenderSource? {
@@ -13058,12 +13032,13 @@ object BlurDrawHook {
      * 本帧返回最近快照（缺失 → null → 回退系统模糊，worker 抓屏完成 postInvalidateHosts 后一帧恢复玻璃）。
      * 防竞争：失败冷却 [elementCaptureQuitAt] → 冷却期内不重抓；[captureInFlightIds] + [pendingCaptureIds]
      * 防重复入队（worker 抓屏中或队列已待抓不重复加）。 */
-    private fun requestScreenSnapshotAsync(): ElementBackground? {
+    private fun requestScreenSnapshotAsync(requiredEpoch: Long = Long.MIN_VALUE): ElementBackground? {
         if (!captureDemandActive()) return null
         // 省电开启 → 不入队抓屏、直接返回 null（渲染侧本就回退系统绘制）
         if (isPowerSaveGlassOff()) return null
         val snap = screenSnapshot
-        val valid = snap != null && snap.bitmap.width > 0 && snap.bitmap.height > 0
+        val valid = snap != null && !snap.bitmap.isRecycled && snap.bitmap.width > 0 && snap.bitmap.height > 0 &&
+            overlayFrameEpochs.accepts(snap.bitmap, requiredEpoch)
         if (valid) return snap
         // 静态模式 → 不入队（零抓屏）：返回最近快照（可为 null → 回退系统模糊）
         if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return snap
@@ -14199,7 +14174,7 @@ object BlurDrawHook {
         // No screenshot without the exclusion layer while the shade is visible:
         // otherwise its global dim is baked into each independent notification.
         if (!NotificationBackdropIsolationPolicy.mayCaptureIndependentBackdrop(
-                panelExpansionActive, realShadeValid)) return
+                panelExpansionActive && visibleCaptureHost(shadeRootViewCache), realShadeValid)) return
         val shade = if (realShadeValid) realShade else resolveShadeSfcOrFallback()
         if (mainThreadSync) diagFirstLog("sfc-done", if (shade != null && shade.isValid) " valid" else " null/invalid")
         // [2026-08-14 用户要求·sfc 拿不到强制抓全屏] shade 可空传入 captureScreenSnapshot：有效 → exclude shade
@@ -14226,6 +14201,7 @@ object BlurDrawHook {
                 }
                 lastRegionSnapshotFingerprint = regionFp
                 // Dense prepared inputs bypass raw multi-scale tiers; build those only for legacy raw paths.
+                overlayFrameEpochs.publish(bg.bitmap, epochAtStart)
                 regionSnapshot = bg
                 logThrottled("region-snapshot-captured", Log.INFO) {
                     "bg-element: region snapshot captured ${bg.bitmap.width}x${bg.bitmap.height} region=${bg.region.toShortString()} (source=$source)"
@@ -14260,6 +14236,7 @@ object BlurDrawHook {
             lastSnapshotFingerprint = fp
             // [spec/127 多尺度源] 帧发布链预构建 1/16 降采样档（worker 线程，渲染线程只取引用）
             // Dense prepared inputs bypass raw multi-scale tiers; build those only for legacy raw paths.
+            overlayFrameEpochs.publish(bg.bitmap, epochAtStart)
             screenSnapshot = bg
             RuntimeDiagnostics.mark("source", "成功取得系统背景缓冲")
             if (mainThreadSync) diagFirstLog("snapshot-replace", " source=$source")

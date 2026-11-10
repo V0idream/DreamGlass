@@ -1,3 +1,21 @@
+# DreamGlass 2.0.1-debug7 验证记录
+
+338 项 JVM 测试、Debug 构建及 Release Lint 通过（358 Warning、0 Error／Fatal）。隔离 Android 模拟器执行 27 项生产背景包装器 GPU 契约，覆盖原生生命周期异常、模糊层交接、缺帧恢复、alpha、重入及实际 AGSL 材质像素。已检查本地渲染图；签名及版本通过。未获取真机通知崩溃栈、未操作手机或上传，ColorOS 插件接入与实际崩溃仍待验收。详见 [记录](docs/validation/2.0.1-debug7/README.md)。
+
+---
+
+# DreamGlass 2.0.1-debug6 验证记录
+
+334 项 JVM 测试、Debug 构建及 Release Lint 通过（358 Warning、0 Error／Fatal）。本地隔离 Android 模拟器执行 17 项生产背景回退 GPU 契约，先复现不支持 setColorFilter(null) 的异常，再验证首帧／多层原生背景回退、alpha 与玻璃切换。签名及版本通过；未操作手机、未上传，实际 ColorOS 崩溃与画面仍待验收。详见 [记录](docs/validation/2.0.1-debug6/README.md)。
+
+---
+
+# DreamGlass 2.0.1-debug5 验证记录
+
+334 项 JVM 单元测试、Debug 构建和 Release Lint 通过；15 项本地 ROM 接入契约通过。Debug Lint 的测试模型任务出现工具 NPE，改用 Release Lint。扩充了透明度回退及 callback 的 Android GPU 探针但未执行，未操作实体设备、未安装或上传；实际画面和功耗未验收。详见 [记录](docs/validation/2.0.1-debug5/README.md)。
+
+---
+
 # DreamGlass 2.0.1-debug4 验证记录
 
 329 项 JVM 单元测试、Debug／Release 构建和 Release Lint 通过（358 Warning、0 Error／Fatal）；10 项本地 ROM 源码契约检查通过。签名与原有覆盖升级证书一致。本轮未操作实体设备、未重复 GPU 探针；debug3 的隔离 GPU 结果附作历史证据，不能替代新包的厂商接入、实际画面及功耗验收。详见 [当前记录](docs/validation/2.0.1-debug4/README.md)。

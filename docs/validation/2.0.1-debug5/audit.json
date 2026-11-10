@@ -1,0 +1,31 @@
+{
+  "candidate": "2.0.1-debug5",
+  "versionCode": 2000005,
+  "apk": "DreamGlass-2.0.1-debug5.apk",
+  "sha256": "b5b3398412eb468c6023aa429791c2939398be3cf908dc55b34cc879e51f6554",
+  "signingCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "upgradeSigningCertificateMatches": true,
+  "unitTests": {
+    "tests": 334,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "nativeStaticContractsPassed": 15,
+  "buildDebug": true,
+  "lintRelease": {
+    "Warning": 358,
+    "Error": 0,
+    "Fatal": 0
+  },
+  "lintDebug": {
+    "passed": false,
+    "reason": "generateDebugAndroidTestLintModel: path null NPE; Release Lint used"
+  },
+  "gpuProbeExecuted": false,
+  "physicalVisualVerified": false,
+  "deviceOperated": false,
+  "installed": false,
+  "uploaded": false,
+  "powerConsumptionMeasured": false
+}
