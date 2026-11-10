@@ -41,6 +41,7 @@ object AppGlassHook {
     private var changing=false
     private var readAt=-1000L
     private var enabled=false
+    private var memberAccepted=false
     private var snapshot:SharedGlassParams.Snapshot?=null
     fun install(api:XposedInterface,classLoader:ClassLoader,packageName:String) {
         val key=keys[packageName] ?: return
@@ -82,8 +83,15 @@ object AppGlassHook {
             }
             RuntimeDiagnostics.mark("app-glass-capability","已安装 OEM 背景通道，等待组件实际命中")
         } catch(error:Throwable) {
-            RuntimeDiagnostics.mark("app-glass-capability","缺少 OEM 背景通道，保留原生；不叠加假玻璃描边")
-            failure(error);return
+            bridge=null
+            RuntimeDiagnostics.mark("app-glass-capability",if(packageName==XposedEntry.PACKAGE_GALLERY)
+                "OEM背景通道不可用；继续安装相册独立实时内容入口，其他材质保留原生"
+                else "缺少 OEM 背景通道，保留原生；不叠加假玻璃描边")
+            failure(error)
+            // Gallery's independent Activity RenderNode -> panel content route
+            // does not call the OEM background filter. Do not make its install
+            // contingent on an unrelated optional bridge or its hookability.
+            if(packageName!=XposedEntry.PACKAGE_GALLERY)return
         }
         Cos17AppSurfaceHooks.install(api,classLoader,packageName)
         for(method in listOf(View::class.java.getDeclaredMethod("setBackgroundDrawable",Drawable::class.java),
@@ -100,7 +108,8 @@ object AppGlassHook {
         }
     }
     private fun preferences() {
-        if(!Prefs.memberAllowed(api)) {enabled=false;readAt=-1000L;return}
+        memberAccepted=Prefs.memberAllowed(api)
+        if(!memberAccepted) {enabled=false;readAt=-1000L;return}
         val now=SystemClock.uptimeMillis();if(now-readAt<500)return
         readAt=now
         val p=api?.let(Prefs::read) ?: return
@@ -109,6 +118,17 @@ object AppGlassHook {
         if(enabled)snapshot=SharedGlassParams.read(p)
     }
     internal fun materialApplied(view:View):Boolean = states[view]?.applied==true && Prefs.memberAllowed(api)
+    /** Called only with the actual panel returned by the Gallery dialog builder,
+     * not a class-name scan over unrelated activities or windows. */
+    internal fun observeGalleryDialog(view:View) {
+        if(packageName!=XposedEntry.PACKAGE_GALLERY || Looper.myLooper()!=Looper.getMainLooper() ||
+            !GalleryNativeSurfaceContract.isDialogPanel(view))return
+        val observed=observe(view)!=null
+        RuntimeDiagnostics.update("gallery-save-observer",if(observed)
+            "已直接观察实际保存对话框parentPanel；等待本窗口preDraw配置/源检查"
+            else "实际parentPanel未能登记：观察表容量或宿主契约限制")
+        if(observed)view.invalidate()
+    }
     internal fun nativeParams(view:View,width:Float,height:Float):com.coloros16.liquidglass.liquidglass.LiquidGlassShader.Params? {
         preferences();if(!enabled || role(view)==AppGlassSurfacePolicy.NONE)return null
         val s=snapshot ?: return null
@@ -186,24 +206,32 @@ object AppGlassHook {
         private var materialBounds:RectF?=null
         private var materialRadius=0f
         var liveContent=false;private set
+        private fun gate(view:View,detail:String) {
+            if(packageName==XposedEntry.PACKAGE_GALLERY && GalleryNativeSurfaceContract.isDialogPanel(view))
+                RuntimeDiagnostics.update("gallery-save-gate",detail)
+        }
         fun effect():RenderEffect? {
           try {
             preferences()
             val view=target.get() ?: return null
-            if(!enabled || SystemClock.uptimeMillis()<blockedUntil || !view.isHardwareAccelerated)return null
-            if(!GallerySurfaceAdapter.canAssign(view))return null
-            val kind=role(view);if(kind==AppGlassSurfacePolicy.NONE) { cached=null;return null }
+            liveContent=packageName==XposedEntry.PACKAGE_GALLERY && GalleryLiveBackdrop.needs(view)
+            if(!enabled) {gate(view,"关闭：会员确认=$memberAccepted；总开关/玻璃/相册联合开启=$enabled");return null}
+            if(SystemClock.uptimeMillis()<blockedUntil) {gate(view,"此前渲染异常，正在原生回退退避期");return null}
+            if(!view.isHardwareAccelerated) {gate(view,"原生回退：宿主不是硬件加速窗口");return null}
+            if(!liveContent && bridge==null)return null
+            if(!GallerySurfaceAdapter.canAssign(view)) {gate(view,"原生回退：独立绘制入口或安全背景租用尚未就绪");return null}
+            val kind=role(view);if(kind==AppGlassSurfacePolicy.NONE) { cached=null;gate(view,"保持原生：宿主角色不在已核对材质范围");return null }
             val s=snapshot ?: return null
             val outline=Outline();view.background?.getOutline(outline)
             if(outline.isEmpty)view.outlineProvider?.getOutline(view,outline)
             val outlineRect=Rect()
             val nativeBounds=nativeMutation {Cos17AppSurfaceHooks.nativeBounds(view)}
-            if(Cos17AppSurfaceHooks.isTarget(view) && nativeBounds==null)return null
+            if(Cos17AppSurfaceHooks.isTarget(view) && nativeBounds==null) {gate(view,"保持原生：原生面板几何未就绪");return null}
             val area=nativeBounds ?: if(outline.getRect(outlineRect) && !outlineRect.isEmpty)RectF(outlineRect)
                 else RectF(0f,0f,view.width.toFloat(),view.height.toFloat())
-            if(area.isEmpty || !listOf(area.left,area.top,area.right,area.bottom).all {it.isFinite()})return null
+            if(area.isEmpty || !listOf(area.left,area.top,area.right,area.bottom).all {it.isFinite()}) {gate(view,"保持原生：当前面板范围为空或非有限值");return null}
             val opacity=Cos17AppSurfaceHooks.nativeFillAlpha(view)
-            if(opacity<=0f)return null
+            if(opacity<=0f) {gate(view,"保持原生：原生面板当前透明度为零");return null}
             val key=System.identityHashCode(view)
             val radius=GlassRegistry.cornerOverrideFor(key) ?: Cos17AppSurfaceHooks.nativeRadius(view) ?: if(outline.radius>0)outline.radius else
                 if(kind==AppGlassSurfacePolicy.CONTROL)minOf(area.width(),area.height())*.5f else minOf(area.width(),area.height())*.22f
@@ -211,10 +239,12 @@ object AppGlassHook {
                 area.width(),area.height(),radius.coerceIn(0f,minOf(area.width(),area.height())*.5f),kind==AppGlassSurfacePolicy.CONTROL,s.compactOptics,s.grayBaseLuma)
             materialBounds=RectF(area);materialRadius=p.cornerRadius
             val hash=31*(31*p.hashCode()+area.hashCode())+opacity.hashCode()
-            liveContent=packageName==XposedEntry.PACKAGE_GALLERY && GalleryLiveBackdrop.needs(view)
             if(liveContent) {
-                cached=GalleryLiveBackdrop.prepare(view,area,p,opacity) ?: return null
+                cached=GalleryLiveBackdrop.prepare(view,area,p,opacity) ?: run {
+                    gate(view,"保持原生：独立内容源未就绪，详见gallery-save-owner/source");return null
+                }
                 paramsHash=hash
+                gate(view,"允许：会员确认、开关、硬件、宿主与独立实时内容源均通过")
                 return cached
             }
             if(cached==null || paramsHash!=hash) {
@@ -234,7 +264,7 @@ object AppGlassHook {
             }
         }
         fun restore(view:View) {
-            try {if(applied)assign(view,nativeEffect)} finally {
+            try {if(applied && bridge!=null)assign(view,nativeEffect)} finally {
                 // Always release native channels even when the OEM bridge fails.
                 applied=false;cached=null;paramsHash=0;lastApplied=null
                 runCatching {GalleryLiveBackdrop.release(view)}.onFailure(::failure)
@@ -250,7 +280,11 @@ object AppGlassHook {
                 else if(!applied || lastApplied!==effect) {
                     if(nativeMutation {Cos17AppSurfaceHooks.beforeAssign(view,true)}) {
                         clip(view)
-                        assign(view,if(liveContent)null else effect);lastApplied=effect;applied=true
+                        // A live panel owns its independent content node. Clear
+                        // an existing OEM filter only if that optional bridge
+                        // exists; missing it must not prevent the actual paint.
+                        if(!liveContent || bridge!=null)assign(view,if(liveContent)null else effect)
+                        lastApplied=effect;applied=true
                         if(liveContent)GalleryLiveBackdrop.activate(view)
                         RuntimeDiagnostics.mark("app-glass-material","组件已使用统一预设；未添加工具栏外框")
                     } else restore(view)

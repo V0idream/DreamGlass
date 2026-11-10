@@ -12,7 +12,6 @@ import io.github.libxposed.api.XposedInterface.ExceptionMode
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
-import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 /** Gallery 17.10.41 resource/class contracts. These are the native material
@@ -38,7 +37,7 @@ internal object GalleryNativeSurfaceContract {
     private data class DialogGeometry(val width:Method,val height:Method,val bottom:Method,
         val horizontal:Field,val vertical:Field,val tiny:Field,val loading:Field,val root:Field,val overlay:Field)
     private var dialogGeometry:DialogGeometry?=null
-    private val dialogOverlays=WeakHashMap<View,WeakReference<View>>()
+    private val dialogPaintRoute=GalleryDialogPaintRoute<View>()
     private var button:Class<*>?=null
     private var buttonRadius:Method?=null
     private var buttonBounds:Field?=null
@@ -71,27 +70,33 @@ internal object GalleryNativeSurfaceContract {
     fun isDialogButton(view:View)=kind(view)==Kind.BUTTON
     fun isDialogPanel(view:View)=kind(view)==Kind.DIALOG
     fun isHomeNavigation(view:View)=kind(view) in setOf(Kind.MENU,Kind.ACCESSORY)
+    /** Exactly one real background owns the body paint: the visible OEM overlay
+     * when present, otherwise parentPanel. Never paint over the text subtree. */
+    fun dialogPaintPanel(view:View):View?=dialogPaintRoute.paintPanel(view,isDialogPanel(view),
+        {it.visibility==View.VISIBLE},GalleryDialogBackgroundLease::owns)
     /** The native overlay is a dedicated non-content View beneath text/buttons.
      * Its gray ColorDrawable otherwise covers the replacement parent's backdrop.
      * Lease its background only; never filter the dialog subtree twice. */
     fun syncDialogOverlay(view:View,active:Boolean):Boolean {
         if(!active) {
-            dialogOverlays.remove(view)?.get()?.let {GalleryDialogBackgroundLease.sync(it,false)}
+            dialogPaintRoute.unbind(view)?.let {
+                GalleryDialogBackgroundLease.sync(it,false)
+            }
             return true
         }
         if(!isDialogPanel(view))return true
         val c=dialogGeometry ?: return false
         val overlay=c.overlay.get(view) as? View
-        val previous=dialogOverlays[view]?.get()
+        val previous=dialogPaintRoute.overlay(view)
         if(previous!=null && previous!==overlay) {
-            GalleryDialogBackgroundLease.sync(previous,false);dialogOverlays.remove(view)
+            GalleryDialogBackgroundLease.sync(previous,false);dialogPaintRoute.unbind(view)
         }
         if(overlay==null || overlay.visibility!=View.VISIBLE)return true
         val root=c.root.get(view) as? View ?: return false
         if(root.parent!==view || overlay.parent!==root || id(overlay)!="dialogOverlay" ||
             overlay is ViewGroup || overlay.isClickable || overlay.isFocusable)return false
         if(!GalleryDialogBackgroundLease.sync(overlay,true))return false
-        dialogOverlays[view]=WeakReference(overlay)
+        dialogPaintRoute.bind(view,overlay)
         return true
     }
     fun role(view:View):Int?=kind(view)?.let {
@@ -145,7 +150,7 @@ internal object GalleryNativeSurfaceContract {
     fun install(api:XposedInterface,loader:ClassLoader,active:(View)->Boolean) {
         photoMenu=null;photoMenuBounds=null;photoMenuSync=null;photoButtonHosts.clear()
         menu=null;accessory=null;pill=null;dialog=null;button=null;buttonRadius=null;buttonBounds=null;toolbarHosts.clear()
-        dialogGeometry=null;dialogOverlays.clear()
+        dialogGeometry=null;dialogPaintRoute.clear()
         var mountedCount=0
         fun mounted(name:String,block:()->Unit) {
             runCatching {block();mountedCount++}.onFailure {
@@ -197,22 +202,31 @@ internal object GalleryNativeSurfaceContract {
                 field(type,"mDialogLayoutMarginVerticalTotal",Int::class.javaPrimitiveType!!),
                 field(type,"mIsTiny",Boolean::class.javaPrimitiveType!!),field(type,"mHasLoading",Boolean::class.javaPrimitiveType!!),
                 field(type,"mRootView",View::class.java),field(type,"mDialogOverlay",View::class.java))
-            // ViewGroup backgrounds may be skipped or replaced during COUI's
-            // own overlay transitions. Render at the guaranteed content pass,
-            // AFTER the leased transparent background but BEFORE text/buttons.
-            val dispatch=ViewGroup::class.java.getDeclaredMethod("dispatchDraw",Canvas::class.java)
-            api.hook(dispatch).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-                val host=chain.getThisObject() as? View
-                if(host!=null && type.isInstance(host) && id(host)=="parentPanel" && active(host))
-                    runCatching {GalleryLiveBackdrop.drawDialogPanel(host,chain.getArg(0) as Canvas)}.onFailure {
-                        RuntimeDiagnostics.mark("gallery-dialog-dispatch-error","保持原生子控件绘制：${it.javaClass.simpleName}")
-                    }
-                chain.proceed()
-            }
-            api.deoptimize(dispatch)
+            // The leased ordinary Drawable is the paint outlet. Do not make
+            // dialog registration depend on a global ViewGroup dispatch hook:
+            // inherited/inlined super dispatch is not a reliable Android ABI.
             dialog=capsule;dialogGeometry=geometry
-            GalleryLiveBackdrop.dialogDispatchInstalled()
+            GalleryLiveBackdrop.dialogBackgroundInstalled()
             deopt(type,setOf("onAttachedToWindow","onLayout","setUseDialogOverlayFeature","updateDialogOverlay"))
+        }
+        mounted("dialog-overlay-state") {
+            // Actual APK applyOverlayState replaces the gray background on every
+            // native mode transition. Renew the existing lease immediately,
+            // without waiting for another preDraw or changing its visibility.
+            val helper=Class.forName("com.coui.appcompat.dialog.COUIAlertDialogOverlayHelper",false,loader)
+            val mode=Class.forName("com.coui.appcompat.dialog.COUIAlertDialogOverlayHelper\$OverlayMode",false,loader)
+            val update=helper.getDeclaredMethod("applyOverlayState",View::class.java,mode)
+            check(update.returnType==Void.TYPE)
+            api.hook(update).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val result=chain.proceed()
+                val overlay=chain.getArg(0) as? View
+                val panel=overlay?.let {dialogPaintRoute.panel(it) ?: dialogAncestor(it)}
+                if(panel!=null && active(panel))runCatching {syncDialogOverlay(panel,true)}.onFailure {
+                    RuntimeDiagnostics.mark("gallery-dialog-overlay-state-error",it.javaClass.simpleName)
+                }
+                result
+            }
+            api.deoptimize(update)
         }
         mounted("dialog-shadow") {
             val root=Class.forName("com.coui.appcompat.dialog.widget.COUIAlertDialogRootLayout",false,loader)

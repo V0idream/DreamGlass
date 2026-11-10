@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "nativeCompletionOnce": true,
+  "cancelOnManualCloseOrDetach": true,
+  "disableReleasesImmediately": true,
+  "staleCallbacksBlocked": true,
+  "executedOn": "debug3 isolated Android emulator",
+  "rerunOnDebug4": false,
+  "physicalDeviceTested": false
+}

@@ -13,6 +13,9 @@ internal class ClearButtonGlassSurface {
     private val fill=Paint(Paint.ANTI_ALIAS_FLAG)
     private val rim=Paint(Paint.ANTI_ALIAS_FLAG).apply {style=Paint.Style.STROKE}
     private val optical=Paint(Paint.ANTI_ALIAS_FLAG)
+    private val empty=LinearGradient(0f,0f,1f,1f,Color.TRANSPARENT,Color.TRANSPARENT,Shader.TileMode.CLAMP)
+    var opticalSubmitted=false;private set
+    var opticalError:String?=null;private set
     private var baseBounds=RectF()
     private var baseLuma=Float.NaN
     private var rimStrength=Float.NaN
@@ -21,6 +24,7 @@ internal class ClearButtonGlassSurface {
      * native isolation flag still hides the button. Failure keeps the base. */
     fun prepare() {runCatching {glass}}
     fun draw(canvas:Canvas,area:RectF,p:LiquidGlassShader.Params,source:Shader?,density:Float):Boolean {
+        opticalSubmitted=false;opticalError=null
         if(!canvas.isHardwareAccelerated || area.isEmpty ||
             !listOf(area.left,area.top,area.right,area.bottom).all(Float::isFinite))return false
         val radius=minOf(area.width(),area.height())*.5f
@@ -40,12 +44,23 @@ internal class ClearButtonGlassSurface {
         }
         canvas.drawRoundRect(area,radius,radius,fill)
         val submitted=source!=null && runCatching {
-            LiquidGlassShader.setUniforms(glass,p.copy(cornerRadius=radius,parallaxX=0f,parallaxY=0f,sourcePreblurred=true),
-                source,source,sourceRect=area,maskRect=area,maskOffsetX=area.left,maskOffsetY=area.top)
-            optical.shader=glass
-            canvas.drawRoundRect(area,radius,radius,optical)
-            true
-        }.getOrDefault(false)
+            val material=glass
+            try {
+                LiquidGlassShader.setUniforms(material,p.copy(cornerRadius=radius,parallaxX=0f,parallaxY=0f,sourcePreblurred=true),
+                    source,source,sourceRect=area,maskRect=area,maskOffsetX=area.left,maskOffsetY=area.top)
+                optical.shader=material
+                canvas.drawRoundRect(area,radius,radius,optical)
+                opticalSubmitted=true
+                true
+            } finally {
+                optical.shader=null
+                // Drop source children after Canvas captured this display list.
+                // In particular, don't cache a native hardware bitmap that the
+                // OEM can replace/recycle on its next background update.
+                material.setInputShader("uSource",empty)
+                material.setInputShader("uSourceLowRes",empty)
+            }
+        }.onFailure {opticalError=it.javaClass.simpleName}.getOrDefault(false)
         // The shared shader already draws the preset's optical edge. A second
         // fixed white stroke made native clear glass look like a plastic ring.
         // Only the no-source/error base needs this soft, preset-scaled outline.

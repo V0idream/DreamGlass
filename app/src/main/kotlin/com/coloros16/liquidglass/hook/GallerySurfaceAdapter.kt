@@ -51,7 +51,7 @@ internal object GallerySurfaceAdapter {
             val route=GalleryLiveBackdrop.canDrawDialog()
             val setter=GalleryDialogBackgroundLease.canMount(view)
             if(!route || !setter)RuntimeDiagnostics.update("gallery-dialog-mount-state",
-                "保持原生：dispatch=$route; ordinaryViewSetter=$setter; background=${view.background?.javaClass?.name}")
+                "保持原生：backgroundDrawable=$route; ordinaryViewSetter=$setter; background=${view.background?.javaClass?.name}")
             return route && setter
         }
         return if(usesStateLayer(view))GalleryStateLayerBackgroundLease.canMount(view)
@@ -60,7 +60,7 @@ internal object GallerySurfaceAdapter {
     private fun leaseBackground(view:View):Boolean {
         if(GalleryNativeSurfaceContract.isDialogPanel(view)) {
             val assigned=GalleryDialogBackgroundLease.sync(view,true)
-            RuntimeDiagnostics.update("gallery-dialog-mount-state","parentPanel背景租用=$assigned; opaque=${view.isOpaque}; before-children-dispatch")
+            RuntimeDiagnostics.update("gallery-dialog-mount-state","parentPanel背景租用=$assigned; opaque=${view.isOpaque}; native-background-before-children")
             return assigned
         }
         if(usesStateLayer(view))return GalleryStateLayerBackgroundLease.sync(view,true)
@@ -188,7 +188,13 @@ internal object GallerySurfaceAdapter {
 
     fun install(api:XposedInterface,loader:ClassLoader,materialApplied:(View)->Boolean):List<Class<*>> {
         contract=null;states.clear()
-        GalleryLiveBackdrop.installDialogSources(api)
+        // The saving dialog is its OWN audited contract. Register it before
+        // probing unrelated toolbar wrapper/COUI setters; one unsupported
+        // decoration must not make parentPanel undiscoverable.
+        GalleryNativeSurfaceContract.install(api,loader) {view -> states[view]?.active==true && materialApplied(view)}
+        GalleryLiveBackdrop.installDialogSources(api,loader,AppGlassHook::observeGalleryDialog)
+        if(!GalleryStateLayerBackgroundLease.install(loader))
+            RuntimeDiagnostics.mark("gallery-state-layer","状态背景层接口未匹配，对应控件保持原生")
         return try {
             val wrapper=Class.forName("com.oplus.gallery.basebiz.widget.BlurButtonWrapperView",false,loader)
             val getter=wrapper.getDeclaredMethod("getMaterialEffectDelegate").apply {isAccessible=true}
@@ -217,9 +223,6 @@ internal object GallerySurfaceAdapter {
                     it.parameterTypes.firstOrNull()==View::class.java
             }
             check(setters.size==6 && clearBlur in setters && clearStroke in setters)
-            if(!GalleryStateLayerBackgroundLease.install(loader))
-                RuntimeDiagnostics.mark("gallery-state-layer","状态背景层接口未匹配，对应控件保持原生")
-            GalleryNativeSurfaceContract.install(api,loader) {view -> states[view]?.active==true && materialApplied(view)}
             for(method in setters)api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 if(mutating.get()==true || !ui())return@intercept chain.proceed()
                 val view=chain.getArg(0) as? View ?: return@intercept chain.proceed()
@@ -251,7 +254,7 @@ internal object GallerySurfaceAdapter {
             listOf(wrapper)
         } catch(error:Throwable) {
             contract=null
-            RuntimeDiagnostics.mark("gallery-glass-contract","相册接口未匹配，保留原生：${error.javaClass.simpleName}")
+            RuntimeDiagnostics.mark("gallery-glass-contract","wrapper/COUI通道未匹配；保存面板独立入口仍保留：${error.javaClass.simpleName}")
             emptyList()
         }
     }

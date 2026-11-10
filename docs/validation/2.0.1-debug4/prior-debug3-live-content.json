@@ -1,0 +1,21 @@
+{
+  "version": "2.0.1-debug3",
+  "status": "PASS",
+  "liveContentChangedWithoutEffectRebuild": true,
+  "nativeSourceMotionWithoutEffectRebuild": true,
+  "nonzeroHostOriginAligned": true,
+  "hostAndSourceOriginsIndependent": true,
+  "contentRefreshDoesNotRequestAnotherFrame": true,
+  "outsideMaskTransparent": true,
+  "nativePaintRestoredAfterException": true,
+  "clearVisibleWithoutNativeInput": true,
+  "clearVisibleWithTransparentNativeInput": true,
+  "clearLiveInputChanges": true,
+  "clearNativePaintUntouched": true,
+  "dialogViewDispatchPaintsBehindChildren": true,
+  "dialogGrayOverlayLeased": true,
+  "dialogLeasedLiveContentUpdates": true,
+  "dialogNativeBackgroundsRestored": true,
+  "oemViewSourceResolverTested": false,
+  "physicalDeviceTested": false
+}

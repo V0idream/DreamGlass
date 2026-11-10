@@ -1087,14 +1087,14 @@ class SettingsActivity : AppCompatActivity() {
             view.findViewById(R.id.periodicCaptureIntervalValue),
             view.findViewById(R.id.periodicCaptureIntervalDesc),
         )
-        fun applyModeUi(mode: Int) {
-            val visibility = if (mode == Prefs.BG_CAPTURE_MODE_ON_CHANGE) View.VISIBLE else View.GONE
+        fun applyModeUi() {
+            val visibility = View.GONE // Event mode has no periodic screenshot fallback.
             maxIntervalGroup.forEach { it.visibility = visibility }
         }
         val currentMode = (frameworkPrefs()?.let { Prefs.readIntCompat(it, Prefs.KEY_BG_CAPTURE_MODE, Prefs.DEFAULT_BG_CAPTURE_MODE) }
             ?: Prefs.readIntCompat(xmlPrefs, Prefs.KEY_BG_CAPTURE_MODE, Prefs.DEFAULT_BG_CAPTURE_MODE))
             .coerceIn(Prefs.BG_CAPTURE_MODE_IMMEDIATE, Prefs.BG_CAPTURE_MODE_STATIC)
-        applyModeUi(currentMode)
+        applyModeUi()
         modeSpinner.setSelection(currentMode)
         modeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
@@ -1105,7 +1105,7 @@ class SettingsActivity : AppCompatActivity() {
             ) {
                 val mode = position.coerceIn(Prefs.BG_CAPTURE_MODE_IMMEDIATE, Prefs.BG_CAPTURE_MODE_STATIC)
                 writePrefInt(Prefs.KEY_BG_CAPTURE_MODE, mode)
-                applyModeUi(mode)
+                applyModeUi()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
@@ -1119,6 +1119,10 @@ class SettingsActivity : AppCompatActivity() {
             max = Prefs.PANEL_CAPTURE_HZ_MAX - Prefs.PANEL_CAPTURE_HZ_MIN, step = 1, offset = Prefs.PANEL_CAPTURE_HZ_MIN,
             format = { v -> getString(R.string.settings_panel_capture_hz_value, v) },
         )
+
+        // Legacy 30..120Hz slider cannot exceed the central energy budget; hide misleading values.
+        view.findViewById<View>(R.id.seekPanelCaptureHz).visibility = View.GONE
+        view.findViewById<View>(R.id.panelCaptureHzValue).visibility = View.GONE
 
         // 最大抓屏间隔（仅变化抓屏显示）：100~5000ms（默认 500）
         bindIntSeekBarStep(

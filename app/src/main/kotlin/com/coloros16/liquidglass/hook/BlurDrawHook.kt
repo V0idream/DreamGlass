@@ -1051,7 +1051,7 @@ object BlurDrawHook {
                     textForceRefreshScheduled = false
                     return
                 }
-                if (!screenInteractive || (!panelExpansionActive && !isHeadsUpHostActive())) {
+                if (!captureDemandActive() || (!panelExpansionActive && !isHeadsUpHostActive())) {
                     textForceRefreshScheduled = false
                     return
                 }
@@ -1097,7 +1097,7 @@ object BlurDrawHook {
      *  registerHostView / heads-up 活跃变化（triggerHeadsUpAppearanceCapture）。 */
     @Synchronized
     private fun ensureTextForceRefreshLoop() {
-        if (!screenInteractive || (!panelExpansionActive && !isHeadsUpHostActive())) return
+        if (!captureDemandActive() || (!panelExpansionActive && !isHeadsUpHostActive())) return
         if (textForceRefreshScheduled) return
         val interval = textForceRefreshIntervalMs()
         if (interval <= 0) return  // 周期刷新关闭（0），仅事件触发
@@ -1138,6 +1138,8 @@ object BlurDrawHook {
     // ---- [spec/19 Heads-Up 玻璃化] ViewBlurProxy.setBlurType + BlurType 枚举实例 + NotificationBackgroundView ----
     private var mViewProxySetBlurType: Method? = null
     private var mBlurTypeMotionInstance: Any? = null
+    private var mBlurTypeNonInstance: Any? = null
+    private var mViewProxyGetBlurType: Method? = null
     private var mBlurTypePlatformStaticInstance: Any? = null
     private var mNotifBackgroundViewClass: Class<*>? = null
 
@@ -1150,6 +1152,8 @@ object BlurDrawHook {
      *  PlatformBlurDrawable。drawable 创建确认（recordNotificationCardRegion 命中）后清除；GC 自动失效。 */
     @Volatile
     private var headsUpGlassForceView: WeakReference<View>? = null
+    private val nativeHeadsUpMaterialHost = ThreadLocal<View>()
+    private val notificationMaterialMapped = ThreadLocal<Boolean>()
 
     // ---- [spec/51 2026-08-13] 通知（heads-up）首帧主线程抓屏 + 连抓 5~6 帧 + 持续期间兜底抓屏 ----
     /** 当前活跃 heads-up 通知背景 View（WeakReference 防泄漏）。通知出现时登记；消失（detach /
@@ -1471,6 +1475,8 @@ object BlurDrawHook {
                 addAction(android.content.Intent.ACTION_SCREEN_ON)
                 addAction(android.content.Intent.ACTION_SCREEN_OFF)
                 addAction(android.content.Intent.ACTION_USER_PRESENT)
+                addAction(android.content.Intent.ACTION_WALLPAPER_CHANGED)
+                addAction("android.intent.action.USER_SWITCHED")
             }
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
@@ -1478,9 +1484,24 @@ object BlurDrawHook {
                         val action = intent?.action ?: return
                         // 缓存置过期 → 下次 isKeyguardLockedNow 强制实测（不直接写死状态值）
                         cachedKeyguardLockedAt = 0L
+                        if (action == android.content.Intent.ACTION_WALLPAPER_CHANGED ||
+                            action == "android.intent.action.USER_SWITCHED") {
+                            LockWallpaperBackdrop.changed()
+                            lockWallpaperSnapshot = null
+                            postInvalidateHosts()
+                            return
+                        }
                         if (action == android.content.Intent.ACTION_SCREEN_OFF) {
                             screenInteractive = false
                             captureEpoch++
+                            // Never expose pre-lock app content to native AOD/lockscreen draws.
+                            screenSnapshot = null
+                            regionSnapshot = null
+                            lastSnapshotFingerprint = 0
+                            lastRegionSnapshotFingerprint = 0
+                            headsUpBurstRemaining = 0
+                            panelExpansionActive = false
+                            panelWasCollapsed = true
                             synchronized(this@BlurDrawHook) {
                                 elementCaptureQueue.clear(); pendingCaptureIds.clear()
                             }
@@ -1491,6 +1512,12 @@ object BlurDrawHook {
                             periodicCapturePosted = false
                             mainHandler().removeCallbacks(textForceRefreshRunnable)
                             textForceRefreshScheduled = false
+                            // Existing display lists may still reference a pre-lock shader input.
+                            // Re-record once at the transition; do not start a screenshot worker.
+                            appliedUniformsMap.clear()
+                            geometryCache.clear()
+                            lockWallpaperSnapshot = null
+                            invalidateRegisteredHostViews()
                         } else {
                             screenInteractive = true
                             ensureTextForceRefreshLoop()
@@ -1880,6 +1907,7 @@ object BlurDrawHook {
      *  isOverGlassRegion 对状态栏时钟等一切坐标判"玻璃区域" → 文字变色误伤）；但渲染兜底
      *  isBackgroundScrimById（drawBlurShader 直绘路径 paint 置透明）仍需识别 scrim → 独立登记。 */
     private val scrimDrawableIds = ConcurrentHashMap.newKeySet<Int>()
+    private val scrimHosts = ConcurrentHashMap<Int, WeakReference<View>>()
 
     /** COS17 factories return AutoBlurDrawable wrappers, not drawBlurShader's inner target. */
     private val qsSeekbars = QsSeekbarCompat()
@@ -2264,10 +2292,36 @@ object BlurDrawHook {
             logThrottled("button-system-blur-failed", Log.WARN) {
                 "button system blur unavailable; keep independent material: ${error.javaClass.simpleName}"
             }
-        }, { blurEngine() })
+        }, { blurEngine() }, { captureDemandActive() })
     }
     private val buttonBackdropWorker by buttonBackdropWorkerDelegate
     @Volatile private var screenInteractive = true
+    @Volatile private var lastDemandCaptureMs = 0L
+    private var captureMenuHost: WeakReference<View>? = null
+
+    private val captureVisibleRect = ThreadLocal.withInitial { Rect() }
+    private fun visibleCaptureHost(view: View?): Boolean = try {
+        if (view == null || !view.isAttachedToWindow || !view.isShown ||
+            view.windowVisibility != View.VISIBLE || view.width <= 0 || view.height <= 0 ||
+            view.display?.state != android.view.Display.STATE_ON) false
+        else {
+            var parent: View? = view
+            var opaque = true
+            while (parent != null) {
+                if (parent.alpha <= 0f || kotlin.math.abs(parent.scaleX) < .001f || kotlin.math.abs(parent.scaleY) < .001f) { opaque = false; break }
+                parent = parent.parent as? View
+            }
+            opaque && view.getGlobalVisibleRect(captureVisibleRect.get())
+        }
+    } catch (_: Throwable) { false }
+
+    private fun captureDemandActive(): Boolean = CaptureDemandPolicy.allowed(
+        screenInteractive, isKeyguardLockedNow(),
+        panelExpansionActive && visibleCaptureHost(shadeRootViewCache),
+        isHeadsUpHostActive(), isCardBackgroundHostActive(), isSimpleBannerHostActive(),
+        visibleCaptureHost(captureMenuHost?.get()),
+    )
+
     @Volatile private var captureRetryAtMs = 0L
     @Volatile private var captureEpoch = 0L
     private var lastCaptureStartMs = 0L
@@ -2296,7 +2350,12 @@ object BlurDrawHook {
     }
     private fun bindQualityBackdrop(id: Int, source: Bitmap, screen: RectF, sourceRect: RectF,
         sourceIsSnapshot: Boolean, params: LiquidGlassShader.Params): ButtonBackdropBinding.Bound {
-        if (!screenInteractive) return ButtonBackdropBinding.Bound(source, sourceRect, params)
+        if (isKeyguardLockedNow() || !screenInteractive) {
+            // Wallpaper is already GPU blurred once per generation. Do not enqueue screenshot
+            // work or independently dim the common keyguard/notification container.
+            return ButtonBackdropBinding.Bound(source, sourceRect,
+                params.copy(blurRadius = 0f, sourcePreblurred = true))
+        }
         val panelRadius = if (ccBlurOnButtonsEnabled() && isButtonBlurRegion(id) && observedPanelBlurRadius > 0)
             ButtonBackdropBlur.radius(observedPanelBlurRadius, ccBlurStrength()) else null
         return ButtonBackdropBinding.resolve(buttonBackdropWorker, source, screen, sourceRect,
@@ -2550,6 +2609,10 @@ object BlurDrawHook {
     fun install(api: XposedInterface, classLoader: ClassLoader) {
         ParticleDissolveHook.install(api, classLoader, RuntimeDiagnostics::mark)
         this.api = api
+        LockWallpaperBackdrop.install(api, classLoader, ::postInvalidateHosts)
+        NotificationArrivalCaptureHook.install(api, classLoader) { background ->
+            if (isHeadsUpBgView(background)) triggerHeadsUpAppearanceCapture(background)
+        }
         hostClassLoader = classLoader
         GlassRegistry.attach { this.api?.let { a -> Prefs.read(a) } }
         // [2026-08-13 用户要求·关闭日志选项] install 时读取并缓存（热路径不每帧读 Prefs 防 binder 开销）
@@ -2629,6 +2692,7 @@ object BlurDrawHook {
         resolveMethods(classLoader)
         mountAutoBlurDrawable(api, classLoader)
         mountNativeVolumeOwnership(api)
+        mountVolumeNativeBlurBudget(api, classLoader)
         // [spec/48 过渡修复 2026-08-13] hook ScrimView.setViewAlpha 捕获 behind_scrim 真实动画 alpha
         //（AutoBlurDrawable.setAlpha 空实现恒 255 → 原黑 tint 读 drawable.alpha 永远=1 无过渡）。
         mountScrimViewAlpha(api, classLoader)
@@ -3216,6 +3280,10 @@ object BlurDrawHook {
             mBlurTypeMotionInstance = Class.forName(CLASS_BLUR_TYPE_MOTION, false, classLoader).getField("INSTANCE").get(null)
             mBlurTypePlatformStaticInstance = Class.forName(CLASS_BLUR_TYPE_PLATFORM_STATIC, false, classLoader).getField("INSTANCE").get(null)
             mNotifBackgroundViewClass = Class.forName(CLASS_NOTIFICATION_BACKGROUND_VIEW, false, classLoader)
+            mViewProxyGetBlurType = vbpCls.getMethod("getBlurType")
+            mBlurTypeNonInstance = try {
+                Class.forName("$CLASS_VIEW_BLUR_TYPE\$BlurTypeNon", false, classLoader).getField("INSTANCE").get(null)
+            } catch (_: Throwable) { null }
             Lg.i(TAG, "Hook B ViewBlurProxy.setBlurType(BlurType) resolved (heads-up Motion -> PlatformStatic)")
         } catch (t: Throwable) {
             Lg.e(TAG, "Hook B resolve ViewBlurProxy.setBlurType failed, heads-up glass disabled", t)
@@ -4868,10 +4936,12 @@ object BlurDrawHook {
         // 仅登记 posteffect drawable id 到 scrimDrawableIds，保住该渲染兜底（drawBlurShader 直绘路径不经验证
         // 拦截时 paint 置透明露出壁纸）。判定与 isBackgroundScrimDrawable 同款（full class name contains ScrimView）。
         if (hostView.javaClass.name.contains("ScrimView")) {
-            scrimDrawableIds.add(System.identityHashCode(target))
+            val scrimId = System.identityHashCode(target)
+            scrimDrawableIds.add(scrimId)
+            scrimHosts[scrimId] = WeakReference(hostView)
             // 防膨胀：scrim drawable 面板开/关/主题变化会重建，id 累积；清空后下次 draw 自动重登记
             //（同 screenRegionMap >1024 clear 语义，见 registerScreenRegionCore）
-            if (scrimDrawableIds.size > 1024) scrimDrawableIds.clear()
+            if (scrimDrawableIds.size > 1024) { scrimDrawableIds.clear(); scrimHosts.clear() }
             return true
         }
         val targetBounds = try {
@@ -5309,6 +5379,7 @@ object BlurDrawHook {
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
                     try {
+                        notificationMaterialMapped.set(false)
                         try {
                             recordNotificationCardRegion(chain)
                         } catch (t: Throwable) {
@@ -5317,10 +5388,13 @@ object BlurDrawHook {
                         // [磨砂根因·修 1] proceed 前临时把 ViewBlurManager.currentMaterialColor 置透明 →
                         // 稳态分支 materialColorDrawable.setTint(透明) 不覆盖玻璃；suppress 内部
                         // try-finally 保证 proceed 后恢复原值（防状态污染）。反射失败 → proceed 原样（含磨砂）。
-                        suppressNotificationMaterialColor(chain)
+                        if (notificationMaterialMapped.get() == true && Prefs.glassEnabled(api) && !isPowerSaveGlassOff())
+                            suppressNotificationMaterialColor(chain)
+                        else chain.proceed()
                     } finally {
                         // draw 栈结束清宿主戳，防跨 draw 泄漏
                         drawHostStamp.remove()
+                        notificationMaterialMapped.remove()
                     }
                 }
             Lg.i(TAG, "Hook B mounted: $CLASS_NBV_EXT_IMP#$METHOD_DRAW_NOTIF_BG(Canvas, Drawable) (notification card map)")
@@ -5430,9 +5504,29 @@ object BlurDrawHook {
                 mPlatformGetBlurDrawable?.invoke(wrapper) ?: wrapper else wrapper
         } catch (_: Throwable) { wrapper }
         VolumeMaskGuard.protectNativeContent(wrapper, target)
+        if (Prefs.glassEnabled(api)) VolumeNativeBlurPolicy.reduceNativeRadius(wrapper)
         screenRegionMap.remove(System.identityHashCode(target))
         if (mGetDrawableShaderPaint?.declaringClass?.isInstance(target) == true) restoreSystemShaderIfReplaced(target)
         RuntimeDiagnostics.mark("volume_native", "已按真实宿主隔离独立音量面板，保留原生内容及遮罩；外观待核验")
+    }
+
+    private fun mountVolumeNativeBlurBudget(api: XposedInterface, classLoader: ClassLoader) {
+        try {
+            val clazz = Class.forName(CLASS_PLATFORM_BLUR_DRAWABLE, false, classLoader)
+            for (method in clazz.declaredMethods.filter { it.name == METHOD_APPLY_BLUR_CONFIG }) {
+                api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                    val result = chain.proceed()
+                    safeModuleTask {
+                        val wrapper = chain.getThisObject()
+                        if (wrapper != null && screenInteractive && Prefs.glassEnabled(api) &&
+                            VolumeNativeBlurPolicy.reduceNativeRadius(wrapper)) {
+                            RuntimeDiagnostics.mark("volume_blur_budget", "独立音量原生GPU模糊上限16px；保留扩展遮罩")
+                        }
+                    }
+                    result
+                }
+            }
+        } catch (t: Throwable) { Lg.w(TAG, "volume: native blur budget unavailable; keep native config", t) }
     }
 
     private fun mountVolumeWindowOwnership(api:XposedInterface) {
@@ -5581,21 +5675,31 @@ object BlurDrawHook {
         } catch (t: Throwable) {
             Lg.e(TAG, "nbv: getArg(1) failed", t); null
         } ?: return
+        val previousForce = headsUpGlassForceView
+        val headsUp = isHeadsUpBgView(bgView) && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()
         val blurDrawable = try {
+            if (headsUp) {
+                // setBlurType can run before attachment, when native ensureBlurDrawable cannot
+                // create a surface. Keep the exclusion scoped around this later ensure as well.
+                headsUpGlassForceView = WeakReference(bgView)
+                val current = mViewProxyGetBlurType?.invoke(proxy)
+                if (current != null && (current === mBlurTypeMotionInstance || current === mBlurTypeNonInstance)) {
+                    mViewProxySetBlurType?.invoke(proxy, mBlurTypePlatformStaticInstance)
+                }
+            }
             mViewProxyGetBlurDrawable?.invoke(proxy, drawableArg) as? Drawable
         } catch (t: Throwable) {
             Lg.e(TAG, "nbv: getBlurDrawable(Drawable) failed", t); return
+        } finally {
+            headsUpGlassForceView = previousForce
         } ?: return
         // 仅 PlatformBlurDrawable 内部 posteffect BlurDrawable（走我们管线）才注册；
         // BackgroundBlurDrawable（framework 自带）不触发 drawBlurShader hook，注册无意义
         if (mPlatformGetBlurDrawable == null || !mPlatformGetBlurDrawable!!.declaringClass.isInstance(blurDrawable)) {
+            if (headsUp) logThrottled("headsup-native-material-fallback", Log.INFO) {
+                "headsUp: native fallback ${blurDrawable.javaClass.simpleName}; platform material unavailable"
+            }
             return
-        }
-        // [spec/19 修复 2026-08-13] 该 heads-up bgView 的 PlatformBlurDrawable 已确认存在
-        // （getBlurDrawable 返回了 PlatformBlurDrawable）→ 解除 isHeadsUpView 排除绕过，恢复系统原判定。
-        // 仅当本次绘制的 bgView 正是强制玻璃化的那个 view 才清除（防其他卡片绘制误清）。
-        if (headsUpGlassForceView?.get() === bgView) {
-            headsUpGlassForceView = null
         }
         val target = try {
             mPlatformGetBlurDrawable?.invoke(blurDrawable)
@@ -5643,8 +5747,11 @@ object BlurDrawHook {
             unifiedScope = isUnifiedCornerScope(bgView, target, "nbv"),
         )
         val previous = screenRegionMap[key]
+        if (isHeadsUpBgView(bgView) && headsUpActiveHost?.get() !== bgView)
+            triggerHeadsUpAppearanceCapture(bgView)
         // 每帧重绑（幂等，同 clazz 只 touch）：动画态重建的 target 换实例后 cardClass 不丢
         GlassRegistry.bind(key, target, CLASS_NBV_EXT_IMP)
+        notificationMaterialMapped.set(true)
         // [doc/spec/99] 每次绘制都刷新 clip（父容器 clip 随动画/布局逐帧可能变）：
         // map 快照 + 新 entry 镜像 + 稳态仍存活的旧 entry 镜像（region/bounds 未变时不换 entry）。
         applyHostClip(key, entry, previous, hostClip)
@@ -6929,6 +7036,23 @@ object BlurDrawHook {
             Lg.w(TAG, "headsUp: setBlurType reflection unresolved, skip")
             return
         }
+        // COS17 themes may select Non instead of Motion. Capture the actual native selection
+        // context, including before the notification is attached to its separate heads-up window.
+        try {
+            val selector = Class.forName(CLASS_VIEW_BLUR_MANAGER, false, classLoader)
+                .getDeclaredMethod("blurForHeadsUp", View::class.java, Boolean::class.javaPrimitiveType)
+            api.hook(selector).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val previous = nativeHeadsUpMaterialHost.get()
+                val view = chain.getArg(0) as? View
+                if (view != null) nativeHeadsUpMaterialHost.set(view)
+                try { chain.proceed() } finally {
+                    if (previous == null) nativeHeadsUpMaterialHost.remove()
+                    else nativeHeadsUpMaterialHost.set(previous)
+                }
+            }
+        } catch (error: Throwable) {
+            Lg.w(TAG, "headsUp: native selection context unavailable; attached draw fallback retained", error)
+        }
         try {
             api.hook(setBlurType)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
@@ -6938,7 +7062,7 @@ object BlurDrawHook {
                     } catch (t: Throwable) {
                         null
                     }
-                    if (arg0 === motion) {
+                    if (arg0 === motion || (mBlurTypeNonInstance != null && arg0 === mBlurTypeNonInstance)) {
                         val proxy = try {
                             chain.getThisObject()
                         } catch (t: Throwable) {
@@ -6953,7 +7077,12 @@ object BlurDrawHook {
                         // 但真机 logcat 实证：系统 `ensurePlatformStaticBlurDrawable failed`（静态模糊 drawable
                         // 创建失败）→ 背景丢失变白。**撤销 BlurProxy 替换路线**（恢复系统原 Motion 模糊背景，
                         // 不碰 BlurProxy）；横幅玻璃改走 mountSimpleBannerGlass（dispatchDraw 画玻璃，方案 B）。
-                        if (proxy != null && view != null && notifBg.isInstance(view)) {
+                        if (proxy != null && view is View && NotificationMaterialRoute.shouldReplace(
+                                enabled = Prefs.glassEnabled(api), powerSave = isPowerSaveGlassOff(),
+                                notificationBackground = notifBg.isInstance(view), motion = arg0 === motion,
+                                non = arg0 === mBlurTypeNonInstance,
+                                headsUpSelection = nativeHeadsUpMaterialHost.get() === view || isHeadsUpBgView(view),
+                            )) {
                             // [spec/19 修复 2026-08-13] 纯白根因：系统 excludeRules =
                             // `HeadsUpContainerWindow.isHeadsUpView(view)`（ViewBlurManager.requireBlurProxyForView
                             // :1286 实证）→ PlatformBlurHelper.ensureBlurDrawable 拒绝为 heads-up 创建
@@ -6961,18 +7090,21 @@ object BlurDrawHook {
                             // proceed 前登记 scoped 绕过（对应 bgView 的 isHeadsUpView 返回 false），
                             // 让 setBlurType(PlatformStatic) 内部 ensureBlurDrawable 能创建 drawable。
                             // drawable 创建确认后（recordNotificationCardRegion）自动清除；GC 兜底。
-                            headsUpGlassForceView = WeakReference(view as View)
+                            val previousForce = headsUpGlassForceView
+                            headsUpGlassForceView = WeakReference(view)
                             val args = chain.getArgs().toTypedArray()
                             args[0] = platformStatic
                             logThrottled("headsup-force-platformstatic", Log.INFO) {
-                                "headsUp: force PlatformStatic (was Motion) for ${view.javaClass.simpleName}, exclude bypass armed"
+                                "headsUp: force PlatformStatic (was ${arg0?.javaClass?.simpleName}) for ${view.javaClass.simpleName}"
                             }
-                            return@intercept chain.proceed(args)
+                            return@intercept try { chain.proceed(args) } finally {
+                                headsUpGlassForceView = previousForce
+                            }
                         }
                     }
                     chain.proceed()
                 }
-            Lg.i(TAG, "Hook B mounted: $CLASS_VIEW_BLUR_PROXY#$METHOD_SET_BLUR_TYPE(BlurType) (heads-up Motion -> PlatformStatic)")
+            Lg.i(TAG, "Hook B mounted: $CLASS_VIEW_BLUR_PROXY#$METHOD_SET_BLUR_TYPE(BlurType) (heads-up Motion/Non -> PlatformStatic)")
         } catch (t: Throwable) {
             Lg.e(TAG, "Hook B mount FAILED: $CLASS_VIEW_BLUR_PROXY#$METHOD_SET_BLUR_TYPE", t)
         }
@@ -8531,7 +8663,7 @@ object BlurDrawHook {
         if (!seedlingRuntimeAllowed()) return false
         val host = cardBackgroundActiveHost?.get() ?: return false
         return try {
-            host.isAttachedToWindow && host.visibility == View.VISIBLE && host.width > 0 && host.height > 0
+            visibleCaptureHost(host)
         } catch (t: Throwable) {
             false
         }
@@ -8544,48 +8676,50 @@ object BlurDrawHook {
      * 本线程零阻塞；pending 去重单通道）。停止：卡片收起/窗口销毁（[isCardBackgroundHostActive] false）
      * → 退出（零后台耗电）；锁屏期间不启动/退出。与 heads-up / simple-banner 持续源独立。
      */
-    private fun startCardBackgroundContinuousCapture() {
-        if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
-        if (cardBackgroundContinuousRunning) return
-        if (cardBackgroundActiveHost?.get() == null) return
-        if (!isCardBackgroundHostActive()) return
-        if (isKeyguardLockedNow()) return
-        cardBackgroundContinuousRunning = true
-        if (moduleLogEnabled) {
-            Lg.i(TAG, "seedling-cardview: continuous capture worker start (rate ${panelCaptureHz()}Hz)")
-        }
+    private val cardCaptureSession = VisibleCaptureSession()
+    private val bannerCaptureSession = VisibleCaptureSession()
+    private fun startCardBackgroundContinuousCapture() = startVisibleOverlayCapture(false)
+
+    /** Expanded clouds and visible banners refresh even in CHANGE mode, then stop on hide.
+     * No contentEpoch bump on each tick: static backgrounds reuse prepared GPU blur outputs. */
+    private fun startVisibleOverlayCapture(banner: Boolean) {
+        if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC || !captureDemandActive() || isKeyguardLockedNow()) return
+        val host = (if (banner) simpleBannerActiveHost else cardBackgroundActiveHost)?.get() ?: return
+        if (!(if (banner) isSimpleBannerHostActive() else isCardBackgroundHostActive())) return
+        val session = if (banner) bannerCaptureSession else cardCaptureSession
+        val token = session.begin(host) ?: return
+        if (banner) simpleBannerContinuousRunning = true else cardBackgroundContinuousRunning = true
+        // A reveal is a new scene even if the native View instance is reused.
+        captureEpoch++;screenSnapshot=null;regionSnapshot=null
+        lastSnapshotFingerprint=0;lastRegionSnapshotFingerprint=0
+        if (buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
+        triggerBackgroundCapture(contentChange=true)
         try {
             safeThread {
                 try {
-                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
-                        // 卡片收起/窗口销毁（detach/隐藏）→ 停止（零后台耗电）
-                        if (!isCardBackgroundHostActive()) {
-                            cardBackgroundActiveHost = null
-                            Lg.i(TAG, "bg-element: seedling-cardview gone, continuous capture stopped")
-                            break
-                        }
-                        if (isKeyguardLockedNow()) {
-                            cardBackgroundActiveHost = null
-                            Lg.i(TAG, "bg-element: keyguard locked, seedling-cardview continuous capture stopped (passive only)")
-                            break
-                        }
-                        markContentChanged()
+                    while (session.current(token) && captureMode() != Prefs.BG_CAPTURE_MODE_STATIC &&
+                        captureDemandActive() && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
+                        val current=(if (banner) simpleBannerActiveHost else cardBackgroundActiveHost)?.get()
+                        if (current !== host || !(if (banner) isSimpleBannerHostActive() else isCardBackgroundHostActive()) ||
+                            isKeyguardLockedNow()) break
                         scheduleElementCaptures()
-                        logThrottled("seedling-cardview-continuous", Log.INFO) {
-                            "seedling-cardview: continuous tick queued (single-channel)"
-                        }
-                        try {
-                            Thread.sleep(continuousCaptureIntervalMs())
-                        } catch (ignored: InterruptedException) {
-                        }
+                        Thread.sleep(if (captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE) continuousCaptureIntervalMs() else 100L)
                     }
+                } catch (_:InterruptedException) {
+                    Thread.currentThread().interrupt()
                 } finally {
-                    cardBackgroundContinuousRunning = false
+                    if (session.finish(token)) {
+                        if (banner) simpleBannerContinuousRunning=false else cardBackgroundContinuousRunning=false
+                        // A replacement can have arrived without another native draw.
+                        val next=(if (banner) simpleBannerActiveHost else cardBackgroundActiveHost)?.get()
+                        if (next !== host && visibleCaptureHost(next)) next?.postInvalidateOnAnimation()
+                    }
                 }
             }.start()
-        } catch (t: Throwable) {
-            cardBackgroundContinuousRunning = false
-            Lg.e(TAG, "seedling-cardview: spawn continuous worker failed", t)
+        } catch (error:Throwable) {
+            session.finish(token)
+            if (banner) simpleBannerContinuousRunning=false else cardBackgroundContinuousRunning=false
+            Lg.e(TAG,"visible overlay capture worker failed",error)
         }
     }
 
@@ -9262,9 +9396,10 @@ object BlurDrawHook {
      *  set + first sync capture，无 worker start）。放宽只判 attach：banner 窗口销毁即 detach → false →
      *  worker 退出，停止语义不变。 */
     private fun isSimpleBannerHostActive(): Boolean {
+        if (!seedlingRuntimeAllowed()) return false
         val host = simpleBannerActiveHost?.get() ?: return false
         return try {
-            host.isAttachedToWindow
+            visibleCaptureHost(host)
         } catch (t: Throwable) {
             false
         }
@@ -9278,106 +9413,8 @@ object BlurDrawHook {
      *  锁屏期间不启动/退出（被动事件触发不受影响）。与 heads-up 持续源独立。
      */
     private fun startSimpleBannerContinuousCapture(force: Boolean = false) {
-        if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
-        if (simpleBannerContinuousRunning) {
-            Lg.i(TAG, "simple-banner: start return, already running")
-            return
-        }
-        val host = simpleBannerActiveHost?.get()
-        if (host == null) {
-            Lg.i(TAG, "simple-banner: skip start, active host null")
-            return
-        }
-        // [2026-08-15 强制刷新] force=true（attach hook 触发：横幅必然出现）跳过活跃/keyguard 判定立即启动；
-        // 非 force（dispatchDraw 命中兜底）仍做判定。
-        if (!force) {
-            if (!isSimpleBannerHostActive()) {
-                val attachOk = try { host.isAttachedToWindow } catch (t: Throwable) { false }
-                Lg.i(TAG, "simple-banner: skip start, inactive attach=$attachOk")
-                return
-            }
-            if (isKeyguardLockedNow()) {
-                Lg.i(TAG, "simple-banner: skip start, keyguard locked (passive only)")
-                return
-            }
-        }
-        simpleBannerContinuousRunning = true
-        // [2026-08-15 诊断] panelCaptureHz 单独求值（避免 Log 参数求值异常吞掉 start 日志）；含 IPC 读 Prefs
-        val hz = try {
-            panelCaptureHz()
-        } catch (t: Throwable) {
-            Lg.w(TAG, "simple-banner: panelCaptureHz failed, default 120", t)
-            Prefs.DEFAULT_PANEL_CAPTURE_HZ
-        }
-        if (moduleLogEnabled) {
-            Lg.i(TAG, "simple-banner: continuous capture worker start (rate ${hz}Hz, force=$force)")
-        }
-        try {
-            safeThread {
-                try {
-                    if (moduleLogEnabled) {
-                        Lg.i(TAG, "simple-banner: continuous worker thread alive")
-                    }
-                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
-                        try {
-                            // [2026-08-15 自愈] host 被新横幅实例接管 → 本 worker 退出（新 worker 接管刷新，
-                            // 防双 worker 并发；running 由 finally 复位）
-                            if (simpleBannerActiveHost?.get() !== host) {
-                                if (moduleLogEnabled) {
-                                    Lg.i(TAG, "simple-banner: host changed, old worker exiting")
-                                }
-                                // [doc/spec/92 §5.3] 换实例 → 清旧 sfc（否则旧窗口 sfc 若仍 valid 会被
-                                // 长期排除错层 = 把别的层挖掉，spec/72 同型事故）
-                                simpleBannerSfcCache = null
-                                break
-                            }
-                            // 横幅消失（detach/回 shade）→ 停止（零后台耗电）
-                            if (!isSimpleBannerHostActive()) {
-                                simpleBannerActiveHost = null
-                                // [doc/spec/92 §5.3] 横幅消失 → 清 sfc 缓存 + 负缓存，下次出现立即重解析
-                                simpleBannerSfcCache = null
-                                simpleBannerSfcMissAt = 0L
-                                Lg.i(TAG, "bg-element: simple-banner gone, continuous capture stopped")
-                                break
-                            }
-                            if (isKeyguardLockedNow()) {
-                                simpleBannerActiveHost = null
-                                // [doc/spec/92 §5.3] 同上：锁屏收横幅 → 清缓存防排除错层
-                                simpleBannerSfcCache = null
-                                simpleBannerSfcMissAt = 0L
-                                Lg.i(TAG, "bg-element: keyguard locked, simple-banner continuous capture stopped (passive only)")
-                                break
-                            }
-                            markContentChanged()
-                            scheduleElementCaptures()
-                            logThrottled("simple-banner-continuous", Log.INFO) {
-                                "simple-banner: continuous tick queued (single-channel)"
-                            }
-                            try {
-                                Thread.sleep(continuousCaptureIntervalMs())
-                            } catch (ignored: InterruptedException) {
-                            }
-                        } catch (t: Throwable) {
-                            // [2026-08-15 诊断] 单轮异常不杀线程：打日志 + 短睡后继续（首轮 attach 时刻
-                            // schedule 链路若异常，下轮重试；不再无日志静默退出）
-                            Lg.e(TAG, "simple-banner: continuous worker loop error", t)
-                            try {
-                                Thread.sleep(50)
-                            } catch (ignored: InterruptedException) {
-                            }
-                        }
-                    }
-                } finally {
-                    if (moduleLogEnabled) {
-                        Lg.i(TAG, "simple-banner: continuous worker exited, running reset")
-                    }
-                    simpleBannerContinuousRunning = false
-                }
-            }.start()
-        } catch (t: Throwable) {
-            simpleBannerContinuousRunning = false
-            Lg.e(TAG, "simple-banner: spawn continuous worker failed", t)
-        }
+        // force never bypasses visibility/lockscreen safety. Attach is only a wake-up event.
+        startVisibleOverlayCapture(true)
     }
 
     // ------------------------------------------------------------ [spec/44b 停用区] 流体云展开卡片玻璃化（OplusCustomRow 宿主，真机实证上错位置停用）
@@ -10443,6 +10480,9 @@ object BlurDrawHook {
         // 供 resolveShadeSfc 折叠期解析 sfc。
         try {
             val rootView = view.rootView
+            if (rootView != null && rootView.javaClass.name.contains("MenuPanel")) {
+                captureMenuHost = WeakReference(view)
+            }
             if (rootView != null && isShadeRootView(rootView)) {
                 shadeRootViewCache = rootView
                 // [2026-08-15 偶发不抓屏根治] 新根登记 → 失效旧 sfc（窗口重建后旧 handle 可能仍 valid
@@ -10636,7 +10676,7 @@ object BlurDrawHook {
      */
     private val retryInvalidateRunnable = safeRunnable {
         retryLoopPosted = false
-        if (!glassRetryPending || !screenInteractive) return@safeRunnable
+        if (!glassRetryPending || !captureDemandActive()) return@safeRunnable
         glassRetryPending = false
         lastRetryInvalidateAt = SystemClock.uptimeMillis()
         retryIntervalMs = (retryIntervalMs * 2).coerceAtMost(4000L)
@@ -10647,7 +10687,7 @@ object BlurDrawHook {
     /** 调度一次回退重试（幂等：已排则不重复排；主线程执行 invalidate）。
      *  渲染线程可调——[mainHandler] 是主 Looper 的 Handler，postDelayed 线程安全。 */
     private fun scheduleGlassRetry() {
-        if (!screenInteractive) return
+        if (!captureDemandActive()) return
         if (retryLoopPosted) return
         retryLoopPosted = true
         try {
@@ -10798,7 +10838,8 @@ object BlurDrawHook {
      *  同一套速率（[startPanelContinuousCapture] / [startHeadsUpContinuousCapture]）。 */
     private fun continuousCaptureIntervalMs(): Long = backgroundCadence.intervalMs(
         SystemClock.uptimeMillis(), panelCaptureHz(), isMotionActive,
-        captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE)
+        captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE).coerceAtLeast(
+            CaptureDemandPolicy.minimumIntervalMs(captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE))
 
 
     /** 抓屏降采样比例（KEY_BG_CAPTURE_SCALE，clamp 0.25~1.0，默认 0.5f）
@@ -10824,9 +10865,7 @@ object BlurDrawHook {
      *  内容变化与各独立持续 worker 照常）；即时模式恒开。 */
     private fun isPeriodicCaptureEnabled(): Boolean {
         val mode = captureMode()
-        if (mode == Prefs.BG_CAPTURE_MODE_STATIC) return false
-        if (mode == Prefs.BG_CAPTURE_MODE_ON_CHANGE && !legacyPeriodicCaptureEnabled()) return false
-        return true
+        return mode == Prefs.BG_CAPTURE_MODE_IMMEDIATE && captureDemandActive()
     }
 
     /** 存量「持续抓屏」开关（KEY_BG_PERIODIC_CAPTURE_ENABLE，默认 true）。 */
@@ -11896,6 +11935,18 @@ object BlurDrawHook {
      * 返回值 true 仅代表 paint.shader 已替换为液态玻璃（后续由系统 drawPath 完成实际绘制）。
      */
     private fun replaceShaderIfPossible(drawable: Any): Boolean {
+        if (isKeyguardLockedNow()) {
+            val ctx = systemUiContext()
+            if (ctx == null || LockWallpaperBackdrop.get(ctx) == null) {
+                // Never keep a previously bound application frame while wallpaper is loading.
+                restoreSystemShaderIfReplaced(drawable)
+                return false
+            }
+        }
+        if (!screenInteractive && !isKeyguardLockedNow()) {
+            restoreSystemShaderIfReplaced(drawable)
+            return false
+        }
         if (VolumeMaskGuard.preservesContent(drawable)) {
             restoreSystemShaderIfReplaced(drawable)
             return false
@@ -11987,7 +12038,12 @@ object BlurDrawHook {
             try {
                 // [spec/48 过渡修复 2026-08-13] 不再读 Drawable.getAlpha()（AutoBlurDrawable.setAlpha
                 // 空实现恒 255 → 无过渡）→ 读 hook setViewAlpha 捕获的 behindScrimAlpha（系统动画逐帧值）。
-                val drawableAlpha = behindScrimAlpha
+                val host = scrimHosts[id]?.get()
+                if (!isBehindScrimHost(host)) {
+                    restoreSystemShaderIfReplaced(drawable)
+                    return false // Notifications/front/unknown keep their native compositing.
+                }
+                val drawableAlpha = readScrimViewAlpha(host) ?: behindScrimAlpha
                 val maskPaint = scrimMaskPaintFor(drawableAlpha)
                 paint.shader = null
                 paint.color = maskPaint?.color ?: android.graphics.Color.TRANSPARENT
@@ -12335,7 +12391,7 @@ object BlurDrawHook {
             val tiltNow = notifTiltAngleFor(entry?.hostViewRef?.get())
             val frame = cg.frame
             // 源变化判断用主线程【当前】快照实例 id（后台计算后快照可能换新 → 立即重建绑定新图，玻璃内容不冻结）
-            val snapshot = screenSnapshot
+            val snapshot = sceneBackdrop()
             var currentBitmap = snapshot?.bitmap
             var renderParams = cg.params
             var sharedButtonBlur = false
@@ -12569,7 +12625,7 @@ object BlurDrawHook {
      * 快照缺失 → 异步请求抓屏（不阻塞渲染线程）+ null（保持上次 uniform，下帧恢复）。
      */
     private fun resolveSrcRectFromRegion(renderRegion: RectF): RectF? {
-        val snap = screenSnapshot
+        val snap = sceneBackdrop()
         if (snap == null || snap.bitmap.width <= 0 || snap.bitmap.height <= 0 || snap.region.width() <= 0f) {
             requestScreenSnapshotAsync()
             return null
@@ -12713,6 +12769,7 @@ object BlurDrawHook {
     }
 
     private fun buildLiquidShader(drawable: Any, bounds: Rect): LiquidShaderBuild? {
+        if (!screenInteractive && !isKeyguardLockedNow()) return null
         val id = System.identityHashCode(drawable)
         GlassRegistry.bind(id, drawable)
         // 每个 drawable 只映射【自己屏幕位置对应的原图区域】——查 AutoBlurDrawable.draw hook
@@ -12944,9 +13001,39 @@ object BlurDrawHook {
      *   停用**，渲染线程自身不 captureDisplay——渲染线程同步 captureDisplay = ANR 根因）；本帧 null →
      *   回退系统模糊，下帧主线程抓屏完成 postInvalidateHosts 后用快照，接受一帧延迟。
      */
+    @Volatile private var lockWallpaperSnapshot: ElementBackground? = null
+    private var lockWallpaperConfiguration = 0
+    /** Screen capture admission and lock wallpaper rendering are deliberately independent. */
+    private fun sceneBackdrop(id: Int? = null, region: RectF? = null): ElementBackground? {
+        if (isKeyguardLockedNow()) {
+            val ctx = systemUiContext() ?: return null
+            val bitmap = LockWallpaperBackdrop.get(ctx) ?: return null
+            val config = ctx.resources.configuration
+            val configKey = 31 * config.orientation + 31 * config.screenWidthDp + config.screenHeightDp
+            val cached = lockWallpaperSnapshot
+            if (cached?.bitmap === bitmap && lockWallpaperConfiguration == configKey) return cached
+            val dm = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION")
+            val display = (ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager)?.defaultDisplay
+            @Suppress("DEPRECATION")
+            if (display != null) display.getRealMetrics(dm) else dm.setTo(ctx.resources.displayMetrics)
+            val cover = LockWallpaperGeometry.cover(bitmap.width, bitmap.height, dm.widthPixels, dm.heightPixels)
+                ?: return null
+            return ElementBackground(bitmap, RectF(cover[0], cover[1], cover[2], cover[3])).also {
+                lockWallpaperConfiguration = configKey
+                lockWallpaperSnapshot = it
+            }
+        }
+        if (!captureDemandActive()) return null
+        return if (id != null && region != null)
+            regionRenderSourceSnapshot(id, region) ?: requestScreenSnapshotAsync()
+        else requestScreenSnapshotAsync()
+    }
+
     private fun resolveRenderSource(id: Int, screenRegion: RectF): RenderSource? {
         // 区域模式命中（瞬态元素 + 区域快照覆盖）→ 采样区域快照；否则整屏快照（srcRect 折算公式一致）
-        val snap = regionRenderSourceSnapshot(id, screenRegion) ?: requestScreenSnapshotAsync()
+        if (!isKeyguardLockedNow() && !captureDemandActive()) return null
+        val snap = sceneBackdrop(id, screenRegion)
         if (snap != null && snap.bitmap.width > 0 && snap.bitmap.height > 0 && snap.region.width() > 0f) {
             // srcRect = 元素当前区域折算到快照坐标（按降采样比例缩放，坐标空间一致不错位）
             val scaleX = snap.bitmap.width.toFloat() / snap.region.width()
@@ -12972,6 +13059,7 @@ object BlurDrawHook {
      * 防竞争：失败冷却 [elementCaptureQuitAt] → 冷却期内不重抓；[captureInFlightIds] + [pendingCaptureIds]
      * 防重复入队（worker 抓屏中或队列已待抓不重复加）。 */
     private fun requestScreenSnapshotAsync(): ElementBackground? {
+        if (!captureDemandActive()) return null
         // 省电开启 → 不入队抓屏、直接返回 null（渲染侧本就回退系统绘制）
         if (isPowerSaveGlassOff()) return null
         val snap = screenSnapshot
@@ -12982,8 +13070,7 @@ object BlurDrawHook {
         // 快照缺失 → 直接入队 worker 异步抓屏（不阻塞渲染线程）；失败冷却期内不重抓
         val now = SystemClock.uptimeMillis()
         // [2026-08-14 用户要求·去冷却] 移除失败冷却检查（不再设置冷却）
-        if (!captureInFlightIds.contains(SNAPSHOT_ID) && pendingCaptureIds.add(SNAPSHOT_ID)) {
-            elementCaptureQueue.add(SNAPSHOT_ID)
+        if (!captureInFlightIds.contains(SNAPSHOT_ID) && enqueueElementCapture(SNAPSHOT_ID)) {
             kickElementCaptureWorker()
             Lg.d(TAG, "bg-element: render-trigger async snapshot capture queued (render non-blocking, one-frame delay)")
         }
@@ -13689,6 +13776,7 @@ object BlurDrawHook {
      * captureOriginalFrame）。**不由元素移动触发**（移动只更新 srcRect 折算，不重抓背景）。
      */
     private fun triggerBackgroundCapture(contentChange: Boolean = true) {
+        if (!captureDemandActive()) return
         // 省电开启 → 不入队抓屏（玻璃已关，快照无消费者）
         if (isPowerSaveGlassOff()) return
         // 静态模式 → 零抓屏（快照冻结为现有值）
@@ -13786,8 +13874,24 @@ object BlurDrawHook {
      * 停止：通知消失（bgView detach / rootView 不再 heads-up）→ 连抓节拍器与持续节拍器各自
      * 检测 [isHeadsUpHostActive] 停止，不后台耗电。
      */
+    private var lastHeadsUpArrivalHost: WeakReference<View>? = null
+    private var lastHeadsUpArrivalAt = 0L
     private fun triggerHeadsUpAppearanceCapture(bgView: View) {
+        if (!Prefs.glassEnabled(api) || isPowerSaveGlassOff() || !visibleCaptureHost(bgView)) return
+        if (isKeyguardLockedNow()) {
+            systemUiContext()?.let { LockWallpaperBackdrop.get(it) }
+            postInvalidateHosts()
+            return
+        }
+        val now=SystemClock.uptimeMillis()
+        if (lastHeadsUpArrivalHost?.get() === bgView && now-lastHeadsUpArrivalAt<100L) return
+        lastHeadsUpArrivalHost=WeakReference(bgView);lastHeadsUpArrivalAt=now
         headsUpActiveHost = WeakReference(bgView)
+        if (captureMode() != Prefs.BG_CAPTURE_MODE_STATIC) {
+            captureEpoch++;screenSnapshot=null;regionSnapshot=null
+            lastSnapshotFingerprint=0;lastRegionSnapshotFingerprint=0
+            if (buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
+        }
         // [doc/spec/50 + spec/51 统一逻辑 + 2026-08-15 用户要求「通知横幅出现立马截一张屏，什么都不等」]
         // 通知首帧后台截屏，再短时连抓 5~6 帧覆盖入场动画。停止条件：通知消失
         // （isHeadsUpHostActive false）提前停；pauseDuringPanelExpansion=true（下拉展开期间
@@ -13813,7 +13917,7 @@ object BlurDrawHook {
     private fun isHeadsUpHostActive(): Boolean {
         val host = headsUpActiveHost?.get() ?: return false
         return try {
-            host.isAttachedToWindow && isHeadsUpRootView(host.rootView)
+            visibleCaptureHost(host) && isHeadsUpRootView(host.rootView)
         } catch (t: Throwable) {
             false
         }
@@ -13836,13 +13940,13 @@ object BlurDrawHook {
         pauseDuringPanelExpansion: Boolean,
     ) {
         if (frames <= 0) return
-        headsUpBurstRemaining = frames
+        headsUpBurstRemaining = minOf(frames, 2)
         if (headsUpBurstRunning) return
         headsUpBurstRunning = true
         try {
             safeThread {
                 try {
-                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
+                    while (captureDemandActive() && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
                         // [2026-08-13 延迟调查·竞争暂停] 通知场景（pauseDuringPanelExpansion=true）且面板
                         // 下拉展开中（panelExpansionActive）→ 暂停连抓，避免与下拉抓屏并发锤 captureDisplay
                         // （SF 串行 → 主抓屏被排队拖后 50-150ms）。短等后重查（不消耗剩余帧数），
@@ -13875,7 +13979,7 @@ object BlurDrawHook {
                         }
                         // 帧间隔（快速连抓覆盖首帧后动画；captureDisplay 自身耗时也计入实际帧率）
                         try {
-                            Thread.sleep(HEADS_UP_BURST_FRAME_INTERVAL_MS)
+                            Thread.sleep(CaptureDemandPolicy.minimumIntervalMs(captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE))
                         } catch (ignored: InterruptedException) {
                         }
                     }
@@ -13901,84 +14005,33 @@ object BlurDrawHook {
      *  [handleElementCaptureFailure] 设冷却 [elementCaptureQuitAt] → worker 睡到冷却结束再重试
      *  （防 spin；冷却已缩短至 300ms，不冻结旧帧）。
      *  通知消失（[isHeadsUpHostActive] false）→ 退出循环并清除活跃宿主（零后台耗电）。 */
+    private val headsUpCaptureSession = VisibleCaptureSession()
     private fun startHeadsUpContinuousCapture() {
-        if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
-        // [2026-08-14 横幅主动源排障] 诊断：isHeadsUpHostActive 拆分量化（host/attach/rootView），
-        // 定位主动源启动失败或中途停止根因（日志过滤 heads-up-capture）
-        val host = headsUpActiveHost?.get()
-        if (host == null) {
-            Lg.i(TAG, "heads-up-capture: skip start, active host null")
-            return
-        }
-        val attachOk = try { host.isAttachedToWindow } catch (t: Throwable) { false }
-        val rootOk = try { isHeadsUpRootView(host.rootView) } catch (t: Throwable) { false }
-        if (!attachOk || !rootOk) {
-            val rv = try { host.rootView } catch (t: Throwable) { null }
-            Lg.i(TAG, "heads-up-capture: skip start, attach=$attachOk rootOk=$rootOk root=${rv?.javaClass?.name} type=${rv?.let { reflectWindowType(it) }}")
-            return
-        }
-        if (headsUpContinuousRunning) return
-        // [2026-08-14 锁屏被动] 锁屏期间不启动通知持续抓屏——锁屏与解锁桌面一样只走被动事件触发
-        // （映射写入 / onBlurReady 等），避免锁屏耗电/不必要抓屏。
-        if (isKeyguardLockedNow()) {
-            Lg.i(TAG, "bg-element: keyguard locked, heads-up continuous capture skipped (passive only)")
-            return
-        }
-        headsUpContinuousRunning = true
+        if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC || !captureDemandActive() || isKeyguardLockedNow()) return
+        val host=headsUpActiveHost?.get() ?: return
+        if (!isHeadsUpHostActive()) return
+        val token=headsUpCaptureSession.begin(host) ?: return
+        headsUpContinuousRunning=true
         try {
             safeThread {
                 try {
-                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
-                        // 通知消失（detach/回 shade）→ 停止（零后台耗电）
-                        if (!isHeadsUpHostActive()) {
-                            val h = headsUpActiveHost?.get()
-                            Lg.i(TAG, "heads-up-capture: stop, active false host=${h?.javaClass?.simpleName} attach=${try { h?.isAttachedToWindow } catch (t: Throwable) { null }} root=${try { h?.rootView?.javaClass?.name } catch (t: Throwable) { null }}")
-                            headsUpActiveHost = null
-                            Lg.i(TAG, "bg-element: heads-up gone, continuous capture stopped")
-                            break
-                        }
-                        // [2026-08-14 锁屏被动] 运行期间进入锁屏 → 退出主动持续抓屏（被动事件触发不受影响）
-                        if (isKeyguardLockedNow()) {
-                            headsUpActiveHost = null
-                            Lg.i(TAG, "bg-element: keyguard locked, heads-up continuous capture stopped (passive only)")
-                            break
-                        }
-                        // [2026-08-14 横幅主动源·根因修复] 移除 panelExpansionActive 暂停：ColorOS QS 收起时
-                        // expansion 可能回调不到 0 → panelExpansionActive 卡 true（真机日志实证 "paused,
-                        // panelExpansionActive=true"）→ 横幅主动源被永久暂停、静止期零抓屏。横幅场景面板收起、
-                        // 无下拉抓屏并发（下拉走 onBlurReady 系统驱动）；且单通道收敛（pending 去重 + 单 worker
-                        // 串行）天然防并发锤 SF。主动源停止只靠 isHeadsUpHostActive（通知消失）+ 锁屏。
-                        // [2026-08-14 横幅主动源] 移除 sfc stale 兜底停止：横幅出现时 shade 面板通常收起
-                        // （shade sfc invalid → force full 抓屏仍工作，但 lastValidSfcCaptureMs 不更新）→
-                        // 原逻辑 500ms 后误停，主动源起不来。横幅主动源停止只靠 isHeadsUpHostActive（通知
-                        // 消失）+ 锁屏 + panelExpansion 暂停；横幅瞬态（几秒）+ 静止节流 60Hz，CPU 可控。
-                        // [2026-08-14 用户要求·去冷却] 移除失败冷却感知（不再设置冷却）
-                        // [2026-08-15 恢复 worker] 持续 tick 入队主 worker 队列（scheduleElementCaptures →
-                        // enqueueElementCapture + kick；captureDisplay 由主 worker 串行执行，本线程零阻塞；
-                        // pending 去重 = 与连抓/主线程触发合并为单通道）。markContentChanged 维护
-                        // lastContentChangeTimeMs（内容变化时序留痕）。
-                        // [2026-08-15 主动式持续抓屏] force=true 绕过冷却/内容变化节流；速率可配
-                        // [continuousCaptureIntervalMs]（运动满速 120Hz / 静止 60Hz，2026-08-14）。
-                        markContentChanged()
-                        scheduleElementCaptures()
-                        logThrottled("heads-up-capture-tick", Log.INFO, 500) {
-                            "heads-up-capture: tick ok (not paused), panelExpansionActive=$panelExpansionActive"
-                        }
-                        logThrottled("heads-up-continuous", Log.INFO) {
-                            "bg-element: heads-up continuous tick queued to worker (single-channel)"
-                        }
-                        try {
-                            Thread.sleep(continuousCaptureIntervalMs())
-                        } catch (ignored: InterruptedException) {
-                        }
+                    while (headsUpCaptureSession.current(token) && captureMode()!=Prefs.BG_CAPTURE_MODE_STATIC &&
+                        captureDemandActive() && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
+                        if (headsUpActiveHost?.get() !== host || !isHeadsUpHostActive() || isKeyguardLockedNow()) break
+                        if (!panelExpansionActive) scheduleElementCaptures()
+                        Thread.sleep(if(captureMode()==Prefs.BG_CAPTURE_MODE_IMMEDIATE) continuousCaptureIntervalMs() else 100L)
                     }
-                } finally {
-                    headsUpContinuousRunning = false
+                } catch (_:InterruptedException) { Thread.currentThread().interrupt() }
+                finally {
+                    if(headsUpCaptureSession.finish(token)) {
+                        headsUpContinuousRunning=false
+                        if(headsUpActiveHost?.get()===host && !isHeadsUpHostActive()) headsUpActiveHost=null
+                    }
                 }
             }.start()
-        } catch (t: Throwable) {
-            headsUpContinuousRunning = false
-            Lg.e(TAG, "heads-up-capture: spawn continuous worker failed", t)
+        } catch(error:Throwable) {
+            headsUpCaptureSession.finish(token);headsUpContinuousRunning=false
+            Lg.e(TAG,"notification capture worker failed",error)
         }
     }
 
@@ -13995,7 +14048,7 @@ object BlurDrawHook {
      *  与首帧连抓（[scheduleHeadsUpBurstWorker]）/内容变化触发共存：pending 去重 + 单 worker 串行 = 同刻
      *  至多一路 captureDisplay。 */
     private fun startPanelContinuousCapture() {
-        if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
+        if (captureMode() != Prefs.BG_CAPTURE_MODE_IMMEDIATE || !captureDemandActive()) return
         if (panelContinuousRunning) return
         if (!panelExpansionActive) return  // 面板未展开不启动
         // [2026-08-14 锁屏被动] 锁屏期间不启动主动持续抓屏——锁屏与解锁桌面一样只走被动事件触发
@@ -14008,7 +14061,7 @@ object BlurDrawHook {
         try {
             safeThread {
                 try {
-                    while (screenInteractive && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
+                    while (captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE && captureDemandActive() && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
                         // 面板收起（setExpansionHeight<=0）→ 停止（零后台耗电）
                         if (!panelExpansionActive) {
                             Lg.i(TAG, "bg-element: panel collapsed, continuous capture stopped")
@@ -14062,6 +14115,7 @@ object BlurDrawHook {
      *  变化抓屏不再节流（旧键 KEY_BG_CAPTURE_MIN_INTERVAL_MS 停用，内容变化一律立即入队）。
      *  静态模式不入队（零抓屏，快照冻结为现有值）。 */
     private fun scheduleElementCaptures() {
+        if (!captureDemandActive()) return
         if (!screenInteractive || !Prefs.glassEnabled(api) || isPowerSaveGlassOff()) return
         if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
         // 入队 → kick 起 worker 消费（异步，主线程零阻塞）。无论 enqueue 是否实际
@@ -14103,6 +14157,11 @@ object BlurDrawHook {
      *    [runTextContrastScanAsync]（不阻塞抓屏线程/主线程/渲染；拖动期 isMotionActive 跳过，spec/49 C 保留）。
      */
     private fun captureSnapshotImmediate(source: String, regionMode: Boolean = false) {
+        if (!captureDemandActive()) return
+        val captureNow = SystemClock.uptimeMillis()
+        if (!CaptureDemandPolicy.due(captureNow, lastDemandCaptureMs,
+                captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE)) return
+        lastDemandCaptureMs = captureNow
         if (!screenInteractive || !Prefs.glassEnabled(api) || SystemClock.uptimeMillis() < captureRetryAtMs) return
         // [spec/85 省电模式] 省电开启 → 真正的 captureDisplay 也不执行（省电下玻璃已关，零抓屏）
         if (isPowerSaveGlassOff()) {
@@ -14137,6 +14196,10 @@ object BlurDrawHook {
         // 故先探真 shade，只有**真 shade** 有效才算「shade 在渲染」。
         val realShade = resolveShadeSfc()
         val realShadeValid = realShade != null && realShade.isValid
+        // No screenshot without the exclusion layer while the shade is visible:
+        // otherwise its global dim is baked into each independent notification.
+        if (!NotificationBackdropIsolationPolicy.mayCaptureIndependentBackdrop(
+                panelExpansionActive, realShadeValid)) return
         val shade = if (realShadeValid) realShade else resolveShadeSfcOrFallback()
         if (mainThreadSync) diagFirstLog("sfc-done", if (shade != null && shade.isValid) " valid" else " null/invalid")
         // [2026-08-14 用户要求·sfc 拿不到强制抓全屏] shade 可空传入 captureScreenSnapshot：有效 → exclude shade
@@ -14149,7 +14212,7 @@ object BlurDrawHook {
             captureScreenSnapshot(shade)
         }
         if (bg != null) {
-            if (!screenInteractive || epochAtStart != captureEpoch) { bg.bitmap.recycle(); return }
+            if (!captureDemandActive() || epochAtStart != captureEpoch) { bg.bitmap.recycle(); return }
             if (regionBBox != null) {
                 // 区域快照用独立指纹比对：内容未变丢弃本帧，不驱动重绘
                 val regionFp = snapshotContentFingerprint(bg.bitmap)
@@ -14288,6 +14351,7 @@ object BlurDrawHook {
      *  （false = 已在队列/处理中——此时队列必有任务待消费或 worker 正在抓，无需重复入队）。 */
     @Synchronized
     private fun enqueueElementCapture(id: Int): Boolean {
+        if (!captureDemandActive()) return false
         if (!screenInteractive || SystemClock.uptimeMillis() < captureRetryAtMs) return false
         if (pendingCaptureIds.add(id)) {
             elementCaptureQueue.add(id)
@@ -14567,11 +14631,11 @@ object BlurDrawHook {
     /** [worker → 主线程] 新元素背景就绪且存在回退标记时，主线程 invalidate 宿主强制重录重试玻璃。 */
     private val hostPostPending = java.util.concurrent.atomic.AtomicBoolean(false)
     private fun postInvalidateHosts() {
-        if (!screenInteractive || !hostPostPending.compareAndSet(false, true)) return
+        if ((!screenInteractive && !isKeyguardLockedNow()) || !hostPostPending.compareAndSet(false, true)) return
         safeModuleTask {
             if (!mainHandler().post {
                 hostPostPending.set(false)
-                safeModuleTask { if (screenInteractive) invalidateRegisteredHostViews() }
+                safeModuleTask { if (screenInteractive || isKeyguardLockedNow()) invalidateRegisteredHostViews() }
             }) hostPostPending.set(false)
         }.also { if (!it) hostPostPending.set(false) }
     }
@@ -15136,6 +15200,7 @@ object BlurDrawHook {
      * 2. 兜底：反射 `IWindowManager.captureDisplay`（旧路径，通道未就绪/解析失败时用）。
      */
     private fun captureElementBackground(shade: SurfaceControl?, region: RectF): ElementBackground? {
+        if (!captureDemandActive()) return null
         // sourceCrop 必须落在显示范围内（MetaBall 扩张/动画中 region 可能含屏外边缘），clamp 兜底
         val dm = android.content.res.Resources.getSystem().displayMetrics
         val maxW = dm.widthPixels.coerceAtLeast(1)
@@ -15159,6 +15224,7 @@ object BlurDrawHook {
             // 任何失败返回 null → 自动落到下面的旧路径（兜底铁律）。
             val newScale = bgCaptureScale()
             val newExcludes = collectExcludes(shade)
+            if (!captureDemandActive()) return null
             val viaToken = DisplayRootChannel.captureViaDisplayToken(
                 systemUiContext(), crop, newScale, newExcludes.toTypedArray()
             )
@@ -15221,6 +15287,7 @@ object BlurDrawHook {
                             // ——主线程 Looper 判定（worker 异步路径不打，防刷屏）；「sfc-done → captureDisplay-start」
                             // = exclude 数组/降采样 CaptureArgs 反射构建耗时
                             if (isMainThreadNow()) diagFirstLog("captureDisplay-start", " crop=$crop scale=$scale")
+                            if (!captureDemandActive()) return null
                             m.invoke(wm, 0, args, listener)
                             val shb = listener.javaClass.getMethod("getBuffer").invoke(listener)
                             if (shb == null) {
@@ -15325,13 +15392,11 @@ object BlurDrawHook {
     /** [spec/48 过渡修复加固] hostView 是否为 behind_scrim（mScrimName=="behind_scrim"）。
      *  hostView null / mScrimNameField null / 反射失败 → 保守 true（behind_scrim 是主路径，宁画不丢）。 */
     private fun isBehindScrimHost(view: View?): Boolean {
-        if (view == null) return true
-        val field = mScrimNameField ?: return true
-        return try {
-            field.get(view) as? String == "behind_scrim"
-        } catch (t: Throwable) {
-            true
-        }
+        if (view == null) return false
+        val nativeName = try { mScrimNameField?.get(view) as? String } catch (_: Throwable) { null }
+        val resourceName = try { view.resources.getResourceEntryName(view.id) } catch (_: Throwable) { null }
+        return NotificationBackdropIsolationPolicy.mayDrawPanelMask(
+            NotificationBackdropIsolationPolicy.scrimRole(nativeName, resourceName))
     }
 
     /** [spec/48 过渡修复加固] 反射读 ScrimView.mViewAlpha（public float，系统 scrim 动画逐帧 alpha 真源，
@@ -15384,6 +15449,7 @@ object BlurDrawHook {
             null
         } ?: return
         val hostView = resolveScrimHostView(chain)
+        if (!isBehindScrimHost(hostView)) return
         val scrimAlpha = readScrimViewAlpha(hostView) ?: behindScrimAlpha
         val paint = scrimMaskPaintFor(scrimAlpha) ?: return
         val bounds = drawable.bounds

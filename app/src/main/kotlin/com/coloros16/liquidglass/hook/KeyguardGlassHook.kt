@@ -207,7 +207,7 @@ object KeyguardGlassHook {
                 val result=chain.proceed()
                 guarded {
                     preferences()
-                    val bundle=if(enabled)chain.getArg(0) as? Bundle else null
+                    val bundle=chain.getArg(0) as? Bundle
                     if(bundle!=null)for(key in bundle.keySet()) {
                         val value=runCatching { bundle.get(key) }.getOrNull()
                         val image=when(value) { is Bitmap->value;is IBinder->runCatching { resolve.invoke(instance,value) as? Bitmap }.getOrNull();else->null }
@@ -243,6 +243,7 @@ object KeyguardGlassHook {
     }
     private fun acceptWallpaper(image:Bitmap) {
         if(Looper.myLooper()!=Looper.getMainLooper()) { ui.post { guarded { acceptWallpaper(image) } };return }
+        LockWallpaperBackdrop.accept(image)
         preferences();if(!enabled || image.isRecycled || image.width<=0 || image.height<=0)return
         val now=SystemClock.uptimeMillis()
         if(nativeWallpaper?.get()===image && source!=null || now-nativeWallpaperAt<1000L)return

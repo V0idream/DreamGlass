@@ -33,14 +33,14 @@ class MemberStoreCoordinatorTest {
         assertEquals(19f, remote.getFloat("blur_radius", 0f), 0f)
     }
 
-    @Test fun oldRemoteEpochIsLockedThenConfirmedWithoutEnablingAnyMember() {
+    @Test fun olderConfirmedRemotePreservesChosenSwitchesAcrossUpgrade() {
         val local = store(); val remote = store(); confirm(local); confirm(remote, "1001008@1.1.8")
         MemberFeaturePolicy.memberBooleanKeys.forEach { remote.edit().putBoolean(it, true).commit() }
         remote.edit().putBoolean("glass_enable", true).commit()
         val before = remote.commitAttempts
-        assertTrue(sync(local, remote)); assertEquals(before + 2, remote.commitAttempts)
+        assertTrue(sync(local, remote)); assertEquals(before, remote.commitAttempts)
         assertTrue(MemberFeaturePolicy.confirmed(remote, version))
-        MemberFeaturePolicy.memberBooleanKeys.forEach { assertEquals(false, remote.all[it]) }
+        MemberFeaturePolicy.memberBooleanKeys.forEach { assertEquals(true, remote.all[it]) }
         assertTrue(remote.getBoolean("glass_enable", false))
     }
 

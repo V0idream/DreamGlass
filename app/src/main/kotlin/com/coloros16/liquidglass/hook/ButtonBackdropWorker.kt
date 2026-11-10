@@ -38,7 +38,7 @@ internal object ButtonBackdropBinding {
 
 /** Four bounded style slots, one running computation, latest pending capture per style.
  * Filtering runs off the UI thread; published hardware/F16 bitmaps are never recycled. */
-internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val failed:(Throwable)->Unit, private val engine:()->Int = { 0 }) {
+internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val failed:(Throwable)->Unit, private val engine:()->Int = { 0 }, private val active:()->Boolean = { true }) {
     private data class Geometry(val width:Int,val height:Int,val left:Float,val top:Float,val screenWidth:Float,val screenHeight:Float)
     private data class Style(val geometry:Geometry,val radius:Float,val engine:Int)
     private data class Key(val source:Bitmap,val generation:Int,val style:Style)
@@ -58,6 +58,7 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
     @Volatile private var retryAtMs=0L
 
     fun resolve(source:Bitmap,screen:RectF,radius:Float):Bitmap? {
+        if(!active())return null
         if(source.isRecycled || screen.width()<=0 || screen.height()<=0 || !radius.isFinite() || radius<=0)return null
         if(SystemClock.uptimeMillis()<retryAtMs)return null
         val geo=Geometry(source.width,source.height,screen.left,screen.top,screen.width(),screen.height())
@@ -97,23 +98,24 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
     private fun drain() {
         RuntimeWorkPolicy.guarded({}) { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
         // Keep the last good image while coalescing new frames. The entire worker shares one
-        // job budget: GPU <= 41 jobs/s; errors use the shared backoff, never a budget per button.
+        // Shared GPU budget <= 20 jobs/s, only while a visible consumer still needs the result.
         try {
             while(true) {
-                val interval=if(SystemClock.uptimeMillis()>=hardwareRetryAtMs)24L else RuntimeWorkPolicy.BLUR_INTERVAL_MS
+                if(!active()) { synchronized(lock) {pending.clear()};return }
+                val interval=if(SystemClock.uptimeMillis()>=hardwareRetryAtMs)50L else RuntimeWorkPolicy.BLUR_INTERVAL_MS
                 val wait=interval-(SystemClock.uptimeMillis()-lastComputeAtMs)
                 if(wait>0)Thread.sleep(wait)
                 val request=synchronized(lock) {
                     val next=pending.entries.firstOrNull() ?: return
                     pending.remove(next.key);next.value
                 }
-                if(request.epoch!=epoch)continue
+                if(request.epoch!=epoch || !active())continue
                 lastComputeAtMs=SystemClock.uptimeMillis()
                 try {
                     val bitmap=compute(request)
                     val publish=synchronized(lock) {
                         val style=request.key.style
-                        if(request.epoch==epoch && geometry==style.geometry && requested.containsKey(style)) {
+                        if(active() && request.epoch==epoch && geometry==style.geometry && requested.containsKey(style)) {
                             ready[style]=bitmap;true
                         } else false
                     }
@@ -154,7 +156,7 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
         try {
             val size=ButtonBackdropBlur.workingSize(source.width,source.height,geo.screenWidth,geo.screenHeight,style.radius)
             val sigma=style.radius*(size[0]/geo.screenWidth+size[1]/geo.screenHeight)*.5f
-            val image=hardware.render(source,size[0],size[1],sigma) { request.epoch!=epoch }
+            val image=hardware.render(source,size[0],size[1],sigma) { request.epoch!=epoch || !active() }
             com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics.mark("blur_hardware", "GPU 背景模糊已产出图像")
             return image
         } catch(cancel:java.util.concurrent.CancellationException) {throw cancel}

@@ -1,3 +1,9 @@
+# DreamGlass 2.0.1-debug4 验证记录
+
+329 项 JVM 单元测试、Debug／Release 构建和 Release Lint 通过（358 Warning、0 Error／Fatal）；10 项本地 ROM 源码契约检查通过。签名与原有覆盖升级证书一致。本轮未操作实体设备、未重复 GPU 探针；debug3 的隔离 GPU 结果附作历史证据，不能替代新包的厂商接入、实际画面及功耗验收。详见 [当前记录](docs/validation/2.0.1-debug4/README.md)。
+
+---
+
 # DreamGlass 2.0.1-debug1 验证记录
 
 275 项 JVM 测试、Debug／Release 构建与 Lint 通过（354 Warning，0 Error／Fatal）。15 项隔离 Android GPU 断言通过，包括真实 View 遍历的保存面板背景租用、内容更新与恢复。混合通知的集合删除契约及状态筛选回归通过，厂商事件／画面未验收。背景刷新源码与 v2.0 一致，撤回类不在 DEX 中。详见 [记录](docs/validation/2.0.1-debug1/README.md)。

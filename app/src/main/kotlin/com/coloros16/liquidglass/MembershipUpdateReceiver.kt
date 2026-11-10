@@ -9,9 +9,9 @@ import com.coloros16.liquidglass.ui.MembershipState
 import io.github.libxposed.service.XposedService
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** The new Hook version rejects stale tokens independently. This bounded update
- * receiver also waits for the asynchronous framework channel to close saved old
- * switches. It cannot replace an already-running old Hook; scopes still reload. */
+/** Preserve existing explicit confirmation and switches across APK updates.
+ * The bounded service sync still denies unconfirmed/revoked stores. Loading new
+ * rendering code into an already-running target remains the framework's job. */
 class MembershipUpdateReceiver:BroadcastReceiver() {
     override fun onReceive(context:Context,intent:Intent) {
         if(intent.action!=Intent.ACTION_MY_PACKAGE_REPLACED)return

@@ -18,10 +18,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.SystemClock
-import android.view.Choreographer
 import android.view.SurfaceControl
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.glass.GlassRegistry
@@ -312,12 +312,35 @@ object LauncherHook {
     private class LiquidShaderBuild(val shader: RuntimeShader)
 
     /** 已登记宿主 View（运动追踪用，WeakReference 防泄漏）。 */
-    private class HostEntry(view: View) {
+    private class HostEntry(view: View):ViewTreeObserver.OnPreDrawListener,View.OnAttachStateChangeListener {
         val ref = WeakReference(view)
         var lastX = Int.MIN_VALUE
         var lastY = Int.MIN_VALUE
         var lastW = -1
         var lastH = -1
+        private var observer:ViewTreeObserver?=null
+        fun attach(view:View) {
+            val next=view.viewTreeObserver
+            if(observer===next)return
+            observer?.takeIf {it.isAlive}?.removeOnPreDrawListener(this)
+            observer=next
+            next.addOnPreDrawListener(this)
+        }
+        override fun onPreDraw():Boolean {
+            ref.get()?.let {view ->
+                if(view.windowVisibility==View.VISIBLE && view.isShown && view.alpha>0f && isLauncherFrameTrackableNow())
+                    trackHostViewMotion(this,view)
+            }
+            return true
+        }
+        override fun onViewAttachedToWindow(v:View) {attach(v)}
+        override fun onViewDetachedFromWindow(v:View) {
+            observer?.takeIf {it.isAlive}?.removeOnPreDrawListener(this)
+            observer=null
+            // Keep the weak entry/attach listener: a reused launcher host must
+            // resume on its next attach, without an invisible polling timer.
+            lastX=Int.MIN_VALUE;lastY=Int.MIN_VALUE;lastW=-1;lastH=-1
+        }
     }
 
     // ------------------------------------------------------------ 状态字段
@@ -336,6 +359,7 @@ object LauncherHook {
     // ---- [spec/117] 17.3.12 指纹解析缓存（旧名命中时全部为空，16.x 行为零变化） ----
     /** 解析出的 BaseDrawable 类（旧名或指纹） */
     private var mBaseDrawableCls: Class<*>? = null
+    private var nativeClearExtractor: NativeClearSourceExtractor? = null
     /** 类指纹来源：old-name / probe-inner / probe-scan（仅日志） */
     private var mBaseDrawableFp: String? = null
     /** 17.3.12 blurShaderPaint 字段 M（旧名路径下为 null） */
@@ -587,10 +611,6 @@ object LauncherHook {
 
     // ---- 运动追踪（宿主位置/尺寸变化 → invalidate → 重录 → 映射跟随） ----
     private val registeredHostViews = LinkedHashSet<HostEntry>()
-    @Volatile
-    private var choreographer: Choreographer? = null
-    @Volatile
-    private var frameCallbackPosted = false
 
     @Volatile
     private var mainHandler: android.os.Handler? = null
@@ -624,6 +644,7 @@ object LauncherHook {
             return
         }
         resolveMethods(classLoader)
+        mountNamedClearSourceUpdates(api)
         mountDrawBlurShader(api, classLoader)
         mountPreviewBackground(api, classLoader)
         mountFolderRoundImageView(api, classLoader)
@@ -659,6 +680,11 @@ object LauncherHook {
         val base = resolveBaseDrawableClass(classLoader)
         if (base != null) {
             resolveBaseDrawableMembers(base, classLoader)
+            nativeClearExtractor=runCatching {NativeClearSourceExtractor.resolve(base)}.onSuccess {
+                RuntimeDiagnostics.update("recents-clear-source-contract","原生清理按钮shader/bitmap/matrix/lock字段及类型已核对：${base.name}")
+            }.onFailure {
+                RuntimeDiagnostics.update("recents-clear-source-contract","不匹配：${it.javaClass.simpleName}；清理按钮保留备用底色")
+            }.getOrNull()
         } else {
             Lg.e(TAG, "LauncherHook resolve BaseDrawable class failed, drawBlurShader replace disabled")
         }
@@ -1181,7 +1207,8 @@ object LauncherHook {
                         } catch (t: Throwable) {
                             Lg.e(TAG, "launcher drawBlurShader: getThisObject failed", t); null
                         }
-                        if (drawable != null) {
+                        val clearOwner=drawable!=null && NativeLauncherButtonMaterial.contains(drawable)
+                        if (drawable != null && !clearOwner) {
                             try {
                                 replaceShaderIfPossible(drawable)
                             } catch (t: Throwable) {
@@ -1199,6 +1226,35 @@ object LauncherHook {
         }
         // ② 17.3.12 路径 A：内联 static a(d)，before 自录玻璃路径并 skip proceed；失败回退 proceed
         mountInlineRecordPathA(api)
+    }
+
+    /** The named build records both AGSL and bitmap alternatives here. Observe
+     * that audited recorder instead of only drawBlurShader, which is bypassed
+     * when enableShader=false. No dirty flags or native paint are changed. */
+    private fun mountNamedClearSourceUpdates(api:XposedInterface) {
+        val base=mBaseDrawableCls ?: return
+        if(base.name!="com.oplus.posteffect.drawable.BaseDrawable" || nativeClearExtractor==null)return
+        runCatching {
+            val dirty=checkedField(base,"contentDirty",Boolean::class.javaPrimitiveType!!)
+            val record=base.getDeclaredMethod("access\$drawContent",base)
+            check(Modifier.isStatic(record.modifiers) && record.returnType==Void.TYPE)
+            api.hook(record).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val owner=chain.getArg(0)
+                val subscribed=owner!=null && NativeLauncherButtonMaterial.contains(owner)
+                val wasDirty=subscribed && dirty.getBoolean(owner)
+                val result=chain.proceed()
+                val changed=wasDirty && !dirty.getBoolean(owner)
+                if(subscribed)runCatching {
+                    nativeClearExtractor?.stamp(owner!!)?.let {
+                        NativeLauncherButtonMaterial.sourceChanged(owner,it,changed)
+                    }
+                }
+                result
+            }
+            api.deoptimize(record)
+        }.onFailure {
+            RuntimeDiagnostics.update("recents-clear-source-notify","named原生录制通知不可用：${it.javaClass.simpleName}")
+        }
     }
 
     /**
@@ -1232,8 +1288,18 @@ object LauncherHook {
                     }
                     // Preserve e()/preDraw geometry, pending-buffer adoption and dirty bookkeeping.
                     // The system records first; only then replace its prepared content with glass.
+                    val nativeContentChanged=drawable!=null && NativeLauncherButtonMaterial.contains(drawable) &&
+                        runCatching {mContentDirtyField?.getBoolean(drawable)==true}.getOrDefault(false)
                     val originalResult = chain.proceed()
                     if (drawable != null) {
+                        if(NativeLauncherButtonMaterial.contains(drawable))runCatching {
+                            nativeClearExtractor?.stamp(drawable)?.let {
+                                NativeLauncherButtonMaterial.sourceChanged(drawable,it,nativeContentChanged &&
+                                    runCatching {mContentDirtyField?.getBoolean(drawable)==false}.getOrDefault(false))
+                            }
+                        }.onFailure {
+                            RuntimeDiagnostics.update("recents-clear-source-notify","原生输入通知失败：${it.javaClass.simpleName}")
+                        }
                         try {
                             val nativeNode = mRenderNodeField?.get(drawable) as? RenderNode
                             if (mContentDirtyField?.getBoolean(drawable) == false && nativeNode?.hasDisplayList() == true) {
@@ -1301,14 +1367,26 @@ object LauncherHook {
         // Some controller variants expose the inner drawable directly while
         // View.background is null or a transition wrapper.
         view.javaClass.getMethod("getBlurDrawable").invoke(view)?.takeIf {
-            mBlurShaderPaintField?.declaringClass?.isInstance(it)==true
+            mBaseDrawableCls?.isInstance(it)==true
         }
     }.getOrNull()
-    internal fun nativeClearSource(view:View):Shader? = runCatching {
-        val inner=clearMaterialInner(view) ?: return null
-        if(mEnableBlurShaderField?.getBoolean(inner)==false)return null
-        getBlurShaderPaintOf(inner)?.shader?.takeUnless {it is RuntimeShader && shaderOwnerSet.contains(it)}
-    }.getOrNull()
+    internal fun withNativeClearSource(view:View,submit:(Shader?,NativeClearSourceExtractor.Info)->Boolean):Boolean {
+        val inner=clearMaterialInner(view) ?: return submit(null,
+            NativeClearSourceExtractor.Info(NativeClearSourceKind.NONE,"no-native-drawable"))
+        val extractor=nativeClearExtractor ?: return submit(null,
+            NativeClearSourceExtractor.Info(NativeClearSourceKind.NONE,"source-contract-unavailable"))
+        var submitting=false
+        return try {
+            extractor.draw(inner,{it !is RuntimeShader || !shaderOwnerSet.contains(it)}) {shader,info ->
+                submitting=true;submit(shader,info)
+            }
+        } catch(error:Throwable) {
+            // Never run the Canvas callback twice after a partial draw.
+            if(submitting)throw error
+            submit(null,NativeClearSourceExtractor.Info(NativeClearSourceKind.NONE,
+                "source-read-${error.javaClass.simpleName}"))
+        }
+    }
     internal fun removeNativeClearMaterial(view:View) {
         for(inner in NativeLauncherButtonMaterial.remove(view))runCatching {mContentDirtyField?.setBoolean(inner,true)}
         view.invalidate()
@@ -2681,6 +2759,7 @@ object LauncherHook {
     /** 渲染触发整屏快照请求：**异步**（不阻塞渲染线程；失败冷却期内不重抓）。快照缺失返回 null。
      *  静态模式 → 不入队（零抓屏），返回最近快照。 */
     private fun requestScreenSnapshotAsync(): ElementBackground? {
+        if (!launcherCaptureDemandActive()) return null
         val snap = screenSnapshot
         val valid = snap != null && snap.bitmap.width > 0 && snap.bitmap.height > 0
         if (valid) return snap
@@ -2704,7 +2783,21 @@ object LauncherHook {
      * onBlurReady 频繁回调 / 新映射建立 都只在壁纸变化（id 变）时真正重解码（refreshWallpaperSourceIfChanged
      * 内部判定），其余情况 no-op，消除 Launcher 侧持续抓屏耗电。动态壁纸/解码失败回退 captureDisplay 抓屏。
      */
+    /** No background launcher work merely because an app/window changed. */
+    @Synchronized
+    private fun launcherCaptureDemandActive(): Boolean = registeredHostViews.any { entry ->
+        val view=entry.ref.get()
+        runCatching {
+            view!=null && view.isAttachedToWindow && view.isShown &&
+                view.windowVisibility==View.VISIBLE && view.alpha>0f &&
+                view.width>0 && view.height>0 && view.display?.state==android.view.Display.STATE_ON &&
+                (view.context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isInteractive==true
+        }.getOrDefault(false)
+    }
+    private var lastVisibleCaptureAtMs=0L
+
     private fun triggerBackgroundCapture() {
+        if (!launcherCaptureDemandActive()) return
         if (wallpaperFileSourceEnabled()) {
             refreshWallpaperSourceIfChanged()
             return
@@ -2715,6 +2808,7 @@ object LauncherHook {
     /** 入队背景源刷新任务（唯一任务 = SNAPSHOT_ID 整屏快照/壁纸解码；pending 去重防 onBlurReady
      *  多 drawable 同帧连调重复入队）。失败冷却期内不重入队（3 次失败暂停，下个内容变化/渲染兜底重试）。 */
     private fun enqueueSnapshotCapture() {
+        if (!launcherCaptureDemandActive()) return
         val now = SystemClock.uptimeMillis()
         if (now < (elementCaptureQuitAt[SNAPSHOT_ID] ?: 0L)) return
         if (pendingCaptureIds.add(SNAPSHOT_ID)) {
@@ -2798,7 +2892,7 @@ object LauncherHook {
             while (true) {
                 val id = elementCaptureQueue.poll() ?: break
                 pendingCaptureIds.remove(id)
-                if (id != SNAPSHOT_ID) continue
+                if (id != SNAPSHOT_ID || !launcherCaptureDemandActive()) continue
                 // [doc/spec/52] 壁纸文件解码背景源优先（静态壁纸零持续抓屏）；解码失败/动态壁纸
                 // 回退 captureDisplay 抓屏（spec/42 setUid 只抓壁纸层，兼容向后）。
                 captureInFlightIds.add(id)
@@ -2812,6 +2906,7 @@ object LauncherHook {
                     captureInFlightIds.remove(id)
                 }
                 if (bg != null) {
+                    if (!launcherCaptureDemandActive()) { bg.bitmap.recycle(); continue }
                     val prev = screenSnapshot
                     val unchanged = prev != null &&
                         prev.region == bg.region &&
@@ -2869,6 +2964,7 @@ object LauncherHook {
     }
 
     private fun enqueueCapture(id: Int) {
+        if (!launcherCaptureDemandActive()) return
         if (pendingCaptureIds.add(id)) {
             elementCaptureQueue.add(id)
         }
@@ -2934,6 +3030,7 @@ object LauncherHook {
      * （0.5 降采样），wrap+copy 出独立软件位图后 close hw。失败返回 null（静默，兜底铁律）。
      */
     private fun captureElementBackground(launcherSfc: SurfaceControl, region: RectF): ElementBackground? {
+        if (!launcherCaptureDemandActive()) return null
         val dm = android.content.res.Resources.getSystem().displayMetrics
         val maxW = dm.widthPixels.coerceAtLeast(1)
         val maxH = dm.heightPixels.coerceAtLeast(1)
@@ -3013,6 +3110,10 @@ object LauncherHook {
                                 "captureDisplay",
                                 Int::class.javaPrimitiveType, argsCls, listenerCls
                             )
+                            if (!launcherCaptureDemandActive()) return null
+                            val captureAt=SystemClock.uptimeMillis()
+                            if (!CaptureDemandPolicy.due(captureAt,lastVisibleCaptureAtMs,false)) return null
+                            lastVisibleCaptureAtMs=captureAt
                             m.invoke(wm, 0, args, listener)
                             val shb = listener.javaClass.getMethod("getBuffer").invoke(listener)
                             if (shb == null) {
@@ -3498,27 +3599,6 @@ object LauncherHook {
 
     // ------------------------------------------------------------ 运动追踪（区域冻结根治）
 
-    private val motionFrameCallback = Choreographer.FrameCallback {
-        frameCallbackPosted = false
-        try {
-            // [spec/90 #3] 熄屏/锁屏门控：不可见时跳过位置比对，500ms 降频自续代替每帧回调
-            if (!isLauncherFrameTrackableNow()) {
-                mainHandler().postDelayed({ kickMotionTracker() }, POWER_SAVE_STATE_CACHE_MS)
-                return@FrameCallback
-            }
-            trackHostViewMotion()
-        } catch (t: Throwable) {
-            Lg.e(TAG, "launcher taskG+: trackHostViewMotion error", t)
-        }
-        var hasLive = false
-        synchronized(this) {
-            for (entry in registeredHostViews) {
-                if (entry.ref.get() != null) { hasLive = true; break }
-            }
-        }
-        if (hasLive) kickMotionTracker()
-    }
-
     /** 登记宿主 View（WeakReference 防泄漏）：清理失效弱引用，再按 referent 去重。 */
     @Synchronized
     private fun registerHostView(view: View?) {
@@ -3528,71 +3608,46 @@ object LauncherHook {
             if (it.next().ref.get() == null) it.remove()
         }
         for (entry in registeredHostViews) {
-            if (entry.ref.get() === view) return
+            if (entry.ref.get() === view) {entry.attach(view);return}
         }
-        registeredHostViews.add(HostEntry(view))
-        kickMotionTracker()
+        val entry=HostEntry(view)
+        registeredHostViews.add(entry)
+        view.addOnAttachStateChangeListener(entry)
+        entry.attach(view)
     }
 
-    /** 启动/续跑帧回调（主线程调用；惰性获取 Choreographer，任何失败静默不崩） */
-    private fun kickMotionTracker() {
-        if (frameCallbackPosted) return
-        val c = choreographer ?: try {
-            Choreographer.getInstance().also { choreographer = it }
-        } catch (t: Throwable) {
-            Lg.e(TAG, "launcher taskG+: Choreographer.getInstance failed (not main thread?)", t)
-            return
-        }
-        frameCallbackPosted = true
-        try {
-            c.postFrameCallback(motionFrameCallback)
-        } catch (t: Throwable) {
-            frameCallbackPosted = false
-            Lg.e(TAG, "launcher taskG+: postFrameCallback failed", t)
-        }
-    }
-
-    /** 逐帧快照比对：位置/尺寸变化的宿主 invalidate() → 重录 → 映射跟随（srcRect 实时折算跟手）。 */
-    @Synchronized
-    private fun trackHostViewMotion() {
-        if (registeredHostViews.isEmpty()) return
+    /** Observe an already requested draw only. No frame is scheduled here;
+     * animations/scroll/layout provide their own draws. Hidden/idle launchers
+     * perform no position scan, screen read or geometry polling. */
+    private fun trackHostViewMotion(entry:HostEntry,v:View) {
         val loc = IntArray(2)
-        val it = registeredHostViews.iterator()
-        while (it.hasNext()) {
-            val entry = it.next()
-            val v = entry.ref.get()
-            if (v == null) {
-                it.remove()
-                continue
+        try {
+            if (!v.isAttachedToWindow) return
+            v.getLocationOnScreen(loc)
+            val w = v.width
+            val h = v.height
+            if (entry.lastX == Int.MIN_VALUE) {
+                entry.lastX = loc[0]; entry.lastY = loc[1]; entry.lastW = w; entry.lastH = h
+                return
             }
-            try {
-                if (!v.isAttachedToWindow) continue
-                v.getLocationOnScreen(loc)
-                val w = v.width
-                val h = v.height
-                if (entry.lastX == Int.MIN_VALUE) {
-                    entry.lastX = loc[0]; entry.lastY = loc[1]; entry.lastW = w; entry.lastH = h
-                    continue
+            if (entry.lastX != loc[0] || entry.lastY != loc[1] || entry.lastW != w || entry.lastH != h) {
+                entry.lastX = loc[0]; entry.lastY = loc[1]; entry.lastW = w; entry.lastH = h
+                // Card mapping used to be registered only once at creation.
+                // Invalidating alone re-recorded the SAME stale source rect.
+                // Update the immutable lookup on UI before native recording;
+                // RenderThread never reads View geometry or captures a frame.
+                if(w>0 && h>0)for((id,mapped) in screenRegionMap)if(mapped.host.get()===v) {
+                    screenRegionMap[id]=mapped.copy(region=RectF(loc[0].toFloat(),loc[1].toFloat(),
+                        (loc[0]+w).toFloat(),(loc[1]+h).toFloat()),autoBounds=Rect(0,0,w,h))
                 }
-                if (entry.lastX != loc[0] || entry.lastY != loc[1] || entry.lastW != w || entry.lastH != h) {
-                    entry.lastX = loc[0]; entry.lastY = loc[1]; entry.lastW = w; entry.lastH = h
-                    // Card mapping used to be registered only once at creation.
-                    // Invalidating alone re-recorded the SAME stale source rect.
-                    // Update the immutable lookup on UI before native recording;
-                    // RenderThread never reads View geometry or captures a frame.
-                    if(w>0 && h>0)for((id,mapped) in screenRegionMap)if(mapped.host.get()===v) {
-                        screenRegionMap[id]=mapped.copy(region=RectF(loc[0].toFloat(),loc[1].toFloat(),
-                            (loc[0]+w).toFloat(),(loc[1]+h).toFloat()),autoBounds=Rect(0,0,w,h))
-                    }
-                    try {
-                        v.invalidate()
-                    } catch (t: Throwable) {
-                        Lg.e(TAG, "launcher taskG+: invalidate host failed", t)
-                    }
+                try {
+                    v.invalidate()
+                } catch (t: Throwable) {
+                    Lg.e(TAG, "launcher taskG+: invalidate host failed", t)
                 }
-            } catch (t: Throwable) {
-                Lg.e(TAG, "launcher taskG+: track single host failed", t)
             }
+        } catch (t: Throwable) {
+            Lg.e(TAG, "launcher taskG+: track single host failed", t)
         }
     }
 

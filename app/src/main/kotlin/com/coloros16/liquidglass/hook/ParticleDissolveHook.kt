@@ -17,11 +17,12 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.service.notification.StatusBarNotification
 import android.view.Choreographer
 import android.view.View
+import android.view.ViewGroup
 import androidx.annotation.RequiresApi
 import com.coloros16.liquidglass.config.Prefs
+import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.log.Lg
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
@@ -56,11 +57,17 @@ object ParticleDissolveHook {
 
     private var reporter: ((String,String)->Unit)? = null
     private fun report(stage:String,detail:String) { runCatching { reporter?.invoke("particles_$stage",detail) } }
+    private fun current(stage:String,detail:String) {
+        // mark() preserves first arrival, which hid pending -> ready/blocked
+        // transitions. Keep current bounded values for device diagnosis.
+        runCatching {RuntimeDiagnostics.update("particles_$stage",detail)}
+        report(stage,detail)
+    }
     fun install(api: XposedInterface, classLoader: ClassLoader, diagnostics: ((String,String)->Unit)? = null) {
         reporter=diagnostics
         if (Build.VERSION.SDK_INT < 33 || Application.getProcessName() != "com.android.systemui") return
         try { Api33.install(api, classLoader) }
-        catch (error: Throwable) { report("error","install: ${error.javaClass.simpleName}: ${error.message}");Lg.w("LiquidGlass", "notification particles unavailable", error) }
+        catch (error: Throwable) { current("error","install: ${error.javaClass.simpleName}: ${error.message}");Lg.w("LiquidGlass", "notification particles unavailable", error) }
     }
 
     @RequiresApi(33)
@@ -70,9 +77,44 @@ object ParticleDissolveHook {
         private val captures = WeakHashMap<View, Capture>() // UI thread only; at most MAX_ACTIVE.
         private val effects = WeakHashMap<View, Dust>()
         private val shadeCloses = WeakHashMap<View, ShadeClose>()
+        private val shadeEpochs = WeakHashMap<View,Int>()
+        // Explicit clear-all preparation only. Weak identities do not keep removed
+        // entries/rows alive; GPU captures remain bounded by the existing limit.
+        private class ClearPrepared(item:Any,view:View,val capture:Capture,val close:Boolean) {
+            val item=WeakReference(item);val row=WeakReference(view)
+        }
+        private val clearPrepared=ArrayList<ClearPrepared>(MAX_ACTIVE)
+        private var preparationGeneration=0
+        private fun releaseClearPreparation(cancelUncommitted:Boolean) {
+            preparationGeneration++
+            val old=clearPrepared.toList();clearPrepared.clear()
+            if(cancelUncommitted)for(p in old) {
+                val view=p.row.get() ?: continue
+                if(!p.capture.committed && captures[view]===p.capture) {
+                    captures.remove(view);p.capture.cancelled=true
+                }
+            }
+        }
         private var replayingClose=false
+        private var collectionAcceptSequence=0L
+        private val clearCompletions=WeakHashMap<Any,NotificationLocalDismissContract.OnceCompletion>()
+        private var clearPreparedBinding:((ClearPrepared)->Boolean)?=null
+        private fun hasVisibleClearPreparation(root:View):Boolean {
+            val now=SystemClock.uptimeMillis()
+            return clearPrepared.any { p ->
+                val view=p.row.get()
+                val visible=Rect()
+                view!=null && p.close && !p.capture.cancelled && !p.capture.committed &&
+                    now-p.capture.createdAt<4950L && captures[view]===p.capture &&
+                    p.capture.root.get()===root && view.isAttachedToWindow &&
+                    view.isShown && view.alpha>.01f && view.getGlobalVisibleRect(visible) &&
+                    !visible.isEmpty && clearPreparedBinding?.invoke(p)==true
+            }
+        }
         private var installed = false
         private var enabled = false
+        private var masterEnabled=false
+        private var featureEnabled=false
         private var speed = DEFAULT_SPEED
         private var readAt = -1L
         private var retryAt = 0L
@@ -138,99 +180,246 @@ object ParticleDissolveHook {
             installed = true
         }
 
-        /** Collection-local commit covers visible ordinary children retained by
-         * an ongoing group. No candidate list, interception decision or native
-         * argument is changed; only the entries the system actually commits are
-         * animated, with the same bounds and dedupe as gesture particles. */
+        /** Collection acceptance covers animation-less removal as well as
+         * ordinary child rows inside a retained group. Do not infer acceptance
+         * from package/group UI relationships or alter native deletion arguments. */
         private fun installMixedGroupCommit(api:XposedInterface,loader:ClassLoader,row:Class<*>) {
             val collection=Class.forName("com.android.systemui.statusbar.notification.collection.NotifCollection",false,loader)
             val entry=Class.forName("com.android.systemui.statusbar.notification.collection.NotificationEntry",false,loader)
             val route=NotificationLocalDismissContract.resolve(collection,entry,row) ?: error("Unknown local dismissal contract")
-            val getParent=row.getMethod("getNotificationParent").apply {check(returnType==row)}
-            val getChildren=row.getMethod("getAttachedChildren").apply {check(List::class.java.isAssignableFrom(returnType))}
-            val getAdapter=row.getMethod("getEntryAdapter")
-            val adapterType=getAdapter.returnType
-            val clearable=adapterType.getMethod("isClearable").apply {check(returnType==Boolean::class.javaPrimitiveType)}
-            val sbn=adapterType.getMethod("getSbn").apply {check(returnType==StatusBarNotification::class.java)}
-            fun ongoing(view:View):Boolean=runCatching {
-                val adapter=getAdapter.invoke(view) ?: return false
-                (sbn.invoke(adapter) as? StatusBarNotification)?.isClearable==false
-            }.getOrDefault(false)
+            val stack=Class.forName("com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout",false,loader)
+            val adapterGetter=row.getMethod("getEntryAdapter")
+            val adapterEntry=adapterGetter.returnType.getMethod("getEntry")
+            // Preparation is optional: a changed vendor signature must not disable
+            // the more important collection commit route.
+            clearPreparedBinding={ p ->
+                val item=p.item.get();val view=p.row.get()
+                item!=null && view!=null && entry.isInstance(item) &&
+                    route.clearable.invoke(item)==true && route.state.invoke(item).toString()=="NOT_DISMISSED" &&
+                    adapterGetter.invoke(view)?.let {adapterEntry.invoke(it)}===item
+            }
+            val prep=NotificationLocalDismissContract.prepareRoute(stack,row)
+            if(prep!=null) {
+                api.hook(prep.clear).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    if(Looper.myLooper()==Looper.getMainLooper())safe {
+                        val owner=chain.getThisObject() as? ViewGroup
+                        if(owner!=null && allowed(api,owner.context)) {
+                            releaseClearPreparation(true)
+                            val selection=chain.getArg(0) as Int
+                            val close=chain.getArg(1)==true
+                            var scanned=0;var hidden=0;var retained=0;var capacity=0
+                            val seen=java.util.Collections.newSetFromMap(java.util.IdentityHashMap<View,Boolean>())
+                            fun visit(view:View) {
+                                if(scanned>=128 || !row.isInstance(view) || !seen.add(view))return
+                                scanned++
+                                val adapter=prep.adapter.invoke(view)
+                                val item=adapter?.let {prep.entry.invoke(it)}
+                                val clearable=item!=null && entry.isInstance(item) && route.clearable.invoke(item)==true
+                                val eligible=clearable && route.state.invoke(item).toString()=="NOT_DISMISSED" &&
+                                    prep.includes.invoke(null,view,selection)==true
+                                if(eligible) {
+                                    if(effects.containsKey(view) || captures[view]?.committed==true)return
+                                    val visible=Rect()
+                                    if(!view.isShown || view.alpha<=.01f || !view.getGlobalVisibleRect(visible) || visible.isEmpty)hidden++
+                                    else {
+                                        val existing=captures[view]?.takeIf {!it.cancelled && SystemClock.uptimeMillis()-it.createdAt<4950L}
+                                        if(existing==null && (captures.size>=MAX_ACTIVE || effects.size>=MAX_ACTIVE))capacity++
+                                        else {
+                                            val c=existing ?: prepare(view)
+                                            if(c!=null)clearPrepared.add(ClearPrepared(item!!,view,c,close))
+                                        }
+                                    }
+                                    // A clearable summary already contains the child pixels.
+                                    // Avoid overlapping parent/child captures for normal groups.
+                                    return
+                                }
+                                retained++
+                                val children=prep.children.invoke(view) as? List<*> ?: return
+                                for(child in children)if(child is View)visit(child)
+                            }
+                            for(i in 0 until owner.childCount)visit(owner.getChildAt(i))
+                            val generation=preparationGeneration
+                            ui.postDelayed({if(preparationGeneration==generation)releaseClearPreparation(true)},5000L)
+                            current("clear_prepare","scanned=$scanned; prepared=${clearPrepared.size}; retained=$retained; hidden=$hidden; capacity=$capacity; close=$close")
+                        }
+                    }
+                    chain.proceed()
+                }
+                runCatching {api.deoptimize(prep.clear)}
+            } else current("clear_prepare","厂商clearNotifications准备接口未匹配；集合提交仍注册")
             api.hook(route.commit).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 val candidates=ArrayList<Pair<Any,View>>(MAX_ACTIVE)
                 if(Looper.myLooper()==Looper.getMainLooper())safe {
                     val entries=chain.getArg(0) as? List<*> ?: emptyList<Any>()
+                    var retained=0;var missingRow=0;var duplicate=0;var missedCapture=0;var warm=0
+                    val acceptedRows=java.util.Collections.newSetFromMap(java.util.IdentityHashMap<View,Boolean>())
+                    for(item in entries)if(item!=null && entry.isInstance(item) && route.clearable.invoke(item)==true &&
+                        route.state.invoke(item).toString()=="NOT_DISMISSED")
+                        (route.row.invoke(item) as? View)?.let {acceptedRows.add(it)}
                     for(item in entries) {
                         if(candidates.size>=MAX_ACTIVE)break
                         if(item==null || !entry.isInstance(item) || route.state.invoke(item).toString()!="NOT_DISMISSED" ||
-                            route.clearable.invoke(item)!=true)continue
-                        val view=route.row.invoke(item) as? View ?: continue
+                            route.clearable.invoke(item)!=true) {retained++;continue}
+                        val view=route.row.invoke(item) as? View
+                        if(view==null) {missingRow++;continue}
                         if(!allowed(api,view.context))break
-                        val parent=getParent.invoke(view) as? View ?: continue
-                        val parentAdapter=getAdapter.invoke(parent) ?: continue
-                        val retained=clearable.invoke(parentAdapter)==false
-                        val siblings=getChildren.invoke(parent) as? List<*> ?: emptyList<Any>()
-                        val hasOngoing=ongoing(parent) || siblings.any {it is View && it!==view && ongoing(it)}
-                        if(retained && hasOngoing && request(view)!=null)candidates.add(item to view)
+                        val binding=adapterGetter.invoke(view)?.let {adapterEntry.invoke(it)}
+                        if(binding!=null && entry.isInstance(binding) && binding!==item) {
+                            missingRow++;current("collection_binding_skip","row被另一个NotificationEntry复用；忽略旧entry，未读取通知内容")
+                            continue
+                        }
+                        if(effects.containsKey(view) || captures[view]?.committed==true ||
+                            NotificationLocalDismissContract.coveredByAncestor(view,{it.parent as? View}) {
+                                acceptedRows.contains(it) || effects.containsKey(it) || captures[it]?.committed==true
+                            }) {duplicate++;continue}
+                        val prepared=clearPrepared.firstOrNull {it.item.get()===item && it.row.get()===view &&
+                            captures[view]===it.capture && !it.capture.cancelled}
+                        if(prepared!=null)warm++
+                        val old=captures[view]?.takeIf {!it.cancelled && SystemClock.uptimeMillis()-it.createdAt<4950L}
+                        val visible=Rect()
+                        if(old==null && (!view.isShown || view.alpha<=.01f || !view.getGlobalVisibleRect(visible) || visible.isEmpty)) {
+                            missedCapture++
+                            current("collection_capture_skip","当前无可见像素且没有准备快照；rowShown=${view.isShown}; rowAlpha=${view.alpha}; rootShown=${view.rootView.isShown}; rootVisibility=${view.rootView.windowVisibility}")
+                            continue
+                        }
+                        if(request(view)!=null)candidates.add(item to view)
+                        else {
+                            missedCapture++
+                            current("collection_capture_skip","rowShown=${view.isShown}; rowAttached=${view.isAttachedToWindow}; rootShown=${view.rootView.isShown}; rootVisibility=${view.rootView.windowVisibility}; prepared=${prepared!=null}; close=${prepared?.close}")
+                        }
                     }
+                    current("collection_candidates","entries=${entries.size}; prepared=$warm; capture=${candidates.size}; retained=$retained; missingRow=$missingRow; duplicate=$duplicate; captureSkipped=$missedCapture")
                 }
                 val result=chain.proceed()
-                // Native interceptors have already filtered the list. Confirm the
-                // actual state change; attempts/cancels must not start particles.
                 for((item,view) in candidates)safe {
-                    val accepted=NotificationLocalDismissContract.accepted(true,true,true,"NOT_DISMISSED",route.state.invoke(item).toString())
+                    val after=route.state.invoke(item).toString()
+                    val accepted=NotificationLocalDismissContract.accepted(true,"NOT_DISMISSED",after)
+                    clearPrepared.removeAll {it.item.get()===item && it.row.get()===view}
                     if(accepted && allowed(api,view.context)) {
+                        collectionAcceptSequence++
                         dismiss(view)
-                        report("mixed_group_commit","普通子通知已由集合确认删除；保留常驻通知与组容器")
+                        current("mixed_group_commit","集合已确认普通通知删除；state=$after; rowShown=${view.isShown}; rootShown=${view.rootView.isShown}; parent关系不作为门限")
+                    } else {
+                        cancel(view)
+                        current("collection_rejected","未确认新删除，保持原生；state=$after")
                     }
                 }
                 result
             }
             collection.declaredMethods.filter {it.name in setOf("dismissNotifications","locallyDismissNotifications")}
                 .forEach {runCatching {api.deoptimize(it)}}
-            report("mixed_group_route","已识别COS17集合级删除提交，补齐混合常驻通知子行")
+            runCatching {api.deoptimize(stack.getDeclaredMethod("onClearAllAnimationsEnd",Int::class.javaPrimitiveType,List::class.java))}
+            report("mixed_group_route","COS17集合提交及可见行准备已接入；不要求父子关系，不修改常驻保留和删除列表")
         }
 
         private fun installClearAllClose(api:XposedInterface,loader:ClassLoader) {
             val stack=Class.forName("com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout",false,loader)
             val callback=Class.forName(stack.name+"\$\$ExternalSyntheticLambda7",false,loader)
-            // Verified COS17 callback: the close=true branch ONLY calls animateCollapseShade(0).
-            // The native post-collapse action still owns notification removal and completion.
+            // COS17 shares ONE Lambda5 completion between the end consumer and
+            // post-collapse action (stock source lines 1606-1626). Lambda5 false
+            // runs onClearAllAnimationsEnd; true posts the native equivalent.
+            // The no-close branch must run that same native callback, not a
+            // synthetic collection deletion or a second clearNotifications call.
             val route=NotificationClearAllContract.resolve(callback,stack) ?: error("Unknown clear-all callback contract")
+            val completionRoute=NotificationLocalDismissContract.completionRoute(route.completion.type,stack)
+                ?: error("Unknown clear-all completion contract")
+            api.hook(completionRoute).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val receiver=chain.getThisObject()
+                val once=if(Looper.myLooper()==Looper.getMainLooper())clearCompletions[receiver] else null
+                // Only our exact retained callback instances are guarded. The
+                // original first invocation always executes, including the
+                // OEM's post-to-main path; its registered collapse replay is a no-op.
+                if(once!=null && !once.claim())null else chain.proceed()
+            }
             val expanded=stack.getDeclaredField("mIsExpanded").apply { isAccessible=true }
             val needsClose=stack.getDeclaredField("mShadeNeedsToClose").apply { isAccessible=true }
             api.hook(route.method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                 if(replayingClose || Looper.myLooper()!=Looper.getMainLooper())return@intercept chain.proceed()
                 val receiver=chain.getThisObject() ?: return@intercept chain.proceed()
                 val owner=route.owner.get(receiver) as? View ?: return@intercept chain.proceed()
+                val retain=runCatching {
+                    route.close.getBoolean(receiver) && expanded.getBoolean(owner) && needsClose.getBoolean(owner) &&
+                        owner.isAttachedToWindow && owner.isShown && allowed(api,owner.context) &&
+                        hasVisibleClearPreparation(owner.rootView)
+                }.getOrDefault(false)
+                if(retain) {
+                    val completion=route.completion.get(receiver)
+                    if(completion!=null) {
+                        // Field writes and matching happen before native execution.
+                        // If the ROM refuses the field write, take the original path.
+                        val changed=runCatching {route.close.setBoolean(receiver,false)}.isSuccess
+                        if(changed) {
+                            clearCompletions[completion]=NotificationLocalDismissContract.OnceCompletion()
+                            val acceptedBefore=collectionAcceptSequence
+                            val shadeEpoch=shadeEpochs[owner] ?: 0
+                            val result=try {chain.proceed()} finally {route.close.setBoolean(receiver,true)}
+                            val argument=chain.getArg(0)
+                            // Lambda5 can post its native commit. This single queued
+                            // continuation follows it, then holds only ACCEPTED dust.
+                            // Rejected/intercepted rows never dissolve or delay collapse.
+                            ui.post {safe {
+                                val close={
+                                    replayingClose=true
+                                    try {route.method.invoke(receiver,argument);Unit} finally {replayingClose=false}
+                                }
+                                val stillOpen=owner.isAttachedToWindow && owner.isShown &&
+                                    (shadeEpochs[owner] ?: 0)==shadeEpoch &&
+                                    runCatching {expanded.getBoolean(owner)}.getOrDefault(false)
+                                if(stillOpen) {
+                                    var deferred=false
+                                    try {
+                                        val delay=if(collectionAcceptSequence!=acceptedBefore && allowed(api,owner.context))
+                                            acceptedShadeHold(owner.rootView) else 0L
+                                        deferred=deferClearAll(owner,delay,close)
+                                        current("clear_close_accepted","native completion executed once; acceptedHold=${delay}ms")
+                                    } finally {
+                                        // Even a diagnostic/scheduling error must release the
+                                        // original close path; completion itself remains once.
+                                        if(!deferred)safe {close()}
+                                    }
+                                }
+                            }}
+                            return@intercept result
+                        }
+                    }
+                }
                 var deferred=false
                 safe {
                     if(route.close.getBoolean(receiver) && expanded.getBoolean(owner) && needsClose.getBoolean(owner) && allowed(api,owner.context)) {
-                        val now=SystemClock.uptimeMillis()
-                        val delay=effects.values.filter { it.belongsTo(owner.rootView) }.maxOfOrNull { it.shadeHoldMs(now) }
-                            ?: captures.values.filter { it.committed && !it.cancelled && it.root.get()===owner.rootView }
-                                .maxOfOrNull { clearAllHoldMs(speed,0) } ?: 0L
+                        val delay=acceptedShadeHold(owner.rootView)
                         if(delay>0 || shadeCloses.containsKey(owner)) {
                             val argument=chain.getArg(0)
                             deferred=deferClearAll(owner,delay) {
                                 replayingClose=true
-                                try { route.method.invoke(receiver,argument) } finally { replayingClose=false }
+                                try {route.method.invoke(receiver,argument)} finally {replayingClose=false}
                             }
                         }
                     }
                 }
                 if(deferred)null else chain.proceed()
             }
+            runCatching {api.deoptimize(completionRoute)}
             // Manual shade closing takes priority. Never collapse a newly reopened panel later.
             stack.getDeclaredMethod("setIsExpanded",Boolean::class.javaPrimitiveType).let { method ->
                 api.hook(method).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                     if(chain.getArg(0)==false && Looper.myLooper()==Looper.getMainLooper())
-                        (chain.getThisObject() as? View)?.let(::cancelShadeClose)
+                        (chain.getThisObject() as? View)?.let {owner ->
+                            shadeEpochs[owner]=(shadeEpochs[owner] ?: 0)+1
+                            cancelShadeClose(owner)
+                        }
                     chain.proceed()
                 }
             }
             stack.declaredMethods.filter { it.name=="clearNotifications" }.forEach { runCatching { api.deoptimize(it) } }
             report("clear_all_route","一键清除收起回调已接入；只在粒子播放期间短暂等待")
+        }
+
+        private fun acceptedShadeHold(root:View):Long {
+            val now=SystemClock.uptimeMillis()
+            return maxOf(
+                effects.values.filter {it.belongsTo(root)}.maxOfOrNull {it.shadeHoldMs(now)} ?: 0L,
+                captures.values.filter {it.committed && !it.cancelled && it.root.get()===root}
+                    .maxOfOrNull {clearAllHoldMs(speed,0)} ?: 0L)
         }
 
         /** Own one bounded callback, never an Xposed Chain. Also used by the lifecycle probe. */
@@ -263,10 +452,9 @@ object ParticleDissolveHook {
             if (Looper.myLooper() != Looper.getMainLooper()) return
             report("event_${event.name.lowercase()}","${event.name}: ${view.javaClass.simpleName}")
             when (event) {
-                NotificationMotionContract.Event.PREPARE -> {
-                    val old = captures[view]
-                    if (old == null || old.cancelled || SystemClock.uptimeMillis()-old.createdAt>100L) prepare(view)
-                }
+                // A touch-down is not deletion. Record only once native dismissal
+                // begins, or explicit clear-all selects a visible clearable row.
+                NotificationMotionContract.Event.PREPARE -> Unit
                 NotificationMotionContract.Event.REQUEST -> request(view)
                 NotificationMotionContract.Event.ACCEPT -> dismiss(view)
                 NotificationMotionContract.Event.CANCEL -> cancel(view)
@@ -278,7 +466,7 @@ object ParticleDissolveHook {
         private inline fun safe(block: () -> Unit) {
             try { block() } catch (error: Throwable) {
                 retryAt = SystemClock.uptimeMillis() + 30_000L
-                report("error","${error.javaClass.simpleName}: ${error.message}")
+                current("error","${error.javaClass.simpleName}: ${error.message}")
                 try { Lg.w("LiquidGlass", "notification particles skipped; native dismissal retained", error) }
                 catch (_: Throwable) { }
             }
@@ -286,20 +474,31 @@ object ParticleDissolveHook {
         private fun allowed(api: XposedInterface, context: Context): Boolean {
             if (Looper.myLooper() != Looper.getMainLooper()) return false
             if (!membershipGranted()) {
+                current("gate","member=false; enabled=false; reason=member_confirmation_missing")
                 enabled = false; readAt = -1L; stopAll(); return false
             }
             val now = SystemClock.uptimeMillis()
-            if (now < retryAt) return false
+            if (now < retryAt) {
+                current("gate","member=true; enabled=$enabled; reason=error_cooldown")
+                return false
+            }
             if (readAt < 0 || now - readAt >= 500) {
                 readAt = now
                 val prefs = Prefs.read(api)
-                enabled = prefs.getBoolean(Prefs.KEY_MASTER, false) && prefs.getBoolean(KEY_ENABLED, false)
+                masterEnabled=prefs.getBoolean(Prefs.KEY_MASTER,false)
+                featureEnabled=prefs.getBoolean(KEY_ENABLED,false)
+                enabled=masterEnabled && featureEnabled
                 speed = Prefs.readIntCompat(prefs, KEY_SPEED, DEFAULT_SPEED).coerceIn(MIN_SPEED, MAX_SPEED)
                 if (!enabled) stopAll()
-                report("enabled",if(enabled)"enabled" else "disabled")
+                current("enabled",if(enabled)"enabled" else "disabled")
             }
             val power = context.getSystemService(PowerManager::class.java)
-            return enabled && ValueAnimator.areAnimatorsEnabled() && power?.isInteractive == true && !power.isPowerSaveMode
+            val animators=ValueAnimator.areAnimatorsEnabled()
+            val interactive=power?.isInteractive==true
+            val powerSave=power?.isPowerSaveMode==true
+            val result=enabled && animators && interactive && !powerSave
+            current("gate","member=true; master=$masterEnabled; feature=$featureEnabled; enabled=$enabled; animators=$animators; interactive=$interactive; powerSave=$powerSave; allowed=$result")
+            return result
         }
 
         private class Capture(val root: WeakReference<View>, val x: Float, val y: Float,
@@ -344,7 +543,7 @@ object ParticleDissolveHook {
                 view.width, actualHeight, view.resources.displayMetrics.density, node)
             captures[view] = c
             c.rowTranslation=view.translationX
-            report("capture","GPU recorded ${c.width}x${c.height}; root=${root.javaClass.simpleName}")
+            current("capture","GPU recorded ${c.width}x${c.height}; root=${root.javaClass.simpleName}")
             val weak = WeakReference(view)
             ui.postDelayed({ safe { weak.get()?.let { row ->
                 if (captures[row] === c) { captures.remove(row);c.cancelled = true }
@@ -355,7 +554,7 @@ object ParticleDissolveHook {
                         if (!c.cancelled) {
                             val image = snapshot(c)
                             // Never recycle an image that may have reached a recorded shader.
-                            if (!c.cancelled) { c.bitmap = image;report("snapshot","hardware texture ${image.width}x${image.height}") }
+                            if (!c.cancelled) { c.bitmap = image;current("snapshot","hardware texture ${image.width}x${image.height}") }
                         }
                     } catch (error: Throwable) {
                         ui.post { safe { throw error } }
@@ -398,6 +597,7 @@ object ParticleDissolveHook {
             val power = root.context.getSystemService(PowerManager::class.java)
             if (!root.isAttachedToWindow || !root.isShown || power?.isInteractive != true ||
                 power.isPowerSaveMode || !ValueAnimator.areAnimatorsEnabled() || effects.size >= MAX_ACTIVE) {
+                current("collection_start_skip","rootAttached=${root.isAttachedToWindow}; rootShown=${root.isShown}; rootVisibility=${root.windowVisibility}; active=${effects.size}; 原生删除仍执行")
                 captures.remove(view);c.cancelled = true;return
             }
             c.consumed = true;captures.remove(view)
@@ -415,8 +615,8 @@ object ParticleDissolveHook {
             effects[view] = dust
             dust.start()
             c.hiddenAlpha=view.alpha;view.alpha=0f
-            report("handoff","已从滑动位置接管：x=${c.releaseX.toInt()}；原生删除回调继续运行")
-            report("playing","GPU dust started")
+            current("handoff","已从滑动位置接管：x=${c.releaseX.toInt()}；原生删除回调继续运行")
+            current("playing","GPU dust started")
         }
         private fun cancel(view: View) {
             val c = captures[view]
@@ -429,6 +629,7 @@ object ParticleDissolveHook {
         }
         internal fun stopAll() {
             if (Looper.myLooper() != Looper.getMainLooper()) { ui.post { stopAll() };return }
+            releaseClearPreparation(true)
             captures.values.forEach { it.cancelled = true };captures.clear()
             effects.values.toList().forEach { it.stop() };effects.clear()
             // Disabling particles releases native completion immediately, without another hold.
@@ -586,7 +787,7 @@ object ParticleDissolveHook {
 
 /** Reject changed OEM callback layouts rather than guessing which boolean controls collapse. */
 object NotificationClearAllContract {
-    data class Route(val method:Method,val owner:Field,val close:Field)
+    data class Route(val method:Method,val owner:Field,val close:Field,val completion:Field)
     fun resolve(callback:Class<*>,stack:Class<*>):Route? {
         if(!java.util.function.Consumer::class.java.isAssignableFrom(callback))return null
         val fields=callback.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
@@ -595,8 +796,9 @@ object NotificationClearAllContract {
         if(fields.size!=3 || fields.none { java.util.function.Consumer::class.java.isAssignableFrom(it.type) })return null
         val method=callback.declaredMethods.singleOrNull { it.name=="accept" && it.returnType==Void.TYPE &&
             it.parameterTypes.contentEquals(arrayOf(Any::class.java)) && !Modifier.isAbstract(it.modifiers) } ?: return null
-        owner.isAccessible=true;close.isAccessible=true;method.isAccessible=true
-        return Route(method,owner,close)
+        val completion=fields.singleOrNull {java.util.function.Consumer::class.java.isAssignableFrom(it.type)} ?: return null
+        owner.isAccessible=true;close.isAccessible=true;completion.isAccessible=true;method.isAccessible=true
+        return Route(method,owner,close,completion)
     }
 }
 

@@ -1,0 +1,23 @@
+{
+  "version": "2.0.1-debug4",
+  "versionCode": 2000004,
+  "apk": "DreamGlass-2.0.1-debug4.apk",
+  "apkSha256": "9a815c5d17aa38213073a7e3f11bbdf2196453b70f4e095a1eda54a56ec62bbe",
+  "unitTests": {
+    "tests": 329,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "debugAndReleaseBuildPassed": true,
+  "releaseLintErrors": 0,
+  "releaseLintWarnings": 358,
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "nativeSourceContractChecks": 10,
+  "gpuProbeRerunThisRound": false,
+  "physicalDeviceOperated": false,
+  "physicalVisualVerified": false,
+  "oemLockWallpaperAcquisitionVerified": false,
+  "powerConsumptionMeasured": false,
+  "newDependencies": false
+}

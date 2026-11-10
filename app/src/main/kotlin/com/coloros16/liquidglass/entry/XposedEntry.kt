@@ -184,7 +184,9 @@ class XposedEntry : XposedModule() {
     /** 安装主入口：SystemUI 初始化回调、Launcher 包加载和热重载共用门槛与分发。 */
     private fun doInstall(packageName: String, classLoader: ClassLoader) {
         RuntimeDiagnostics.begin(packageName)
-        Lg.e("lg-boot", "host=$packageName pid=${android.os.Process.myPid()}")
+        Lg.e("lg-boot", "host=$packageName pid=${android.os.Process.myPid()} module=${BuildConfig.VERSION_NAME}/${BuildConfig.VERSION_CODE}")
+        RuntimeDiagnostics.update("module-build","${BuildConfig.VERSION_NAME}/${BuildConfig.VERSION_CODE}; process=${android.app.Application.getProcessName()}")
+        RuntimeDiagnostics.update("member-confirmation",if(Prefs.memberAllowed(this))"诚信确认有效（跨版本保留）" else "尚未确认或配置读取不可用；会员渲染不会执行")
         // 模块默认全关（Prefs.masterEnabled=false 直接跳过，零侵入）。
         if (!Prefs.masterEnabled(this)) {
             RuntimeDiagnostics.mark("configured", "总开关关闭，未安装效果 Hook")

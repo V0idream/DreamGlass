@@ -50,8 +50,6 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         selected = savedInstanceState?.getInt("tab", 0) ?: 0
         App.addServiceStateListener(this, false)
         showPage()
-        if(savedInstanceState==null && MembershipState.firstNotice(this))
-            startActivity(Intent(this,MembershipActivity::class.java).putExtra("first_notice",true))
     }
 
     override fun onResume() { super.onResume(); if (::frameworkLabel.isInitialized) refreshState() }
@@ -152,7 +150,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         val member=card()
         member.addView(text("会员扩展",16f,accent,true))
         member.addView(text("粒子飘散 · 动态倾斜 · 锁屏与组件玻璃",12f,muted))
-        action(member,if(MembershipState.confirmed(this))"管理当前版本会员功能  ›" else "诚信确认后开启扩展  ›",true) {
+        action(member,if(MembershipState.confirmed(this))"管理会员功能  ›" else "诚信确认后开启扩展  ›",true) {
             startActivity(Intent(this,MembershipActivity::class.java))
         }
         val safe = card()
@@ -253,7 +251,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             for ((id, label, detail) in rows) DreamUi.row(c, label, detail) { advanced(id) }
         }
         val member=card()
-        DreamUi.row(member,"会员功能","粒子、倾斜、锁屏与组件玻璃 · 每版本诚信确认") {
+        DreamUi.row(member,"会员功能","粒子、倾斜、锁屏与组件玻璃 · 诚信确认后使用") {
             startActivity(Intent(this,MembershipActivity::class.java))
         }
         performanceControls()

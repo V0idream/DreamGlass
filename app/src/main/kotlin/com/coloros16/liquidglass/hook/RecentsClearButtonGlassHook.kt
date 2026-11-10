@@ -28,7 +28,7 @@ import java.util.WeakHashMap
  * remain native. Independent of the incompatible COS16 PressFeedbackHandler. */
 internal object RecentsClearButtonGlassHook {
     private data class Contract(val button:Class<*>,val panel:Class<*>,val slot:Field,
-        val getButton:Method,val bounds:Method,val forceBlocked:Method)
+        val getButton:Method,val bounds:Method)
     private var contract:Contract?=null
     private var api:XposedInterface?=null
     private val states=WeakHashMap<View,State>()
@@ -81,7 +81,8 @@ internal object RecentsClearButtonGlassHook {
             val slot=panel.getDeclaredField("a").apply {check(type==button);isAccessible=true}
             val getter=panel.getDeclaredMethod("getClearPressButton").apply {check(returnType==View::class.java)}
             val bounds=button.getDeclaredMethod("getItemBackgroundRect").apply {check(returnType==RectF::class.java)}
-            val blocked=button.getDeclaredMethod("getForceBlockDraw").apply {check(returnType==Boolean::class.javaPrimitiveType)}
+            button.getDeclaredMethod("getForceBlockDraw").apply {check(returnType==Boolean::class.javaPrimitiveType)}
+            val isolation=button.getDeclaredMethod("setForceBlockDraw",Boolean::class.javaPrimitiveType)
             val inflate=panel.getDeclaredMethod("onFinishInflate")
             val attached=button.getDeclaredMethod("onAttachedToWindow")
             val onDraw=button.getDeclaredMethod("onDraw",Canvas::class.java)
@@ -94,6 +95,19 @@ internal object RecentsClearButtonGlassHook {
             api.hook(attached).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 val result=chain.proceed()
                 if(ui())(chain.getThisObject() as? View)?.takeIf(::eligible)?.let(::observe)
+                result
+            }
+            api.hook(isolation).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val result=chain.proceed()
+                if(ui())(chain.getThisObject() as? View)?.let {view ->
+                    // The verified COS17 setter only assigns its field. It
+                    // does NOT invalidate the button / cached parent layer.
+                    // Keep our material in the enter display list and request
+                    // one new record when native isolation changes or ends.
+                    // No native flag, layer, alpha or cleanup callback changes.
+                    val state=states[view] ?: if(eligible(view))observe(view) else null
+                    state?.nativeIsolationChanged(chain.getArg(0) as Boolean)
+                }
                 result
             }
             api.hook(onDraw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
@@ -113,8 +127,8 @@ internal object RecentsClearButtonGlassHook {
                 // sufficient. Controller setup and unrelated buttons stay native.
                 if(nativeDraw.current()===chain.getThisObject() && nativeDraw.current()!=null)true else chain.proceed()
             }
-            api.deoptimize(onDraw);api.deoptimize(useBlur);api.deoptimize(inflate)
-            contract=Contract(button,panel,slot,getter,bounds,blocked)
+            api.deoptimize(onDraw);api.deoptimize(useBlur);api.deoptimize(inflate);api.deoptimize(isolation)
+            contract=Contract(button,panel,slot,getter,bounds)
             mark("contract","已核对COS17 btn_clear实例、panel slot/getter及原生绘制分支；保留点击和清理回调")
         }.onFailure {mark("unavailable","缺少精确控件或OEM背景接口，保留原生：${it.javaClass.simpleName}")}
     }
@@ -129,16 +143,28 @@ internal object RecentsClearButtonGlassHook {
         private var wasShown=false
         fun draw(canvas:Canvas):Boolean {
             val view=target.get() ?: return false
-            // clearEnterIsolation can release forceBlockDraw after preDraw.
             // Prepare on this Canvas too; never wait for another invalidation.
             sync(requestFrame=false)
-            if(!active || !view.isShown || contract?.forceBlocked?.invoke(view)==true)return false
+            // OEM forceBlockDraw suppresses its fallback paint/src icon during
+            // the *entire* overview enter animation. It does not hide the native
+            // text, and must not hide this separate material either. The native
+            // parent RenderNode still controls enter/exit alpha and translation.
+            if(!active || !view.isShown || view.windowVisibility!=View.VISIBLE)return false
             val p=params ?: return false
-            val source=LauncherHook.nativeClearSource(view)
-            val drawn=surface.draw(canvas,area,p,source,view.resources.displayMetrics.density)
-            if(drawn)mark(if(source==null)"visible-base" else "visible-live",
-                if(source==null)"缺少原生GPU输入；保留可见胶囊底色，不删除背景" else "在按钮文字前直接绘制原生实时shader；不依赖背景RenderNode透明度")
-            return drawn
+            return LauncherHook.withNativeClearSource(view) {source,info ->
+                val drawn=surface.draw(canvas,area,p,source,view.resources.displayMetrics.density)
+                RuntimeDiagnostics.update("recents-clear-glass-current",
+                    "source=${info.kind}; reason=${info.reason}; baseDrawn=$drawn; opticalSubmitted=${surface.opticalSubmitted}; error=${surface.opticalError ?: "none"}")
+                drawn
+            }
+        }
+        fun nativeIsolationChanged(isolated:Boolean) {
+            val view=target.get() ?: return
+            sync(requestFrame=false)
+            // Event-driven: exactly one invalidation per native setter call,
+            // never a frame loop while overview is closed or the device sleeps.
+            if(active && view.isAttachedToWindow && view.isShown && view.windowVisibility==View.VISIBLE)view.invalidate()
+            mark("isolation","native=$isolated; materialReady=$active; nativeAlphaAndCleanupPreserved=true")
         }
         private fun sync(requestFrame:Boolean=true) {
             val view=target.get() ?: return
@@ -149,9 +175,8 @@ internal object RecentsClearButtonGlassHook {
                 val c=contract ?: return
                 if(!enabled || !eligible(view) || !shown || !view.isHardwareAccelerated ||
                     view.width<=0 || view.height<=0 || SystemClock.uptimeMillis()<blockedUntil) {restore(view);return}
-                // Native entering isolation intentionally skips visible drawing.
-                // It must NOT discard prepared geometry/material: the native
-                // animation may release it later in this same frame.
+                // Geometry is independent of the OEM fallback-paint isolation;
+                // native entering alpha/scale remain on the parent RenderNode.
                 val b=RectF(c.bounds.invoke(view) as RectF)
                 val radius=RecentsClearButtonPolicy.radius(b.left,b.top,b.right,b.bottom) ?: run {restore(view);return}
                 val config=snapshot ?: return

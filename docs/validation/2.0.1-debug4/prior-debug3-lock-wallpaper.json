@@ -1,0 +1,16 @@
+{
+  "checks": {
+    "first-lock-wallpaper-hardware-output": true,
+    "first-lock-wallpaper-correct-source": true,
+    "cached-source-reused": true,
+    "old-scene-immediately-invalidated": true,
+    "new-lock-wallpaper-hardware-output": true,
+    "new-lock-wallpaper-correct-source": true,
+    "distinct-generation-output": true,
+    "changed-event-clears-prepared-image": true
+  },
+  "passed": true,
+  "physicalVisualVerified": false,
+  "oemWallpaperAcquisitionVerified": false,
+  "displayCaptureUsed": false
+}

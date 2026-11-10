@@ -12,9 +12,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.coloros16.liquidglass.R
 
-/** Local, per-version self-report only; no payment transaction is verified. */
+/** Local persistent self-report only; no payment transaction is verified. */
 object MembershipState {
-    private fun noticePrefs(c:Context)=c.getSharedPreferences("dreamglass_membership",Context.MODE_PRIVATE)
     private fun localConfirmed(c:Context)=com.coloros16.liquidglass.config.MemberFeaturePolicy.isConfirmed(com.coloros16.liquidglass.config.Prefs.raw(c))
     fun confirmed(c:Context):Boolean {
         if(!localConfirmed(c))return false
@@ -27,11 +26,6 @@ object MembershipState {
     @Synchronized fun synchronize(c:Context,service:io.github.libxposed.service.XposedService):Boolean =
         com.coloros16.liquidglass.config.MemberStoreCoordinator.synchronize(
             com.coloros16.liquidglass.config.Prefs.raw(c),com.coloros16.liquidglass.config.Prefs.raw(service))
-    fun firstNotice(c:Context):Boolean {
-        val p=noticePrefs(c);val version=com.coloros16.liquidglass.config.MemberFeaturePolicy.currentVersion
-        if(p.getString("notice_version",null)==version)return false
-        p.edit().putString("notice_version",version).apply();return !confirmed(c)
-    }
     @Synchronized fun confirm(c:Context):Boolean {
         val policy=com.coloros16.liquidglass.config.MemberFeaturePolicy
         val local=com.coloros16.liquidglass.config.Prefs.raw(c)
@@ -80,10 +74,10 @@ class MembershipActivity:AppCompatActivity() {
                 setImageDrawable(assets.open("appreciation/wechat.png").use { android.graphics.drawable.Drawable.createFromStream(it,null) });scaleType=ImageView.ScaleType.FIT_CENTER
                 contentDescription="微信赞赏码，建议支付五元"
             },LinearLayout.LayoutParams(-1,dp(210)))
-            body.addView(DreamUi.label(this,"每次版本更新需要重新点击确认；已经支持过的用户无需重复付款。确认后请自行开启所需功能。",13f,DreamUi.accent))
+            body.addView(DreamUi.label(this,"诚信确认会保留，版本更新无需重复确认或付款。确认后请自行开启所需功能。",13f,DreamUi.accent))
             body.addView(DreamUi.label(this,"当然你实在不想付费直接用我也不拦你，不强制你给钱所以也别骂我圈钱。",13f,DreamUi.muted))
         } else {
-            body.addView(DreamUi.label(this,"当前版本已确认 · ${com.coloros16.liquidglass.BuildConfig.VERSION_NAME}",12f,DreamUi.accent))
+            body.addView(DreamUi.label(this,"诚信确认已保存",12f,DreamUi.accent))
             val card=DreamUi.card(body)
             for((id,title,desc) in listOf(
                 Triple("particles","粒子飘散","通知删除、多任务卡片消散与速度"),
@@ -104,7 +98,7 @@ class MembershipActivity:AppCompatActivity() {
                 if(MembershipState.confirm(this)) {
                     val destination=intent.getStringExtra("destination")
                     if(destination in MembershipState.categories) { openCategory(destination!!);finish() }
-                    else if(intent.getBooleanExtra("first_notice",false))finish() else show()
+                    else show()
                 } else Toast.makeText(this,"确认未能保存，请重试",Toast.LENGTH_SHORT).show()
             }
             DreamUi.action(actions,"暂不支付，退出",false) { if(!MembershipState.decline(this))Toast.makeText(this,"关闭状态未能同步，请重新打开模块重试",Toast.LENGTH_LONG).show();finishAffinity() }

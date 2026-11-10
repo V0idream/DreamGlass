@@ -24,7 +24,7 @@ object MemberStoreCoordinator {
         if (remoteState.isFailure) { tryLock(remote); return false }
         if (remoteState.getOrNull() == true) return true // Preserve selected switches.
 
-        // New/old remote epoch: remove old switches BEFORE copying explicit local
+        // A never-confirmed/revoked remote store: clear switches BEFORE copying local
         // confirmation. Neither legacy flags nor missing-default-true options
         // should silently activate after reconnection or upgrade.
         if (!tryLock(remote)) return false
@@ -50,6 +50,6 @@ object MemberStoreCoordinator {
         runCatching { MemberFeaturePolicy.lock(raw) }.getOrDefault(false)
 
     private fun confirmation(raw: SharedPreferences, version: String): Result<Boolean> = runCatching {
-        MemberFeaturePolicy.unfiltered(raw).getString(MemberFeaturePolicy.KEY_CONFIRMED_VERSION, null) == version
+        MemberFeaturePolicy.tokenConfirmed(MemberFeaturePolicy.unfiltered(raw).getString(MemberFeaturePolicy.KEY_CONFIRMED_VERSION, null),version)
     }
 }

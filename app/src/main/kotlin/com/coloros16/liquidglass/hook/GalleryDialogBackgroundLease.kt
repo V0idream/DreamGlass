@@ -14,7 +14,8 @@ import java.lang.ref.WeakReference
  * COUIStateEffectDrawable is safe as a CHILD of an ordinary View background:
  * unlike COUIButton, these hosts do not forward setBackground into that child.
  * Preserve native geometry while clearing View's opaque-background metadata.
- * Actual glass is drawn before the panel's children, not inside this Drawable.
+ * Draw in the actual native background channel before foreground children.
+ * This does not depend on ART dispatching a hooked ViewGroup super method.
  */
 internal object GalleryDialogBackgroundLease {
     fun owns(view:View)=(view.background as? Leased)?.owner?.get()===view
@@ -37,7 +38,12 @@ internal object GalleryDialogBackgroundLease {
     }
     private class Leased(view:View,val original:Drawable?):Drawable() {
         val owner=WeakReference(view)
-        override fun draw(canvas:Canvas) { /* background only; panel dispatch draws glass */ }
+        override fun draw(canvas:Canvas) {
+            val host=owner.get() ?: return
+            val panel=GalleryNativeSurfaceContract.dialogPaintPanel(host) ?: return
+            if(GalleryLiveBackdrop.owns(panel))GalleryLiveBackdrop.drawDialogBackground(panel,host,canvas)
+            else original?.draw(canvas)
+        }
         @Deprecated("Deprecated in Java") override fun getOpacity()=PixelFormat.TRANSLUCENT
         override fun getPadding(out:Rect)=original?.getPadding(out) ?: super.getPadding(out)
         override fun getOutline(out:Outline) {original?.getOutline(out) ?: out.setEmpty()}

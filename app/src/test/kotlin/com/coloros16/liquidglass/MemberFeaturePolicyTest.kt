@@ -43,12 +43,12 @@ class MemberFeaturePolicyTest {
         assertFalse(wrapped(raw).getBoolean("notification_popup_glass_enable", true))
     }
 
-    @Test fun explicitConfirmationUnlocksOnlyThisExactVersionNameAndCode() {
+    @Test fun explicitConfirmationSurvivesVersionNameAndCodeChanges() {
         val raw = MemoryPreferences(); raw.edit().putBoolean(feature, true).commit(); confirm(raw)
         assertTrue(wrapped(raw).getBoolean(feature, false))
         val changedName = MemberFeaturePolicy.wrap(raw, MemberFeaturePolicy.versionToken("1.1.9", 1_001_009))
         val changedCode = MemberFeaturePolicy.wrap(raw, MemberFeaturePolicy.versionToken("1.1.9-debug1", 1_001_010))
-        assertFalse(changedName.getBoolean(feature, true)); assertFalse(changedCode.getBoolean(feature, true))
+        assertTrue(changedName.getBoolean(feature, false)); assertTrue(changedCode.getBoolean(feature, false))
     }
 
     @Test fun configImportCannotWriteOrExportTokenOrLegacyConfirmation() {
@@ -118,6 +118,20 @@ class MemberFeaturePolicyTest {
         val oldWrapper = MemberFeaturePolicy.wrap(raw, "old")
         val current = MemberFeaturePolicy.wrap(oldWrapper, version)
         assertTrue(current.getBoolean(feature, false)); assertSame(current, MemberFeaturePolicy.wrap(current, version))
+    }
+
+    @Test fun updateCleanupPreservesLegacyConfirmationAndSelectedFeatures() {
+        val raw=MemoryPreferences();confirm(raw);raw.edit().putBoolean(feature,true).commit()
+        val writes=raw.commitAttempts
+        assertTrue(MemberFeaturePolicy.disableIfUnconfirmed(raw))
+        assertTrue(MemberFeaturePolicy.confirmed(raw));assertTrue(raw.getBoolean(feature,false))
+        assertEquals(writes,raw.commitAttempts)
+    }
+    @Test fun malformedLegacyMarkersDoNotGrantAccess() {
+        for(token in listOf("", "1001009@", "0@2.0", "99999999999@2.0", "random", "100@bad")) {
+            val raw=MemoryPreferences();raw.edit().putString(MemberFeaturePolicy.KEY_CONFIRMED_VERSION,token).commit()
+            assertFalse(token,MemberFeaturePolicy.confirmed(raw))
+        }
     }
 
     /** No Android runtime calls: tests the actual SharedPreferences facade against

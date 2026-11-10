@@ -2,9 +2,8 @@
 package com.coloros16.liquidglass.config
 
 import android.content.SharedPreferences
-import com.coloros16.liquidglass.BuildConfig
 
-/** Version-scoped honor confirmation, not payment verification or DRM.
+/** Persistent honor confirmation, not payment verification or DRM.
  * Confirmation must come from the explicit membership action, never a config
  * import. Hook processes must consume [wrap], not the unfiltered backing store.
  */
@@ -27,7 +26,13 @@ object MemberFeaturePolicy {
     )
 
     fun versionToken(name: String, code: Int): String = "$code@$name"
-    val currentVersion: String = versionToken(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)
+    // Kept under the existing key for upgrades. Confirmation is no longer tied
+    // to an APK version; historical explicit tokens remain valid.
+    const val currentVersion: String = "honor-confirmed-v1"
+    private val historicalToken=Regex("[1-9][0-9]{0,9}@[0-9][A-Za-z0-9.+_-]{0,63}")
+    internal fun tokenConfirmed(token:String?,version:String=currentVersion):Boolean =
+        token==currentVersion || token==version || token!=null && historicalToken.matches(token) &&
+            token.substringBefore('@').toLongOrNull()?.let {it in 1..Int.MAX_VALUE.toLong()}==true
 
     fun wrap(raw: SharedPreferences): SharedPreferences = wrap(raw, currentVersion)
     internal fun wrap(raw: SharedPreferences, version: String): SharedPreferences =
@@ -40,7 +45,7 @@ object MemberFeaturePolicy {
     fun confirmed(raw: SharedPreferences): Boolean = confirmed(raw, currentVersion)
     fun isConfirmed(raw: SharedPreferences): Boolean = confirmed(raw)
     internal fun confirmed(raw: SharedPreferences, version: String): Boolean = try {
-        unfiltered(raw).getString(KEY_CONFIRMED_VERSION, null) == version
+        tokenConfirmed(unfiltered(raw).getString(KEY_CONFIRMED_VERSION, null),version)
     } catch (_: RuntimeException) { false }
 
     /** Call only from the explicit 'I have paid, continue' action, on BOTH the
@@ -66,8 +71,8 @@ object MemberFeaturePolicy {
     }
     fun lock(raw: SharedPreferences): Boolean = revokeAndDisable(raw)
 
-    /** Optional UI startup cleanup. Runtime reads deny stale versions even
-     * before cleanup, including when a Hook only has a read-only remote store. */
+    /** Deny only never-confirmed/revoked stores. An APK update must not clear
+     * a prior explicit confirmation or the user's selected member switches. */
     fun disableIfUnconfirmed(raw: SharedPreferences): Boolean =
         if (confirmed(raw)) true else revokeAndDisable(raw)
 

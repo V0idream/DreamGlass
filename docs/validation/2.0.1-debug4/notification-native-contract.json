@@ -1,0 +1,18 @@
+{
+  "checks": {
+    "native_selector_accepts_view_and_boolean": true,
+    "native_third_party_theme_selects_non": true,
+    "native_motion_and_non_are_distinct": true,
+    "native_platform_creation_waits_for_attachment": true,
+    "native_drawable_getter_retries_creation": true,
+    "module_observes_native_heads_up_selector": true,
+    "module_restores_native_selection_context": true,
+    "module_repairs_attached_motion_and_non": true,
+    "module_scopes_exclusion_through_lazy_getter": true,
+    "module_keeps_native_paint_if_unmapped": true
+  },
+  "passed": true,
+  "systemUiApkSha256": "a06bf8e0046a5e6a19347e09064e6ce8f79e0e963c78c8ce65f0fbf56d770e62",
+  "physicalVisualVerified": false,
+  "deviceOperated": false
+}
