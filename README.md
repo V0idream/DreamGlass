@@ -1,6 +1,6 @@
 # DreamGlass
 
-**For ColorOS 17** · 正式版本 **2.0** · 预发布候选 **2.0.1-debug7**
+**For ColorOS 17** · 正式版本 **2.0** · 预发布候选 **2.0.1-debug8**
 
 基础材质完全免费。粒子飘散、应用／通知倾斜、锁屏玻璃，以及其他应用与组件玻璃集中在“会员功能”，采用五元诚信付款，不联网核验支付。尚未在会员页确认时，会员开关在设置与实际 Hook 中均保持关闭。页面只提供“我已支付，请继续”和“暂不支付，退出”。
 
@@ -10,9 +10,9 @@
 
 [2.0 已正式发布](https://github.com/V0idream/DreamGlass/releases/tag/v2.0)，附带 APK、源码、许可与校验和。
 
-新版候选：[2.0.1-debug7 下载](https://github.com/V0idream/DreamGlass/releases/tag/v2.0.1-debug7)。修正展开场景旧快照挡住新帧、挂载时序和原生模糊层残留，保护通知与流体云共用背景的系统回调；保留按需抓屏、GPU 模糊及独立锁屏壁纸来源。
+新版候选：[2.0.1-debug8 下载](https://github.com/V0idream/DreamGlass/releases/tag/v2.0.1-debug8)。合并抓屏重复限速，通知出现／面板显示／流体云展开时短暂优先更新；减少 GPU 初始材质排队，随后恢复原有省电预算。保留 debug7 的材质、GPU 模糊、场景隔离和通知背景保护。
 
-338 项单元测试、构建、Release Lint 和 27 项本地 Android GPU 契约通过；本次通知崩溃仍缺少真机堆栈，厂商接入、视觉与功耗未验收。详见 [候选说明](docs/RELEASE_2.0.1-debug7.md) 与 [验证记录](docs/validation/2.0.1-debug7/README.md)。计算器适配保持移除，生产模糊使用 GPU。
+343 项单元测试、构建、Release Lint、27 项 Android GPU 背景契约及新增 GPU 更新／隐藏停工检查通过。用户反馈该候选试用效果良好；尚未测量真机延迟改善幅度及功耗。详见 [候选说明](docs/RELEASE_2.0.1-debug8.md) 与 [验证记录](docs/validation/2.0.1-debug8/README.md)。计算器适配保持移除，生产模糊使用 GPU。
 
 诚信付款是应用的支持方式，不修改本项目及第三方代码所附的开源许可与完整源码提供方式。
 

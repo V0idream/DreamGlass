@@ -51,7 +51,7 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
     private var geometry:Geometry?=null
     private var running=false
     @Volatile private var epoch=0L
-    private var lastComputeAtMs=0L
+    private val workBudget=BackdropWorkBudget()
     private val hardware=HardwareBackdropBlur()
     @Volatile private var hardwareRetryAtMs=0L
     @Volatile private var trimHardware=false
@@ -84,8 +84,9 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
     }
 
     /** Drop references only: published bitmaps may still be used by recorded RenderNodes. */
-    fun clear() = synchronized(lock) {
-        epoch++;geometry=null;requested.clear();pending.clear();ready.clear();trimHardware=true
+    fun clear(releaseHardware:Boolean=true) = synchronized(lock) {
+        epoch++;geometry=null;requested.clear();pending.clear();ready.clear()
+        if(releaseHardware)trimHardware=true
         if(!running) {
             running=true
             try { executor.execute(::drain) } catch(t:Throwable) {
@@ -98,19 +99,22 @@ internal class ButtonBackdropWorker(private val invalidate:()->Unit,private val 
     private fun drain() {
         RuntimeWorkPolicy.guarded({}) { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
         // Keep the last good image while coalescing new frames. The entire worker shares one
-        // Shared GPU budget <= 20 jobs/s, only while a visible consumer still needs the result.
+        // Shared GPU budget: two initial credits, then 20 jobs/s, only with visible demand.
         try {
             while(true) {
                 if(!active()) { synchronized(lock) {pending.clear()};return }
-                val interval=if(SystemClock.uptimeMillis()>=hardwareRetryAtMs)50L else RuntimeWorkPolicy.BLUR_INTERVAL_MS
-                val wait=interval-(SystemClock.uptimeMillis()-lastComputeAtMs)
-                if(wait>0)Thread.sleep(wait)
+                if(synchronized(lock) {pending.isEmpty()})return
+                val wait=workBudget.waitMs(SystemClock.uptimeMillis())
+                if(wait>0) {Thread.sleep(wait);continue}
                 val request=synchronized(lock) {
-                    val next=pending.entries.firstOrNull() ?: return
+                    // A surface with no prepared image takes precedence over refreshing one
+                    // already showing a good image. Keep only the latest input per style.
+                    val next=pending.entries.firstOrNull { !ready.containsKey(it.key) }
+                        ?: pending.entries.firstOrNull() ?: return
                     pending.remove(next.key);next.value
                 }
                 if(request.epoch!=epoch || !active())continue
-                lastComputeAtMs=SystemClock.uptimeMillis()
+                workBudget.started(SystemClock.uptimeMillis())
                 try {
                     val bitmap=compute(request)
                     val publish=synchronized(lock) {

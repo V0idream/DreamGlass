@@ -2298,7 +2298,6 @@ object BlurDrawHook {
     }
     private val buttonBackdropWorker by buttonBackdropWorkerDelegate
     @Volatile private var screenInteractive = true
-    @Volatile private var lastDemandCaptureMs = 0L
     private var captureMenuHost: WeakReference<View>? = null
 
     private val captureVisibleRect = ThreadLocal.withInitial { Rect() }
@@ -2330,6 +2329,7 @@ object BlurDrawHook {
     @Volatile private var cloudRequiredCaptureEpoch = Long.MIN_VALUE
     @Volatile private var bannerRequiredCaptureEpoch = Long.MIN_VALUE
     private var lastCaptureStartMs = 0L
+    private val captureWake = Object()
     private val captureExecutor = RuntimeWorkPolicy.executor("DreamGlass-capture")
     private val contrastExecutor = RuntimeWorkPolicy.executor("DreamGlass-contrast")
 
@@ -8744,6 +8744,7 @@ object BlurDrawHook {
         // Publication is atomic from the renderer's perspective: only a frame stamped
         // after this reveal can replace its native fallback. Never recycle a previous app.
         val revealEpoch = ++captureEpoch
+        noteCaptureReveal()
         if (banner) bannerRequiredCaptureEpoch = revealEpoch else cloudRequiredCaptureEpoch = revealEpoch
         lastSnapshotFingerprint=0;lastRegionSnapshotFingerprint=0
         triggerBackgroundCapture(contentChange=true)
@@ -8756,7 +8757,7 @@ object BlurDrawHook {
                         if (current !== host || !(if (banner) isSimpleBannerHostActive() else isCardBackgroundHostActive()) ||
                             isKeyguardLockedNow()) break
                         scheduleElementCaptures()
-                        Thread.sleep(if (captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE) continuousCaptureIntervalMs() else 100L)
+                        Thread.sleep(continuousCaptureIntervalMs())
                     }
                 } catch (_:InterruptedException) {
                     Thread.currentThread().interrupt()
@@ -10805,10 +10806,27 @@ object BlurDrawHook {
      *  setExpansionHeight / 通知卡滑动）置位，复位延迟 300ms）。
      *  间隔 = 1000/有效Hz ms，clamp 4~1000ms（防过快打爆 SF / 过慢背景滞后）。下拉面板与通知横幅共用
      *  同一套速率（[startPanelContinuousCapture] / [startHeadsUpContinuousCapture]）。 */
-    private fun continuousCaptureIntervalMs(): Long = backgroundCadence.intervalMs(
+    private fun continuousCaptureIntervalMs(): Long = backgroundCadence.admittedIntervalMs(
         SystemClock.uptimeMillis(), panelCaptureHz(), isMotionActive,
-        captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE).coerceAtLeast(
-            CaptureDemandPolicy.minimumIntervalMs(captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE))
+        captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE)
+
+    private fun noteCaptureReveal() {
+        synchronized(captureWake) {
+            backgroundCadence.reveal(SystemClock.uptimeMillis())
+            // A reveal can shorten an idle deadline while the serial worker is waiting.
+            captureWake.notifyAll()
+        }
+    }
+
+    private fun awaitCaptureSlot(): Boolean = synchronized(captureWake) {
+        while (screenInteractive && captureDemandActive() && captureMode() != Prefs.BG_CAPTURE_MODE_STATIC) {
+            val wait = CaptureDemandPolicy.waitMs(SystemClock.uptimeMillis(), lastCaptureStartMs,
+                continuousCaptureIntervalMs())
+            if (wait == 0L) return@synchronized true
+            captureWake.wait(wait)
+        }
+        false
+    }
 
 
     /** 抓屏降采样比例（KEY_BG_CAPTURE_SCALE，clamp 0.25~1.0，默认 0.5f）
@@ -13815,7 +13833,7 @@ object BlurDrawHook {
     ) {
         if (!screenInteractive || captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
         markContentChanged()
-        backgroundCadence.reveal(SystemClock.uptimeMillis())
+        noteCaptureReveal()
         triggerBackgroundCapture()
         scheduleHeadsUpBurstWorker(
             HEADS_UP_BURST_TOTAL_FRAMES, burstStop, logTag, pauseDuringPanelExpansion,
@@ -13865,7 +13883,7 @@ object BlurDrawHook {
         if (captureMode() != Prefs.BG_CAPTURE_MODE_STATIC) {
             captureEpoch++;screenSnapshot=null;regionSnapshot=null
             lastSnapshotFingerprint=0;lastRegionSnapshotFingerprint=0
-            if (buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear()
+            if (buttonBackdropWorkerDelegate.isInitialized()) buttonBackdropWorker.clear(releaseHardware = false)
         }
         // [doc/spec/50 + spec/51 统一逻辑 + 2026-08-15 用户要求「通知横幅出现立马截一张屏，什么都不等」]
         // 通知首帧后台截屏，再短时连抓 5~6 帧覆盖入场动画。停止条件：通知消失
@@ -13954,7 +13972,7 @@ object BlurDrawHook {
                         }
                         // 帧间隔（快速连抓覆盖首帧后动画；captureDisplay 自身耗时也计入实际帧率）
                         try {
-                            Thread.sleep(CaptureDemandPolicy.minimumIntervalMs(captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE))
+                            Thread.sleep(continuousCaptureIntervalMs())
                         } catch (ignored: InterruptedException) {
                         }
                     }
@@ -13994,7 +14012,7 @@ object BlurDrawHook {
                         captureDemandActive() && Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
                         if (headsUpActiveHost?.get() !== host || !isHeadsUpHostActive() || isKeyguardLockedNow()) break
                         if (!panelExpansionActive) scheduleElementCaptures()
-                        Thread.sleep(if(captureMode()==Prefs.BG_CAPTURE_MODE_IMMEDIATE) continuousCaptureIntervalMs() else 100L)
+                        Thread.sleep(continuousCaptureIntervalMs())
                     }
                 } catch (_:InterruptedException) { Thread.currentThread().interrupt() }
                 finally {
@@ -14133,10 +14151,6 @@ object BlurDrawHook {
      */
     private fun captureSnapshotImmediate(source: String, regionMode: Boolean = false) {
         if (!captureDemandActive()) return
-        val captureNow = SystemClock.uptimeMillis()
-        if (!CaptureDemandPolicy.due(captureNow, lastDemandCaptureMs,
-                captureMode() == Prefs.BG_CAPTURE_MODE_IMMEDIATE)) return
-        lastDemandCaptureMs = captureNow
         if (!screenInteractive || !Prefs.glassEnabled(api) || SystemClock.uptimeMillis() < captureRetryAtMs) return
         // [spec/85 省电模式] 省电开启 → 真正的 captureDisplay 也不执行（省电下玻璃已关，零抓屏）
         if (isPowerSaveGlassOff()) {
@@ -14145,6 +14159,8 @@ object BlurDrawHook {
             }
             return
         }
+        // The serial worker has already admitted this capture; no second throttle here.
+        lastCaptureStartMs = SystemClock.uptimeMillis()
         val epochAtStart = captureEpoch
         // 区域模式：先算活跃瞬态 region 并集；拿不到就清区域快照并退出（整屏快照保持原样）
         val regionBBox = if (regionMode) {
@@ -14394,10 +14410,7 @@ object BlurDrawHook {
                 try {
                     // All event/timer channels share this admission limit, so duplicate event
                     // bursts cannot bypass the change-mode budget. No pixels are downsampled here.
-                    val wait = continuousCaptureIntervalMs() - (SystemClock.uptimeMillis() - lastCaptureStartMs)
-                    if (wait > 0L) Thread.sleep(wait)
-                    if (screenInteractive && captureMode() != Prefs.BG_CAPTURE_MODE_STATIC) {
-                        lastCaptureStartMs = SystemClock.uptimeMillis()
+                    if (awaitCaptureSlot()) {
                         captureSnapshotImmediate("worker", regionMode = id == REGION_SNAPSHOT_ID)
                     }
                 } finally {
