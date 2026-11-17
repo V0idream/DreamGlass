@@ -70,7 +70,7 @@ internal object IconGlassRecordingSources {
                     val ratio=128f/maxOf(job.width,job.height)
                     val renderer=accelerator ?: HardwareBackdropBlur().also {accelerator=it}
                     val hardware=renderer.render(job.node,job.width,job.height,
-                        (job.width*ratio).toInt().coerceAtLeast(1),(job.height*ratio).toInt().coerceAtLeast(1),.01f) {job.epoch!=epoch}
+                        (job.width*ratio).toInt().coerceAtLeast(1),(job.height*ratio).toInt().coerceAtLeast(1),0f) {job.epoch!=epoch}
                     output=try {hardware.copy(Bitmap.Config.ARGB_8888,false)}finally {hardware.recycle()}
                     val owned=checkNotNull(output)
                     if(ui.post {

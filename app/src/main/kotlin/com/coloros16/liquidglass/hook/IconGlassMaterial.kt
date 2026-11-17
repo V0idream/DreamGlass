@@ -36,6 +36,7 @@ internal class IconGlassMaterial {
     private var sharpImage:Bitmap?=null
     private var sharpGeneration=-1
     private var wallpaperGeneration = -1
+    private val uniforms=IconGlassUniformCache()
 
     fun draw(canvas: Canvas, bounds: RectF, foreground: Bitmap, wallpaper: Bitmap,
              wallpaperSource: RectF, params: Params = Params(),sharpWallpaper:Bitmap=wallpaper): Boolean {
@@ -43,6 +44,8 @@ internal class IconGlassMaterial {
             foreground.isRecycled || wallpaper.isRecycled || !valid(bounds) || !valid(wallpaperSource) ||
             foreground.width <= 0 || foreground.height <= 0 || wallpaper.width <= 0 || wallpaper.height <= 0 ||
             !params.clarity.isFinite() || !params.refraction.isFinite() || !params.thickness.isFinite()) return false
+        // An invisible native icon needs neither shader creation nor texture/uniform updates.
+        if(params.alpha<=0)return true
         try {
             val shader = material ?: try {
                 RuntimeShader(SOURCE).also { material = it; paint.shader = it }
@@ -57,6 +60,7 @@ internal class IconGlassMaterial {
             canvas.drawRect(bounds, paint)
             return true
         } catch (_: Throwable) {
+            uniforms.clear() // Retry all writes if a native uniform update failed part-way.
             return false // Caller draws the original bitmap in this same slot.
         }
     }
@@ -76,20 +80,33 @@ internal class IconGlassMaterial {
             shader.setInputShader("uSharpWallpaper",input(sharp))
             sharpImage=sharp;sharpGeneration=sharp.generationId
         }
-        shader.setFloatUniform("uEdgeClarity",if(sharp!==wallpaper)1f else 0f)
-        shader.setFloatUniform("uOrigin", bounds.left, bounds.top)
-        shader.setFloatUniform("uSize", bounds.width(), bounds.height())
-        shader.setFloatUniform("uForegroundSize", foreground.width.toFloat(), foreground.height.toFloat())
-        shader.setFloatUniform("uSource", wallpaperSource.left, wallpaperSource.top,
+        float1(shader,"uEdgeClarity",if(sharp!==wallpaper)1f else 0f)
+        float2(shader,"uOrigin", bounds.left, bounds.top)
+        float2(shader,"uSize", bounds.width(), bounds.height())
+        // These ratios depend on the icon/crop, not on fragment position. Share them across
+        // every foreground/underlay sample instead of dividing again for each pixel.
+        float2(shader,"uForegroundScale", foreground.width/bounds.width(), foreground.height/bounds.height())
+        float2(shader,"uWallpaperScale", wallpaperSource.width()/bounds.width(),wallpaperSource.height()/bounds.height())
+        float4(shader,"uSource", wallpaperSource.left, wallpaperSource.top,
             wallpaperSource.width(), wallpaperSource.height())
-        shader.setFloatUniform("uClarity", params.clarity.coerceIn(0f, 1f))
-        shader.setFloatUniform("uRefraction", params.refraction.coerceIn(0f, 1f))
-        shader.setFloatUniform("uThickness", params.thickness.coerceIn(0f, 1f))
-        shader.setFloatUniform("uKeepColor", if (params.keepColor) 1f else 0f)
-        shader.setFloatUniform("uDisabled", if (params.disabled) 1f else 0f)
-        shader.setFloatUniform("uReliefArtwork", if (params.reliefArtwork) 1f else 0f)
-        shader.setFloatUniform("uDetailedArtwork", if (params.detailedArtwork) 1f else 0f)
-        shader.setFloatUniform("uAlpha", params.alpha.coerceIn(0, 255) / 255f)
+        float1(shader,"uClarity", params.clarity.coerceIn(0f, 1f))
+        float1(shader,"uRefraction", params.refraction.coerceIn(0f, 1f))
+        float1(shader,"uThickness", params.thickness.coerceIn(0f, 1f))
+        float1(shader,"uKeepColor", if (params.keepColor) 1f else 0f)
+        float1(shader,"uDisabled", if (params.disabled) 1f else 0f)
+        float1(shader,"uReliefArtwork", if (params.reliefArtwork) 1f else 0f)
+        float1(shader,"uDetailedArtwork", if (params.detailedArtwork) 1f else 0f)
+        float1(shader,"uAlpha", params.alpha.coerceIn(0, 255) / 255f)
+    }
+
+    private fun float1(shader:RuntimeShader,name:String,x:Float) {
+        if(uniforms.one(name,x))shader.setFloatUniform(name,x)
+    }
+    private fun float2(shader:RuntimeShader,name:String,x:Float,y:Float) {
+        if(uniforms.two(name,x,y))shader.setFloatUniform(name,x,y)
+    }
+    private fun float4(shader:RuntimeShader,name:String,x:Float,y:Float,z:Float,w:Float) {
+        if(uniforms.four(name,x,y,z,w))shader.setFloatUniform(name,x,y,z,w)
     }
 
     /** Wallpaper is a separate Surface on COS17: bind its texture explicitly instead of
@@ -105,6 +122,7 @@ internal class IconGlassMaterial {
     fun clear() {
         material = null; paint.shader = null; foregroundImage = null; wallpaperImage = null
         foregroundGeneration = -1; wallpaperGeneration = -1; sharpImage=null;sharpGeneration=-1
+        uniforms.clear()
     }
 
     private fun input(bitmap: Bitmap) = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
@@ -123,7 +141,8 @@ uniform shader uSharpWallpaper;
 uniform float uEdgeClarity;
 uniform float2 uOrigin;
 uniform float2 uSize;
-uniform float2 uForegroundSize;
+uniform float2 uForegroundScale;
+uniform float2 uWallpaperScale;
 uniform float4 uSource;
 uniform float uClarity;
 uniform float uRefraction;
@@ -140,13 +159,12 @@ float boxDistance(float2 p) {
     return length(max(q,float2(0.0)))+min(max(q.x,q.y),0.0)-radius;
 }
 half4 foreground(float2 p) {
-    float2 uv=p/uSize;
-    if(uv.x<0.0 || uv.y<0.0 || uv.x>1.0 || uv.y>1.0)return half4(0.0);
-    half4 sampled=uForeground.eval(uv*uForegroundSize);
+    if(p.x<0.0 || p.y<0.0 || p.x>uSize.x || p.y>uSize.y)return half4(0.0);
+    half4 sampled=uForeground.eval(p*uForegroundScale);
     return sampled;
 }
 half3 background(float2 p) {
-    return uWallpaper.eval(uSource.xy+(p/uSize)*uSource.zw).rgb;
+    return uWallpaper.eval(uSource.xy+p*uWallpaperScale).rgb;
 }
 half4 main(float2 position) {
     float2 p=position-uOrigin;
@@ -168,20 +186,23 @@ half4 main(float2 position) {
     float bevel=1.0-smoothstep(0.0,bevelWidth,max(-d,0.0));
     float surfaceXY=.94*bevel;
     float surfaceZ=sqrt(max(1.0-surfaceXY*surfaceXY,.001));
-    float eta=.69;
-    float transmittedZ=sqrt(max(1.0-eta*eta*(1.0-surfaceZ*surfaceZ),.001));
-    float travel=(transmittedZ-eta*surfaceZ)*surfaceXY/
-        max(eta+(transmittedZ-eta*surfaceZ)*surfaceZ,.1);
-    float opticalDepth=side*(.16+.22*uThickness);
-    float bend=opticalDepth*travel*uRefraction;
-    float2 samplePoint=p-normal*bend-centered*(.12*uRefraction);
+    float2 samplePoint=p;
+    if(uRefraction>0.0) {
+        float eta=.69;
+        float transmittedZ=sqrt(max(1.0-eta*eta*(1.0-surfaceZ*surfaceZ),.001));
+        float travel=(transmittedZ-eta*surfaceZ)*surfaceXY/
+            max(eta+(transmittedZ-eta*surfaceZ)*surfaceZ,.1);
+        float opticalDepth=side*(.16+.22*uThickness);
+        float bend=opticalDepth*travel*uRefraction;
+        samplePoint=p-normal*bend-centered*(.12*uRefraction);
+    }
     float edge=bevel;
     half3 glass=background(samplePoint);
     // A blurred 768px wallpaper can erase a displacement of only a few texels.
     // Use the already cached sharp texture through the curved edge; keep the
     // broad center frosted. This adds no decode, capture, or per-frame blur.
     if(uEdgeClarity>.5 && bevel>.04) {
-        half3 refracted=uSharpWallpaper.eval(uSource.xy+(samplePoint/uSize)*uSource.zw).rgb;
+        half3 refracted=uSharpWallpaper.eval(uSource.xy+samplePoint*uWallpaperScale).rgb;
         glass=mix(glass,refracted,half(smoothstep(.04,.70,bevel)*.94));
     }
     // Frosted substrate compresses busy wallpaper contrast while retaining its colour.
@@ -208,17 +229,22 @@ half4 main(float2 position) {
     half4 right=foreground(p+float2(stepSize,0.0));half4 left=foreground(p-float2(stepSize,0.0));
     half4 down=foreground(p+float2(0.0,stepSize));half4 up=foreground(p-float2(0.0,stepSize));
     float2 glyphGradient=float2(float(right.a-left.a),float(down.a-up.a));
-    half3 ink=mix(half3(.76,.84,.92),half3(.99,1.0,1.0),half(clamp(1.0-p.y/uSize.y,0.0,1.0)));
-    half3 glyphGlass=background(p+float2(glyphGradient.x,-glyphGradient.y)*side*.022);
-    glyphGlass=mix(glyphGlass,ink,half(.73+.20*uClarity));
+    half3 glyphGlass=half3(0.0);
     half3 original=mark.rgb/max(mark.a,half(.001));
-    glyphGlass=mix(glyphGlass,original,half(uKeepColor*.045));
+    // Relief/detailed artwork replaces this value completely. Do not sample a second
+    // wallpaper texture or mix generic ink only to discard that work immediately.
+    if(uReliefArtwork<=.5 && uDetailedArtwork<=.5) {
+        half3 ink=mix(half3(.76,.84,.92),half3(.99,1.0,1.0),half(clamp(1.0-p.y/uSize.y,0.0,1.0)));
+        glyphGlass=background(p+float2(glyphGradient.x,-glyphGradient.y)*side*.022);
+        glyphGlass=mix(glyphGlass,ink,half(.73+.20*uClarity));
+        glyphGlass=mix(glyphGlass,original,half(uKeepColor*.045));
+    }
     // A close cast shadow separates the subject from the translucent plate.
     // Contact coverage reuses the four existing foreground reads.
     float shadow=float(foreground(p-float2(side*.010,side*.016)).a)*(1.0-glyphAlpha);
     float contact=max(max(float(left.a),float(up.a))-glyphAlpha,0.0);
     glass*=half(1.0-clamp(shadow*.28+contact*.10,0.0,.34));
-    if (uReliefArtwork>.5) {
+    if (uReliefArtwork>.5 && uDetailedArtwork<=.5) {
         // Original colours become height/tone levels. No coloured photo fallback.
         float level=float(dot(original,half3(.2126,.7152,.0722)));
         float hx=float(right.r/max(right.a,half(.001))-left.r/max(left.a,half(.001)));

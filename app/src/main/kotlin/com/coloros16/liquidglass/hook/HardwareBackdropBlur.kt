@@ -18,6 +18,10 @@ internal class HardwareBackdropBlur : AutoCloseable {
     private var renderer: HardwareRenderer? = null
     private val node = RenderNode("DreamGlass backdrop")
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val effects=BackdropBlurEffectCache<RenderEffect> { radius ->
+        RenderEffect.createBlurEffect(radius,radius,Shader.TileMode.CLAMP)
+    }
+    private var appliedEffect:RenderEffect?=null
 
     fun render(source: Bitmap, width: Int, height: Int, sigma: Float, cancelled: () -> Boolean): Bitmap =
         render(width,height,sigma,cancelled) { canvas ->
@@ -40,8 +44,8 @@ internal class HardwareBackdropBlur : AutoCloseable {
         try {
             engine.setSurface(reader.surface)
             node.setPosition(0, 0, width, height)
-            node.setRenderEffect(RenderEffect.createBlurEffect(sigma.coerceAtLeast(.01f),
-                sigma.coerceAtLeast(.01f), Shader.TileMode.CLAMP))
+            val effect=effects.resolve(sigma)
+            if(effect!==appliedEffect) {node.setRenderEffect(effect);appliedEffect=effect}
             val canvas = node.beginRecording(width, height)
             try {
                 canvas.drawColor(Color.TRANSPARENT, BlendMode.CLEAR)
@@ -67,5 +71,5 @@ internal class HardwareBackdropBlur : AutoCloseable {
             reader.close();node.discardDisplayList()
         }
     }
-    override fun close() { renderer?.destroy();renderer=null;node.discardDisplayList() }
+    override fun close() { renderer?.destroy();renderer=null;node.discardDisplayList();node.setRenderEffect(null);appliedEffect=null;effects.clear() }
 }

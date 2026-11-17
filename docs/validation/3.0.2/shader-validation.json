@@ -1,0 +1,12 @@
+{
+  "actualProductionShaderCompiled": true,
+  "comparisonScenes": 144,
+  "maxChannelDifference": 2,
+  "worstMeanChannelDifference": 9.645061728395061e-05,
+  "blurZeroAndEnabled": true,
+  "refractionZeroAndEnabled": true,
+  "genericReliefDetailedAndCombinedArtwork": true,
+  "transparentAndHalfAlpha": true,
+  "androidGpuProbeExecuted": false,
+  "physicalVisualVerified": false
+}

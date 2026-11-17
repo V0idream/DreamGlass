@@ -113,9 +113,10 @@ internal object LauncherIconGlassAssets {
     }
     fun identity(item:Any?):String?=runCatching {
         if(item==null)return@runCatching null
-        val component=item.javaClass.getMethod("getTargetComponent").invoke(item) as? android.content.ComponentName ?: return@runCatching null
-        val user=find(item.javaClass,"user")?.get(item) as? android.os.UserHandle
-        val shortcut=runCatching {item.javaClass.getMethod("getDeepShortcutId").invoke(item) as? String}.getOrNull()
+        val access=IconGlassIdentityAccess.forType(item.javaClass)
+        val component=access.component?.invoke(item) as? android.content.ComponentName ?: return@runCatching null
+        val user=access.user?.get(item) as? android.os.UserHandle
+        val shortcut=runCatching {access.shortcut?.invoke(item) as? String}.getOrNull()
         component.flattenToString()+"@"+(user?.hashCode() ?: 0)+(shortcut?.takeIf {it.isNotEmpty()}?.let {"#"+it} ?: "")
     }.getOrNull()
     fun sourceForItem(item:Any?):Bitmap?=runCatching {
@@ -310,6 +311,7 @@ internal object LauncherIconGlassAssets {
         val state=synchronized(lock) {drawables[drawable] ?: swap(drawable,asset.source,bitmap).also {drawables[drawable]=it}}
         synchronized(state) {
             state.drawing.alpha=state.nativeAlpha?.alpha ?: drawable.alpha
+            if(state.drawing.alpha<=0)return true
             state.drawing.colorFilter=state.nativeFilter?.colorFilter
             canvas.drawBitmap(bitmap,null,rect,state.drawing)
         }

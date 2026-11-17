@@ -109,7 +109,16 @@ internal object LauncherIconGlassHook {
             ancestryParent.clear();ancestryRoot.clear();ancestryRevision=-1;engine.clear()
         }
     }
-    private data class Artwork(val source:Bitmap,val generation:Int,val mask:IconGlassMasks.Prepared,val variant:String)
+    private class Artwork(val source:Bitmap,val generation:Int,val mask:IconGlassMasks.Prepared,val variant:String) {
+        private var settings:IconGlassMaterial.Params?=null
+        private var last:IconGlassMaterial.Params?=null
+        fun style(base:IconGlassMaterial.Params,alpha:Int=255,disabled:Boolean=false):IconGlassMaterial.Params {
+            last?.let {if(settings===base && it.alpha==alpha && it.disabled==disabled)return it}
+            settings=base
+            return base.copy(alpha=alpha,disabled=disabled,reliefArtwork=mask.relief,
+                detailedArtwork=mask.detailed,customImage=mask.passthrough).also {last=it}
+        }
+    }
     private data class Metadata(val component:ComponentName?,val user:Int,val container:Long)
     private data class Draw(val state:State,val drawable:Drawable,val canvas:Canvas,val base:Matrix,
         val item:Any?=null,val folderPreview:Boolean=false,val source:Bitmap?=null,val suggestionImage:Boolean=false,
@@ -617,6 +626,10 @@ internal object LauncherIconGlassHook {
         val state=scope.state;val view=state.host.get() ?: return false
         if(!enabled || !canvas.isHardwareAccelerated ||
             !IconGlassPolicy.validSize(rect.width().toFloat(),rect.height().toFloat()))return false
+        val nativePaint=if(scope.drawable is BitmapDrawable)scope.drawable.paint else if(c.fast.isInstance(scope.drawable))
+            (field(scope.drawable.javaClass,"mMonoPaint") ?: c.paint)?.get(scope.drawable) as? Paint else null
+        val alpha=nativePaint?.alpha ?: scope.drawable.alpha
+        if(alpha<=0)return true // Skip masks, wallpaper mapping and GPU work, but keep native text/badges.
         val raw=scope.source ?: (scope.drawable as? BitmapDrawable)?.bitmap ?:
             (if(c.fast.isInstance(scope.drawable))c.bitmap.get(scope.drawable) as? Bitmap else IconGlassRecordingSources.get(scope.drawable)) ?: return false
         val original=LauncherIconGlassAssets.original(raw)
@@ -625,34 +638,35 @@ internal object LauncherIconGlassHook {
         if(!liveMode)LauncherIconGlassAssets.prefabFor(scope.item ?: view.tag)?.let {prefab ->
             LauncherIconGlassAssets.apply(view,scope.drawable,scope.item ?: view.tag,original,prefab)
             if(LauncherIconGlassAssets.drawCached(scope.drawable,canvas,rect))return true
-            canvas.drawBitmap(prefab,null,rect,Paint(Paint.FILTER_BITMAP_FLAG).apply {alpha=scope.drawable.alpha});return true
+            canvas.drawBitmap(prefab,null,rect,Paint(Paint.FILTER_BITMAP_FLAG).apply {this.alpha=scope.drawable.alpha});return true
         }
         observeScreen(view.context)
         val cachedArtwork=state.artwork[scope.drawable]
-        val mask=cachedArtwork?.takeIf {it.source===original && it.generation==original.generationId && it.variant==IconGlassDynamicIcons.variant(state.component?.flattenToString())}?.mask ?:
-            IconGlassMasks.resolve(view.context,scope.component,scope.userId,original,artworkReady)?.also {
-                state.artwork[scope.drawable]=Artwork(original,original.generationId,it,IconGlassDynamicIcons.variant(state.component?.flattenToString()))
+        val artwork=cachedArtwork?.takeIf {it.source===original && it.generation==original.generationId && it.variant==IconGlassDynamicIcons.variant(state.component?.flattenToString())} ?:
+            IconGlassMasks.resolve(view.context,scope.component,scope.userId,original,artworkReady)?.let {
+                Artwork(original,original.generationId,it,IconGlassDynamicIcons.variant(state.component?.flattenToString()))
+                    .also {ready -> state.artwork[scope.drawable]=ready}
             } ?: return fallback(scope,canvas,rect)
+        val mask=artwork.mask
         // Compare matrices within this same Canvas to remove an arbitrary recording origin.
         // Native compound-drawable placement and FastBitmapDrawable transforms stay included.
-        if(!scope.base.invert(state.inverse))return false
-        canvas.getMatrix(state.current)
-        state.combined.setConcat(state.inverse,state.current)
-        state.screenRect.set(rect)
-        state.combined.mapRect(state.screenRect)
-        state.global.reset();view.transformMatrixToGlobal(state.global)
-        state.global.mapRect(state.screenRect)
-        val background=IconGlassWallpaper.resolve(view.context,state.screenRect,artworkReady)
+        val background=if(mask.passthrough)null else {
+            if(!scope.base.invert(state.inverse))return false
+            canvas.getMatrix(state.current)
+            state.combined.setConcat(state.inverse,state.current)
+            state.screenRect.set(rect)
+            state.combined.mapRect(state.screenRect)
+            state.global.reset();view.transformMatrixToGlobal(state.global)
+            state.global.mapRect(state.screenRect)
+            IconGlassWallpaper.resolve(view.context,state.screenRect,artworkReady)
+        }
         val backdrop=background?.bitmap ?: IconGlassFallback.backdrop
         val crop=background?.sourceRect ?: RectF(0f,0f,8f,8f)
-        val nativePaint=if(scope.drawable is BitmapDrawable)scope.drawable.paint else if(c.fast.isInstance(scope.drawable))
-            (field(scope.drawable.javaClass,"mMonoPaint") ?: c.paint)?.get(scope.drawable) as? Paint else null
-        val alpha=nativePaint?.alpha ?: scope.drawable.alpha
         val disabled=if(c.fast.isInstance(scope.drawable))c.disabled?.invoke(scope.drawable) as? Boolean ?: false else !view.isEnabled
         state.bounds.set(rect)
         val generated=if(LauncherIconGlassAssets.isGenerated(raw))raw else LauncherIconGlassAssets.generated(original) ?:
             LauncherIconGlassAssets.request(original,mask.foreground,backdrop,crop,
-                params.copy(reliefArtwork=mask.relief,detailedArtwork=mask.detailed,customImage=mask.passthrough),artworkReady,LauncherIconGlassAssets.identity(scope.item ?: view.tag),background?.sharpBitmap ?: backdrop)
+                artwork.style(params),artworkReady,LauncherIconGlassAssets.identity(scope.item ?: view.tag),background?.sharpBitmap ?: backdrop)
         if(generated!=null) {
             if(raw!==generated)LauncherIconGlassAssets.apply(view,scope.drawable,scope.item ?: view.tag,original,generated)
             if(!liveMode || background==null || mask.passthrough) {
@@ -667,7 +681,7 @@ internal object LauncherIconGlassHook {
         }
         val material=state.materials.getOrPut(scope.drawable) {IconGlassMaterial()}
         val result=material.draw(canvas,state.bounds,mask.foreground,backdrop,crop,
-            params.copy(alpha=alpha,disabled=disabled,reliefArtwork=mask.relief,detailedArtwork=mask.detailed),background?.sharpBitmap ?: backdrop)
+            artwork.style(params,alpha,disabled),background?.sharpBitmap ?: backdrop)
         state.liveMaterialPainted=liveMode && background!=null && result
         if(result && !rendered) {
             rendered=true

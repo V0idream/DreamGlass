@@ -5,6 +5,33 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IconWallpaperGeometryTest {
+    @Test fun allIconsInOneSceneReuseTheSameProjection() {
+        val cache=IconWallpaperGeometry.ProjectionCache()
+        val shared=cache.get(768,800,1440,3168,.5f,0f,1f)!!
+        repeat(60) { i ->
+            assertSame(shared,cache.get(768,800,1440,3168,.5f,0f,1f))
+            assertTrue(shared.x(i*20f).isFinite())
+        }
+        assertNotSame(shared,cache.get(768,800,1440,3168,.6f,0f,1f))
+        assertNotSame(shared,cache.get(768,800,1440,3168,.5f,0f,1.1f))
+        assertNotSame(shared,cache.get(768,800,3168,1440,.5f,0f,1f))
+        assertNull(cache.get(768,800,0,3168,.5f,0f,1f))
+        assertNull(cache.get(768,800,1440,3168,Float.NaN,0f,1f))
+    }
+    @Test fun precomputedProjectionMatchesOriginalFormulaAcrossScrollAndZoom() {
+        val cache=IconWallpaperGeometry.ProjectionCache()
+        for(width in listOf(384,768))for(height in listOf(384,768))
+            for(zoom in listOf(.1f,.8f,1f,1.2f,4f))for(offset in listOf(0f,.3f,1f)) {
+                val projection=cache.get(width,height,1440,3168,offset,offset,zoom)!!
+                val scale=maxOf(1440f/width,3168f/height)
+                val cropX=(width*scale-1440f).coerceAtLeast(0f)*offset
+                val cropY=(height*scale-3168f).coerceAtLeast(0f)*offset
+                for(point in listOf(-80f,0f,360f,720f,1440f,3168f)) {
+                    assertEquals(((point-720f)/zoom+720f+cropX)/scale,projection.x(point),.002f)
+                    assertEquals(((point-1584f)/zoom+1584f+cropY)/scale,projection.y(point),.002f)
+                }
+            }
+    }
     @Test fun wideWallpaperOffsetsUseLauncherLeftOriginAndFullScrollRange() {
         assertArrayEquals(floatArrayOf(20f,50f,60f,90f),
             IconWallpaperGeometry.map(400,200,100,200,20f,50f,60f,90f,0f,0f,1f),.001f)

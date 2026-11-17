@@ -35,6 +35,7 @@ internal object IconGlassWallpaper {
     private val registrationQueued=AtomicBoolean(false)
     private val notificationQueued=AtomicBoolean(false)
     private val lock=Any()
+    private val projections=IconWallpaperGeometry.ProjectionCache()
     @Volatile private var image:Bitmap?=null
     @Volatile private var sharp:Bitmap?=null
     @Volatile private var wallpaperGeneration=0L
@@ -78,10 +79,10 @@ internal object IconGlassWallpaper {
             return LauncherHook.publishedIconBackdrop(iconScreen)
         }
         val current=transform
-        val rect=IconWallpaperGeometry.map(bitmap.width,bitmap.height,screenWidth,screenHeight,
-            iconScreen.left,iconScreen.top,iconScreen.right,iconScreen.bottom,current.x,current.y,current.zoom)
+        val projection=projections.get(bitmap.width,bitmap.height,screenWidth,screenHeight,current.x,current.y,current.zoom)
             ?: return null
-        return Frame(bitmap,RectF(rect[0],rect[1],rect[2],rect[3]),sharp ?: bitmap)
+        return Frame(bitmap,RectF(projection.x(iconScreen.left),projection.y(iconScreen.top),
+            projection.x(iconScreen.right),projection.y(iconScreen.bottom)),sharp ?: bitmap)
     }
 
     /** Pure coordinate update: no wallpaper manager call, decode, copy or work submission. */
@@ -150,6 +151,17 @@ internal object IconGlassWallpaper {
         val version=generation
         val wallpaperVersion=wallpaperGeneration
         val blurValue=blur
+        // A zero-blur change can immediately share the already-sized sharp texture. Do not
+        // queue a worker, copy pixels or allocate a GPU blur pass merely to return this image.
+        val cachedSharp=sharp?.takeUnless {it.isRecycled}
+        if(blurValue<=0 && cachedSharp!=null) {
+            synchronized(lock) {
+                if(!active || version!=generation)return
+                image=cachedSharp;preparedGeneration=version;attemptedGeneration=version;imageSerial++
+            }
+            notifyReady()
+            return
+        }
         if(attemptedGeneration==version || !loading.compareAndSet(false,true))return
         attemptedGeneration=version
         val owner=app ?: run {loading.set(false);return}
@@ -276,14 +288,36 @@ internal object IconWallpaperGeometry {
 
     fun map(width:Int,height:Int,screenWidth:Int,screenHeight:Int,
             left:Float,top:Float,right:Float,bottom:Float,x:Float,y:Float,zoom:Float):FloatArray? {
-        if(width<=0 || height<=0 || screenWidth<=0 || screenHeight<=0 || !valid(left,top,right,bottom) ||
-            !x.isFinite() || !y.isFinite() || !zoom.isFinite() || zoom<=0f)return null
+        if(!valid(left,top,right,bottom))return null
+        val projection=create(width,height,screenWidth,screenHeight,x,y,zoom) ?: return null
+        return floatArrayOf(projection.x(left),projection.y(top),projection.x(right),projection.y(bottom))
+    }
+    class Projection internal constructor(val width:Int,val height:Int,val screenWidth:Int,val screenHeight:Int,
+        val offsetX:Float,val offsetY:Float,val zoom:Float,private val factor:Float,
+        private val originX:Float,private val originY:Float) {
+        fun x(screen:Float)=screen*factor+originX
+        fun y(screen:Float)=screen*factor+originY
+    }
+    /** Immutable cover/offset/zoom projection shared by every icon in the same scene.
+     * A moving icon only needs four multiply/add pairs; no per-icon projection key/array.
+     */
+    class ProjectionCache {
+        private var last:Projection?=null
+        fun get(width:Int,height:Int,screenWidth:Int,screenHeight:Int,x:Float,y:Float,zoom:Float):Projection? {
+            last?.let {if(it.width==width && it.height==height && it.screenWidth==screenWidth &&
+                it.screenHeight==screenHeight && it.offsetX==x && it.offsetY==y && it.zoom==zoom)return it}
+            return create(width,height,screenWidth,screenHeight,x,y,zoom)?.also {last=it}
+        }
+    }
+    private fun create(width:Int,height:Int,screenWidth:Int,screenHeight:Int,x:Float,y:Float,zoom:Float):Projection? {
+        if(width<=0 || height<=0 || screenWidth<=0 || screenHeight<=0 || !x.isFinite() || !y.isFinite() ||
+            !zoom.isFinite() || zoom<=0f)return null
         val scale=maxOf(screenWidth.toFloat()/width,screenHeight.toFloat()/height)
         val cropX=(width*scale-screenWidth).coerceAtLeast(0f)*x.coerceIn(0f,1f)
         val cropY=(height*scale-screenHeight).coerceAtLeast(0f)*y.coerceIn(0f,1f)
         val cx=screenWidth*.5f;val cy=screenHeight*.5f
         val z=zoom.coerceIn(.1f,4f)
-        return floatArrayOf(((left-cx)/z+cx+cropX)/scale,((top-cy)/z+cy+cropY)/scale,
-            ((right-cx)/z+cx+cropX)/scale,((bottom-cy)/z+cy+cropY)/scale)
+        return Projection(width,height,screenWidth,screenHeight,x,y,zoom,1f/(z*scale),
+            (cx-cx/z+cropX)/scale,(cy-cy/z+cropY)/scale)
     }
 }

@@ -31,7 +31,9 @@ internal object LauncherIconGlassBinding {
         val cached=LauncherIconGlassAssets.prefabFor(item) ?: LauncherIconGlassAssets.generated(source)
         if(cached!=null)return cached
         val mask=IconGlassMasks.resolve(context,component,userId,source,ready) ?: return null
-        val background=frame ?: IconGlassWallpaper.resolve(context,screen,wallpaperReady)
+        // Imported images are already the final artwork: their CPU crop path never reads
+        // wallpaper pixels. Avoid decoding/blurring wallpaper just to pass an unused input.
+        val background=if(mask.passthrough)null else frame ?: IconGlassWallpaper.resolve(context,screen,wallpaperReady)
         return LauncherIconGlassAssets.request(source,mask.foreground,
             background?.bitmap ?: IconGlassFallback.backdrop,
             background?.sourceRect ?: RectF(0f,0f,8f,8f),params.copy(reliefArtwork=mask.relief,detailedArtwork=mask.detailed,customImage=mask.passthrough),
