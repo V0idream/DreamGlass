@@ -120,6 +120,7 @@ class SettingsActivity : AppCompatActivity() {
         // [spec/65] iOS 动态倾斜/透视（实验性，默认关）
         Category("tilt", R.string.cat_tilt, R.string.cat_tilt_desc, R.layout.view_cat_tilt),
         Category("desktop", R.string.cat_desktop, R.string.cat_desktop_desc, R.layout.view_cat_desktop),
+        Category("icons", R.string.cat_icon_glass, R.string.cat_icon_glass_desc, R.layout.view_cat_icon_glass),
         // 其他组件：相册、智能侧边栏、负一屏与通知菜单
         Category("components", R.string.cat_components, R.string.cat_components_desc, R.layout.view_cat_components),
         // [2026-09-17] 追踪器分类页已删除（追踪器整体移除，无存活控件）
@@ -339,6 +340,7 @@ class SettingsActivity : AppCompatActivity() {
             "particles" -> bindParticles(view)
             "tilt" -> bindTilt(view)
             "desktop" -> bindDesktop(view)
+            "icons" -> bindIconGlass(view)
             "components" -> bindComponents(view)
             "log" -> bindLog(view)
             "config" -> bindConfig(view)
@@ -1328,6 +1330,52 @@ class SettingsActivity : AppCompatActivity() {
         )
         bindGlassSwitch(view, R.id.switchPageIndicatorGlass, Prefs.KEY_PAGE_INDICATOR_GLASS, Prefs.DEFAULT_PAGE_INDICATOR_GLASS)
         bindGlassSwitch(view, R.id.switchCardGlass, Prefs.KEY_CARD_GLASS_ENABLE, Prefs.DEFAULT_CARD_GLASS_ENABLE)
+    }
+
+    /** Member category; retain the enable guard if confirmation changes while open. */
+    private fun bindIconGlass(view: View) {
+        IconLibraryUi.bind(this,view)
+        val mode=view.findViewById<Spinner>(R.id.spinnerIconGlassMode)
+        mode.adapter=ArrayAdapter(this,android.R.layout.simple_spinner_item,
+            listOf(getString(R.string.icon_glass_mode_prefab),getString(R.string.icon_glass_mode_live)))
+            .apply {setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)}
+        val stored=(frameworkPrefs() ?: xmlPrefs).getString(Prefs.KEY_ICON_GLASS_MODE,Prefs.DEFAULT_ICON_GLASS_MODE)
+        var requestedMode=if(stored=="live")"live" else "prefab"
+        mode.setSelection(if(stored=="live")1 else 0)
+        mode.onItemSelectedListener=object:AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent:AdapterView<*>?,selected:View?,position:Int,id:Long) {
+                val value=if(position==1)"live" else "prefab"
+                // Compare the last UI request too: while disconnected, remote prefs still
+                // contain the old value and must not suppress a switch back to that value.
+                if(requestedMode!=value) {
+                    requestedMode=value
+                    writePrefString(Prefs.KEY_ICON_GLASS_MODE,value)
+                }
+            }
+            override fun onNothingSelected(parent:AdapterView<*>?) {}
+        }
+        val enabled = view.findViewById<Switch>(R.id.switchIconGlass)
+        lateinit var listener: CompoundButton.OnCheckedChangeListener
+        listener = CompoundButton.OnCheckedChangeListener { _, checked ->
+            if (checked && !MembershipState.confirmed(this)) {
+                enabled.setOnCheckedChangeListener(null)
+                enabled.isChecked = false
+                enabled.setOnCheckedChangeListener(listener)
+                startActivity(Intent(this, MembershipActivity::class.java).putExtra("destination", "icons"))
+                finish()
+            } else writePrefBoolean(Prefs.KEY_ICON_GLASS_ENABLE, checked)
+        }
+        enabled.setOnCheckedChangeListener(listener)
+        refreshBooleanSwitch(enabled, listener, Prefs.KEY_ICON_GLASS_ENABLE, Prefs.DEFAULT_ICON_GLASS_ENABLE)
+        bindGlassSwitch(view, R.id.switchIconGlassKeepColor, Prefs.KEY_ICON_GLASS_KEEP_COLOR, Prefs.DEFAULT_ICON_GLASS_KEEP_COLOR)
+        bindIntSeekBar(view.findViewById(R.id.seekIconGlassBlur), view.findViewById(R.id.iconGlassBlurValue),
+            Prefs.KEY_ICON_GLASS_BLUR, Prefs.DEFAULT_ICON_GLASS_BLUR, 100) { "$it%" }
+        bindIntSeekBar(view.findViewById(R.id.seekIconGlassClarity), view.findViewById(R.id.iconGlassClarityValue),
+            Prefs.KEY_ICON_GLASS_CLARITY, Prefs.DEFAULT_ICON_GLASS_CLARITY, 100) { "$it%" }
+        bindIntSeekBar(view.findViewById(R.id.seekIconGlassRefraction), view.findViewById(R.id.iconGlassRefractionValue),
+            Prefs.KEY_ICON_GLASS_REFRACTION, Prefs.DEFAULT_ICON_GLASS_REFRACTION, 100) { "$it%" }
+        bindIntSeekBar(view.findViewById(R.id.seekIconGlassThickness), view.findViewById(R.id.iconGlassThicknessValue),
+            Prefs.KEY_ICON_GLASS_THICKNESS, Prefs.DEFAULT_ICON_GLASS_THICKNESS, 100) { "$it%" }
     }
 
     /** ColorOS 17 已适配组件，保留各宿主的独立开关。 */

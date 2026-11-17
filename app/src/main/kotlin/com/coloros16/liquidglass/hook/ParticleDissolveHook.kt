@@ -20,6 +20,9 @@ import android.os.SystemClock
 import android.view.Choreographer
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
+import android.view.Gravity
+import android.widget.FrameLayout
 import androidx.annotation.RequiresApi
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
@@ -119,6 +122,7 @@ object ParticleDissolveHook {
         private var readAt = -1L
         private var retryAt = 0L
         private var interfaceApi: XposedInterface? = null
+        private val headsUpLeases=WeakHashMap<View,HeadsUpLease>()
         private fun membershipGranted(): Boolean = Prefs.memberAllowed(interfaceApi)
         private val worker = ThreadPoolExecutor(0, 1, 15, TimeUnit.SECONDS,
             ArrayBlockingQueue<Runnable>(MAX_ACTIVE), { task ->
@@ -163,7 +167,7 @@ object ParticleDissolveHook {
             val commit = row.getDeclaredMethod("performDismiss", Boolean::class.javaPrimitiveType)
             api.hook(commit).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                 val view = chain.getThisObject() as? View
-                if (view != null) safe { if (allowed(api, view.context)) request(view) }
+                if (view != null) safe { if (allowed(api, view.context)) request(view)?.let {particleRoot(view,it)} }
                 val result = chain.proceed()
                 if (view != null) safe { if (allowed(api, view.context)) dismiss(view) }
                 result
@@ -177,7 +181,69 @@ object ParticleDissolveHook {
             runCatching {installMixedGroupCommit(api,loader,row)}.onFailure {
                 report("mixed_group_route","保留原生集合删除：${it.javaClass.simpleName}")
             }
+            runCatching {installHeadsUpGesture(api,loader,row)}.onFailure {
+                report("heads_up_route","保留原生横幅滑动：${it.javaClass.simpleName}")
+            }
             installed = true
+        }
+
+        private fun installHeadsUpGesture(api:XposedInterface,loader:ClassLoader,row:Class<*>) {
+            val animator=Class.forName("com.oplus.systemui.notification.headsup.windowframe.OplusHeadsUpAnimator",false,loader)
+            val control=animator.getDeclaredField("control").apply {isAccessible=true}
+            val view=control.type.getMethod("getView")
+            val dismiss=animator.declaredMethods.single {it.name=="dismiss" && it.parameterCount==3 &&
+                it.parameterTypes[0]==Boolean::class.javaPrimitiveType && it.parameterTypes[1]==String::class.java}
+            api.hook(dismiss).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                var selected:View?=null
+                safe {
+                    if(HeadsUpDissolveContract.accepted(chain.getArg(0)==true,chain.getArg(1) as? String)) {
+                        val native=view.invoke(control.get(chain.getThisObject())) as? View
+                        if(native!=null && row.isInstance(native) && allowed(api,native.context)) {
+                            request(native)?.let {it.vertical=true;particleRoot(native,it);selected=native}
+                        }
+                    }
+                }
+                val result=chain.proceed() // Native drag dismissal executes once and is never delayed.
+                selected?.let {native ->safe {if(allowed(api,native.context))dismiss(native)}}
+                result
+            }
+            report("heads_up_route","横幅上划确认入口已接入；超时与替换不播放粒子")
+        }
+
+        /** The OEM removes the entire heads-up window. A bounded, non-touchable SystemUI
+         * window keeps only our particles alive; the original notification/window is unblocked. */
+        private class HeadsUpLease(val root:FrameLayout,private val manager:WindowManager) {
+            private var closed=false
+            fun close() {
+                if(closed)return;closed=true
+                runCatching {manager.removeViewImmediate(root)}
+            }
+        }
+        @android.annotation.SuppressLint("WrongConstant") // Hidden TYPE_STATUS_BAR_SUB_PANEL (2017), verified OEM window type.
+        private fun particleRoot(view:View,c:Capture) {
+            if(headsUpLeases.containsKey(view))return
+            val nativeRoot=view.rootView
+            val type=(nativeRoot.layoutParams as? WindowManager.LayoutParams)?.type ?: -1
+            if(!HeadsUpDissolveContract.windowRoot(nativeRoot.javaClass.name,type))return
+            runCatching {
+                val context=view.context.createWindowContext(2017,null)
+                val manager=context.getSystemService(WindowManager::class.java) ?: return@runCatching
+                val root=FrameLayout(context).apply {setBackgroundColor(Color.TRANSPARENT)}
+                val flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+                val layout=WindowManager.LayoutParams(-1,-1,2017,flags,PixelFormat.TRANSLUCENT).apply {
+                    gravity=Gravity.TOP or Gravity.START;title="DreamGlass heads-up particles";setFitInsetsTypes(0)
+                }
+                val lease=HeadsUpLease(root,manager)
+                try {manager.addView(root,layout)}catch(t:Throwable) {lease.close();throw t}
+                headsUpLeases.remove(view)?.close();headsUpLeases[view]=lease
+                val location=IntArray(2);view.getLocationOnScreen(location)
+                c.root=WeakReference(root);c.x=location[0].toFloat();c.y=location[1].toFloat();c.releaseX=c.x;c.releaseY=c.y
+                ui.postDelayed({safe {
+                    if(headsUpLeases[view]===lease) {headsUpLeases.remove(view);lease.close()}
+                }},durationMs(speed)+1000L)
+            }.onFailure {report("heads_up_window","独立粒子层不可用，原生滑动照常：${it.javaClass.simpleName}")}
         }
 
         /** Collection acceptance covers animation-less removal as well as
@@ -501,7 +567,7 @@ object ParticleDissolveHook {
             return result
         }
 
-        private class Capture(val root: WeakReference<View>, val x: Float, val y: Float,
+        private class Capture(var root: WeakReference<View>, var x: Float, var y: Float,
             val width: Int, val height: Int, val density: Float, val node: RenderNode,
             val createdAt: Long = SystemClock.uptimeMillis()) {
             @Volatile var bitmap: Bitmap? = null
@@ -513,6 +579,8 @@ object ParticleDissolveHook {
             var releaseX=x;var releaseY=y
             var direction=1f;var initialProgress=0f
             var hiddenAlpha:Float?=null
+            var vertical=false
+            var waitingForRoot=false
             var finished: (() -> Unit)? = null
         }
         private fun prepare(view: View): Capture? {
@@ -579,11 +647,12 @@ object ParticleDissolveHook {
         private fun dismiss(view: View) {
             val image = request(view) ?: return
             if (image.committed) return
+            particleRoot(view,image)
             image.committed = true
             val translation=runCatching { (view.javaClass.getMethod("getTranslation").invoke(view) as Number).toFloat() }.getOrDefault(view.translationX)
             image.releaseX=handoffX(image.x,image.rowTranslation,translation)
-            image.direction=if(translation<0f)-1f else 1f
-            image.initialProgress=handoffProgress(translation,image.width)
+            image.direction=if(image.vertical || translation<0f)-1f else 1f
+            image.initialProgress=if(image.vertical).14f else handoffProgress(translation,image.width)
             // Keep the committed row until the bounded GPU job completes; native removal can
             // otherwise release its last strong reference before the image is ready.
             image.finished = { start(view, image) }
@@ -594,11 +663,18 @@ object ParticleDissolveHook {
             if (!membershipGranted()) { c.cancelled = true; captures.remove(view); stopAll(); return }
             val bitmap = c.bitmap ?: return
             val root = c.root.get() ?: return
+            if(!root.isAttachedToWindow && headsUpLeases.containsKey(view)) {
+                if(!c.waitingForRoot) {
+                    c.waitingForRoot=true
+                    root.post {safe {c.waitingForRoot=false;start(view,c)}}
+                }
+                return
+            }
             val power = root.context.getSystemService(PowerManager::class.java)
             if (!root.isAttachedToWindow || !root.isShown || power?.isInteractive != true ||
                 power.isPowerSaveMode || !ValueAnimator.areAnimatorsEnabled() || effects.size >= MAX_ACTIVE) {
                 current("collection_start_skip","rootAttached=${root.isAttachedToWindow}; rootShown=${root.isShown}; rootVisibility=${root.windowVisibility}; active=${effects.size}; 原生删除仍执行")
-                captures.remove(view);c.cancelled = true;return
+                captures.remove(view);c.cancelled = true;headsUpLeases.remove(view)?.close();return
             }
             c.consumed = true;captures.remove(view)
             if(view.isAttachedToWindow) {
@@ -607,9 +683,11 @@ object ParticleDissolveHook {
                 if(current.isFinite() && (currentX-c.releaseX)*c.direction>=0f)c.releaseX=currentX
             }
             val dust = Dust(root, bitmap, c.releaseX, c.releaseY, c.width, c.height, c.density, speed,c.direction,c.initialProgress,
+                vertical=c.vertical,
                 remainsAllowed = ::membershipGranted) {
                 c.hiddenAlpha?.let { old -> if(view.alpha==0f)view.alpha=old };c.hiddenAlpha=null
                 effects.remove(view)
+                headsUpLeases.remove(view)?.close()
                 if(!membershipGranted())ui.post { stopAll() } // Release deferred native shade close as well.
             }
             effects[view] = dust
@@ -622,9 +700,11 @@ object ParticleDissolveHook {
             val c = captures[view]
             if (c?.committed == true || effects.containsKey(view)) return
             captures.remove(view)?.cancelled = true
+            headsUpLeases.remove(view)?.close()
         }
         private fun abort(view: View) {
             captures.remove(view)?.cancelled = true
+            headsUpLeases.remove(view)?.close()
             effects.remove(view)?.stop()
         }
         internal fun stopAll() {
@@ -632,6 +712,7 @@ object ParticleDissolveHook {
             releaseClearPreparation(true)
             captures.values.forEach { it.cancelled = true };captures.clear()
             effects.values.toList().forEach { it.stop() };effects.clear()
+            headsUpLeases.values.toList().forEach {it.close()};headsUpLeases.clear()
             // Disabling particles releases native completion immediately, without another hold.
             shadeCloses.values.toList().forEach { it.finish(true) }
         }

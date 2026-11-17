@@ -58,6 +58,8 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
             return
         }
         serviceRef=service
+        runCatching {com.coloros16.liquidglass.icons.IconLibrary.syncRevision(this,service)}
+            .onFailure {Lg.w(TAG,"icon library revision synchronization failed",it)}
         serviceLost = false
         listeners.forEach { it.onServiceStateChanged(service) }
     }

@@ -395,6 +395,22 @@ object Prefs {
     /** 桌面 Dock 栏玻璃默认值（false = 不干预，Dock 保持系统原样透明） */
     const val DEFAULT_DOCK_GLASS_ENABLE = false
 
+    // ---------- 桌面图标液态玻璃（独立会员开关，默认不干预原生图标） ----------
+    const val KEY_ICON_GLASS_ENABLE = "launcher_icon_glass_enable"
+    const val DEFAULT_ICON_GLASS_ENABLE = false
+    const val KEY_ICON_GLASS_MODE = "launcher_icon_glass_mode"
+    const val DEFAULT_ICON_GLASS_MODE = "prefab"
+    const val KEY_ICON_GLASS_BLUR = "launcher_icon_glass_blur"
+    const val DEFAULT_ICON_GLASS_BLUR = 26
+    const val KEY_ICON_GLASS_CLARITY = "launcher_icon_glass_clarity"
+    const val DEFAULT_ICON_GLASS_CLARITY = 76
+    const val KEY_ICON_GLASS_REFRACTION = "launcher_icon_glass_refraction"
+    const val DEFAULT_ICON_GLASS_REFRACTION = 56
+    const val KEY_ICON_GLASS_THICKNESS = "launcher_icon_glass_thickness"
+    const val DEFAULT_ICON_GLASS_THICKNESS = 45
+    const val KEY_ICON_GLASS_KEEP_COLOR = "launcher_icon_glass_keep_color"
+    const val DEFAULT_ICON_GLASS_KEEP_COLOR = true
+
     // ---------- 桌面「问小布」入口液态玻璃化（doc/spec/76） ----------
     /** 桌面底部「✨问小布」入口（= `OplusPageIndicator` 的 BREENO 态）液态玻璃背景。
      *  默认 **false**（与模块「默认全关」原则一致）。该控件与页面小圆点是同一个 View 的两个互斥

@@ -1,0 +1,30 @@
+{
+  "product": "DreamGlass",
+  "version": "3.0.0",
+  "versionCode": 3000000,
+  "buildType": "release",
+  "debuggable": false,
+  "apkSha256": "c0626f380422a948240ed3cb1af6c7c0b888011ed8bf41842d448b433216f65b",
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "unitTests": 389,
+  "testFailures": 0,
+  "lintErrors": 0,
+  "legalAssetsVerified": true,
+  "bundledCustomIcons": false,
+  "memberMenuVerifiedInSource": true,
+  "offlineShader": {
+    "actualShaderCompiled": true,
+    "deviceScaleWallpaperRatio": 0.24166666666666667,
+    "oldAndNewRendered": true,
+    "artworkExamples": 6,
+    "sharpEdgeDifference": 9.213443910955915,
+    "transparentCorners": true,
+    "zeroAlpha": true,
+    "halfAlpha": true,
+    "AndroidVisualVerified": false
+  },
+  "physicalInstall": false,
+  "physicalVisualVerified": false,
+  "powerMeasured": false,
+  "adbUsedThisRelease": false
+}

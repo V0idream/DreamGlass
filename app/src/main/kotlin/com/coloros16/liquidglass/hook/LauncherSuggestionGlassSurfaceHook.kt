@@ -60,7 +60,9 @@ internal object LauncherSuggestionGlassSurfaceHook {
             val info=c.info.invoke(parent) ?: return@runCatching false
             LauncherSuggestionSurfacePolicy.eligible(c.wrapperCard.get(wrapper)===parent,
                 c.wrapperBackground.get(wrapper)===view,parent.getChildAt(0)===view,
-                c.itemType.getInt(info),c.cardType.getInt(info))
+                c.itemType.getInt(info),c.cardType.getInt(info)).also {
+                    if(it)LauncherIconGlassHook.registerVerifiedSuggestion(parent)
+                }
         }.getOrDefault(false)
     }
     private fun observe(view:View):State=states[view] ?: State(view).also {
@@ -165,7 +167,8 @@ internal object LauncherSuggestionGlassSurfaceHook {
             val view=target.get() ?: return
             try {
                 preferences()
-                if(!enabled || !eligible(view) || !view.isShown || !view.isHardwareAccelerated ||
+                val verified=eligible(view) // Icon scope remains available when card background glass is disabled.
+                if(!enabled || !verified || !view.isShown || !view.isHardwareAccelerated ||
                     view.width<=0 || view.height<=0 || SystemClock.uptimeMillis()<blockedUntil) {restore(view);return}
                 val geometry=geometry(view) ?: run {
                     restore(view)

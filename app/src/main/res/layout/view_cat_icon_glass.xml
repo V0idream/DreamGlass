@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true" android:scrollbars="none">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="12dp">
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="定制图标库" android:textColor="@color/dream_ink" android:textSize="17sp" />
+            <TextView android:id="@+id/iconLibraryStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="定制图标从 GitHub 按需下载，不随安装包内置。扫描在本机匹配包名，不上传应用列表；下载后可离线使用。" android:textColor="@color/dream_muted" android:textSize="13sp" />
+            <Button android:id="@+id/iconLibraryScan" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="扫描已安装应用" />
+            <Button android:id="@+id/iconLibraryDownload" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="一键下载匹配图标" />
+            <Button android:id="@+id/iconLibraryHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="查看 GitHub 图标库" />
+            <Button android:id="@+id/iconCustomize" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="自定义图标 / 导入 ZIP" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+            <Switch android:id="@+id/switchIconGlass" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="@string/icon_glass_enable"
+                android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_description" android:textColor="@color/dream_muted" android:textSize="13sp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_reload_hint" android:textColor="@color/dream_muted" android:textSize="13sp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_mode" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <Spinner android:id="@+id/spinnerIconGlassMode" android:layout_width="match_parent"
+                android:layout_height="48dp" android:contentDescription="@string/icon_glass_mode" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_mode_desc" android:textColor="@color/dream_muted" android:textSize="13sp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_blur" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekIconGlassBlur" android:layout_width="match_parent"
+                android:layout_height="48dp" android:max="100" android:contentDescription="@string/icon_glass_blur" />
+            <TextView android:id="@+id/iconGlassBlurValue" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:textColor="@color/dream_accent" android:textSize="14sp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_blur_desc" android:textColor="@color/dream_muted" android:textSize="13sp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_clarity" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekIconGlassClarity" android:layout_width="match_parent"
+                android:layout_height="48dp" android:max="100" android:contentDescription="@string/icon_glass_clarity" />
+            <TextView android:id="@+id/iconGlassClarityValue" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:textColor="@color/dream_accent" android:textSize="14sp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_clarity_desc" android:textColor="@color/dream_muted" android:textSize="13sp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_refraction" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekIconGlassRefraction" android:layout_width="match_parent"
+                android:layout_height="48dp" android:max="100" android:contentDescription="@string/icon_glass_refraction" />
+            <TextView android:id="@+id/iconGlassRefractionValue" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:textColor="@color/dream_accent" android:textSize="14sp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_refraction_desc" android:textColor="@color/dream_muted" android:textSize="13sp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_thickness" android:textColor="@color/dream_ink" android:textSize="15sp" />
+            <SeekBar android:id="@+id/seekIconGlassThickness" android:layout_width="match_parent"
+                android:layout_height="48dp" android:max="100" android:contentDescription="@string/icon_glass_thickness" />
+            <TextView android:id="@+id/iconGlassThicknessValue" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:textColor="@color/dream_accent" android:textSize="14sp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_thickness_desc" android:textColor="@color/dream_muted" android:textSize="13sp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+        <com.coloros16.liquidglass.ui.ParameterCard android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="10dp">
+            <Switch android:id="@+id/switchIconGlassKeepColor" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="@string/icon_glass_keep_color"
+                android:textColor="@color/dream_ink" android:textSize="15sp" android:minHeight="48dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/icon_glass_keep_color_desc" android:textColor="@color/dream_muted" android:textSize="13sp" />
+        </com.coloros16.liquidglass.ui.ParameterCard>
+    </LinearLayout>
+</ScrollView>

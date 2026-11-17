@@ -17,10 +17,12 @@
       未加 xposedmodule meta-data（新式 LibXposed 框架不依赖它，见 package-info.java）。
     -->
 
-    <!-- DreamGlass 不联网；参考项目的自动升级入口不再调用。 -->
+    <!-- User initiated custom icon library downloads only. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- 包可见性声明（hook 安装分发与设置页读取宿主信息用） -->
     <queries>
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <package android:name="com.android.systemui" />
         <package android:name="com.android.launcher" />
         <package android:name="com.coloros.gallery3d" />
@@ -36,6 +38,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.LiquidGlass"
         android:supportsRtl="true">
+        <provider android:name=".icons.IconLibraryProvider" android:authorities="${applicationId}.icons" android:exported="true" />
 
         <activity android:name=".ui.DreamActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
@@ -56,6 +59,7 @@
         </receiver>
         <activity android:name=".ui.MembershipActivity" android:exported="false" />
         <activity android:name=".ui.LicenseActivity" android:exported="false" />
+        <activity android:name=".ui.IconCustomizationActivity" android:exported="false" />
         <!-- 完整高级配置。 -->
         <activity
             android:name=".ui.SettingsActivity"

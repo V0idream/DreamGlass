@@ -251,7 +251,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             for ((id, label, detail) in rows) DreamUi.row(c, label, detail) { advanced(id) }
         }
         val member=card()
-        DreamUi.row(member,"会员功能","粒子、倾斜、锁屏与组件玻璃 · 诚信确认后使用") {
+        DreamUi.row(member,"会员功能","桌面图标、粒子、倾斜、锁屏与组件玻璃") {
             startActivity(Intent(this,MembershipActivity::class.java))
         }
         performanceControls()

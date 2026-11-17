@@ -20,7 +20,10 @@ class ParticleProbeActivity:Activity() {
  private val ui=Handler(Looper.getMainLooper())
  private lateinit var label:TextView
  private lateinit var card:View
- private fun fail(error:Throwable) { Log.e("ParticleProbe","FAIL",error);label.text="FAIL: $error" }
+ private fun fail(error:Throwable) {
+  File(filesDir,"particle-probe").apply {mkdirs()}.resolve("report.json").writeText(JSONObject().put("passed",false).put("error",error.stackTraceToString()).toString(2))
+  Log.e("ParticleProbe","FAIL",error);label.text="FAIL: $error"
+ }
  override fun onCreate(state:Bundle?) {
   super.onCreate(state)
   val box=FrameLayout(this).apply { setBackgroundColor(Color.rgb(12,20,28)) }
@@ -67,6 +70,14 @@ class ParticleProbeActivity:Activity() {
    if(t==0f)check(b.getPixel(200,200)==source.getPixel(100,100))
   }
   check(counts[0]>60000 && counts[2] in 1000 until counts[0] && counts[3]==0 && escaped>0) { "Coverage $counts / escaped=$escaped" }
+  shader.setFloatUniform("uVertical",1f);shader.setFloatUniform("uDirection",-1f);shader.setFloatUniform("uProgress",.55f)
+  val up=rendered(shader,560,380);var above=0
+  for(y in 0 until 100)for(x in 100 until 460)if(Color.alpha(up.getPixel(x,y))>8)above++
+  check(above>0) {"Upward heads-up dissolve did not escape above the card"}
+  File(dir,"heads-up-upward.png").outputStream().use {up.compress(Bitmap.CompressFormat.PNG,100,it)}
+  shader.setFloatUniform("uProgress",1f)
+  val end=rendered(shader,560,380)
+  for(y in 0 until 380 step 5)for(x in 0 until 560 step 5)check(Color.alpha(end.getPixel(x,y))==0)
   shader.setFloatUniform("uProgress",0f)
   val half=Bitmap.createScaledBitmap(source,180,90,true)
   shader.setInputShader("uImage",BitmapShader(half,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP).apply { setFilterMode(BitmapShader.FILTER_MODE_LINEAR) })
@@ -74,51 +85,57 @@ class ParticleProbeActivity:Activity() {
   val scaled=rendered(shader,560,380)
   val old=source.getPixel(200,100);val actual=scaled.getPixel(300,200)
   check(kotlin.math.abs(Color.green(actual)-Color.green(old))<5 && kotlin.math.abs(Color.blue(actual)-Color.blue(old))<5)
-  lifecycle(JSONObject().put("scaledSnapshotCoordinates",true).put("coverage",counts).put("escapedPixels",escaped).put("shaderCompiled",true).put("zeroProgressIdentity",true).put("endTransparent",true))
+  lifecycle(JSONObject().put("headsUpUpwardParticles",above).put("scaledSnapshotCoordinates",true).put("coverage",counts).put("escapedPixels",escaped).put("shaderCompiled",true).put("zeroProgressIdentity",true).put("endTransparent",true))
  }
  private fun lifecycle(report:JSONObject) {
   val api=ParticleDissolveHook.Api33
   val type=api.javaClass
-  fun method(name:String)=type.getDeclaredMethod(name,View::class.java).apply { isAccessible=true }
-  val prepare=method("prepare");val dismiss=method("dismiss");val cancel=method("cancel")
+  fun method(name:String)=type.getDeclaredMethod(name,View::class.java).apply {isAccessible=true}
+  val prepare=method("prepare");val cancel=method("cancel")
   api.onGesture(card,NotificationMotionContract.Event.PREPARE)
   api.onGesture(card,NotificationMotionContract.Event.REQUEST)
-  val effects=type.getDeclaredField("effects").apply { isAccessible=true }.get(api) as Map<*,*>
-  val captures=type.getDeclaredField("captures").apply { isAccessible=true }.get(api) as Map<*,*>
-  check(effects.isEmpty()) // A swipe attempt is not a deletion.
-  api.onGesture(card,NotificationMotionContract.Event.CANCEL)
-  check(captures.isEmpty())
+  val effects=type.getDeclaredField("effects").apply {isAccessible=true}.get(api) as Map<*,*>
+  val captures=type.getDeclaredField("captures").apply {isAccessible=true}.get(api) as Map<*,*>
+  check(effects.isEmpty())
+  api.onGesture(card,NotificationMotionContract.Event.CANCEL);check(captures.isEmpty())
   val cap=prepare.invoke(api,card)!!
-  val field=cap.javaClass.getDeclaredField("bitmap").apply { isAccessible=true }
+  val field=cap.javaClass.getDeclaredField("bitmap").apply {isAccessible=true}
   var tries=0
   fun waitReady() {
    try {
-    if(field.get(cap)==null) { check(tries++<60);ui.postDelayed({waitReady()},50);return }
+    if(field.get(cap)==null) {check(tries++<60);ui.postDelayed({waitReady()},50);return}
     val captured=field.get(cap) as Bitmap
     check(captured.config==Bitmap.Config.HARDWARE)
-    val readback=captured.copy(Bitmap.Config.ARGB_8888,false)!!
-    check(Color.alpha(readback.getPixel(readback.width/2,readback.height/2))>200)
-    readback.recycle()
-    api.onGesture(card,NotificationMotionContract.Event.REQUEST)
-    api.onGesture(card,NotificationMotionContract.Event.COMMIT)
+    val copy=captured.copy(Bitmap.Config.ARGB_8888,false)!!
+    check(Color.alpha(copy.getPixel(copy.width/2,copy.height/2))>200);copy.recycle()
+    cancel.invoke(api,card);check(captures.isEmpty());api.stopAll();check(effects.isEmpty())
+    // libxposed is compileOnly and absent in the AOSP app process. Exercise the
+    // production Dust overlay directly; do not add a debug bypass to its member gate.
+    var completed=0
+    val root=card.rootView
+    val dust=ParticleDissolveHook.Api33.Dust(root,captured,60f,300f,card.width,card.height,1f,100,
+      direction=-1f,vertical=true) {completed++}
+    dust.start()
     ui.postDelayed({try {
-      check(effects.size==1);cancel.invoke(api,card);check(effects.size==1)
-      // Native reset after a committed delete must not kill the already-started dust.
-      api.onGesture(card,NotificationMotionContract.Event.ABORT);check(effects.isEmpty())
-      api.stopAll();check(effects.isEmpty())
-      dismiss.invoke(api,card)
-      ui.postDelayed({try {
-       check(effects.size==1)
-       ui.postDelayed({try { check(effects.isEmpty())
-        var detached=0
-        val dust=ParticleDissolveHook.Api33.Dust(card,captured,0f,0f,card.width,card.height,1f,100) { detached++ }
-        dust.start();(card.parent as android.view.ViewGroup).removeView(card);check(detached==1)
-        report.put("detachReleasesOverlay",true).put("hardwareSnapshot",true).put("cancelBeforeCommitReleasesCapture",true).put("attemptDoesNotEmitParticles",true).put("nativeResetAfterCommitKeepsDust",true).put("nativeAbortStopsParticles",true).put("stopAllReleasesOverlay",true).put("completionReleasesOverlay",true).put("physicalDeviceTested",false)
-        Log.i("ParticleProbe","PASS "+report);label.text="PASS\n"+report.toString(2)
-       } catch(e:Throwable){fail(e)}},1400)
-      } catch(e:Throwable){fail(e)}},300)
-    } catch(e:Throwable){fail(e)}},300)
-   } catch(e:Throwable) { fail(e) }
+     check(completed==0)
+     ui.postDelayed({try {
+      check(completed==1)
+      var stopped=0
+      val aborted=ParticleDissolveHook.Api33.Dust(root,captured,0f,0f,card.width,card.height,1f,100) {stopped++}
+      aborted.start();aborted.stop();aborted.stop();check(stopped==1)
+      var detached=0
+      val removal=ParticleDissolveHook.Api33.Dust(card,captured,0f,0f,card.width,card.height,1f,100) {detached++}
+      removal.start();(card.parent as android.view.ViewGroup).removeView(card);check(detached==1)
+      report.put("passed",true).put("hardwareSnapshot",true).put("attemptDoesNotEmitParticles",true)
+       .put("cancelBeforeCommitReleasesCapture",true).put("completionReleasesOverlay",true)
+       .put("explicitStopIsIdempotent",true).put("detachReleasesOverlay",true)
+       .put("physicalDeviceTested",false).put("vendorHeadsUpHookExecuted",false)
+       .put("frameworkCommitLifecycleTested",false)
+      File(filesDir,"particle-probe/report.json").writeText(report.toString(2))
+      Log.i("ParticleProbe","PASS "+report);label.text="PASS\n"+report.toString(2)
+     }catch(e:Throwable) {fail(e)}},1300)
+    }catch(e:Throwable) {fail(e)}},100)
+   }catch(e:Throwable) {fail(e)}
   }
   waitReady()
  }

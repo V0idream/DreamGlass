@@ -216,8 +216,10 @@ class XposedEntry : XposedModule() {
             // COS17 keeps native spring animation; only verified icon-directed tilt is added.
             PACKAGE_LAUNCHER -> {
                 LauncherHook.install(this, classLoader)
+                com.coloros16.liquidglass.hook.LauncherIconGlassHook.install(this,classLoader)
                 com.coloros16.liquidglass.hook.LauncherFolderGlassSurfaceHook.install(this,classLoader)
                 com.coloros16.liquidglass.hook.LauncherSuggestionGlassSurfaceHook.install(this,classLoader)
+                com.coloros16.liquidglass.hook.LauncherLargeFolderGlassHook.install(this,classLoader)
                 com.coloros16.liquidglass.hook.RecentsClearButtonGlassHook.install(this,classLoader)
                 LauncherTiltCompat.install(this, classLoader)
             }

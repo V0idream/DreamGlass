@@ -42,7 +42,7 @@ object MembershipState {
             com.coloros16.liquidglass.config.Prefs.raw(service))
         else runCatching {com.coloros16.liquidglass.config.MemberFeaturePolicy.lock(local)}.getOrDefault(false)
     }
-    val categories=setOf("particles","tilt","keyguard","components","seedling")
+    val categories=setOf("particles","tilt","keyguard","components","seedling","icons")
 }
 
 class MembershipActivity:AppCompatActivity() {
@@ -67,7 +67,7 @@ class MembershipActivity:AppCompatActivity() {
         val body=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(16),dp(20),dp(24)) }
         scroll.addView(body);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         body.addView(DreamUi.label(this,if(confirmed)"会员功能" else "诚信付款 · 会员扩展",23f,DreamUi.ink,true))
-        body.addView(DreamUi.label(this,"基础材质完全免费。粒子飘散、应用与通知倾斜、锁屏玻璃，以及其他应用与组件玻璃属于会员扩展。",14f,DreamUi.muted))
+        body.addView(DreamUi.label(this,"基础材质完全免费。粒子飘散、应用与通知倾斜、锁屏玻璃、桌面图标，以及其他应用与组件玻璃属于会员扩展。",14f,DreamUi.muted))
         if(!confirmed) {
             body.addView(DreamUi.label(this,"模块开发与持续适配存在成本，希望你支付 5 元支持开发。这里只保存你的诚信确认，不核验支付记录。未确认前，所有会员效果保持关闭。",15f,DreamUi.ink).apply { setPadding(0,dp(14),0,dp(8)) })
             body.addView(ImageView(this).apply {
@@ -83,6 +83,7 @@ class MembershipActivity:AppCompatActivity() {
                 Triple("particles","粒子飘散","通知删除、多任务卡片消散与速度"),
                 Triple("tilt","动态倾斜","应用窗口与通知卡片的动画倾转"),
                 Triple("keyguard","锁屏液态玻璃","时钟、卡片与底部快捷按钮，实验性"),
+                Triple("icons","桌面图标玻璃","预制／实时渲染、模糊与折射、自定义图片及图标库"),
                 Triple("components","其他应用与组件","相册、智能侧边栏与负一屏"),
                 Triple("seedling","流体云展开卡片","收起使用黑底，展开应用玻璃"))) {
                 DreamUi.row(card,title,desc) { openCategory(id) }

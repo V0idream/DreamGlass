@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cat_icon_glass">桌面图标玻璃</string>
+    <string name="cat_icon_glass_desc">磨砂底板与立体图案 · 桌面、文件夹和小布建议</string>
+    <string name="icon_glass_enable">启用桌面图标玻璃</string>
+    <string name="icon_glass_mode">图标绘制模式</string>
+    <string name="icon_glass_mode_prefab">预制图标</string>
+    <string name="icon_glass_mode_live">实时渲染</string>
+    <string name="icon_glass_mode_desc">预制图标复用已生成效果，适合降低功耗。实时渲染会跟随壁纸位置更新，并以预制图标兜底；切换页面和应用动画也优先显示玻璃结果。</string>
+    <string name="icon_glass_description">会员扩展，默认关闭。覆盖桌面、Dock、文件夹与小布建议中的应用图标。复杂图案尝试提取主体，通过玻璃深浅与浮雕保留细节。主体自动居中，图标与应用切换动画复用生成结果；关闭后恢复原样。使用静态桌面壁纸；无法读取壁纸或使用动态壁纸时显示预制玻璃回退。</string>
+    <string name="icon_glass_reload_hint">安装新版后首次使用需重启桌面。打开本页不会要求付款确认，仅在首次启用时提示。</string>
+    <string name="icon_glass_clarity">前景辨识度</string>
+    <string name="icon_glass_clarity_desc">提高后，图案轮廓更清晰；降低后，前景更通透。</string>
+    <string name="icon_glass_refraction">背景折射</string>
+    <string name="icon_glass_refraction_desc">调节玻璃透镜对背后壁纸的弯折程度。</string>
+    <string name="icon_glass_thickness">边缘厚度</string>
+    <string name="icon_glass_thickness_desc">调节玻璃边缘的层次与高光。</string>
+    <string name="icon_glass_keep_color">保留少量原始色彩</string>
+    <string name="icon_glass_keep_color_desc">用图标本身的颜色辅助识别；关闭后采用更统一的透明风格。</string>
+    <string name="icon_glass_blur">图标背景模糊</string>
+    <string name="icon_glass_blur_desc">仅调整玻璃底板的模糊程度，前景线条保持清晰。松手后应用，预制与实时模式均生效。</string>
+</resources>

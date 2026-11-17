@@ -1,5 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
+    <activity android:name="com.dreamglass.cos17.IconInventoryActivity" android:exported="true" />
+    <activity android:name="com.dreamglass.cos17.IconLibraryProbeActivity" android:exported="true" />
+    <activity android:name="com.dreamglass.cos17.IconGlassArchiveProbeActivity" android:exported="true" />
+    <activity android:name="com.dreamglass.cos17.IconGlassLiveProbeActivity" android:exported="true" />
+    <activity android:name="com.dreamglass.cos17.IconGlassViewBindingProbeActivity" android:exported="true" />
+    <activity android:name="com.dreamglass.cos17.IconGlassProbeActivity" android:exported="true" />
+    <activity android:name="com.dreamglass.cos17.IconGlassMasksProbeActivity" android:exported="true" />
+    <activity android:name="com.dreamglass.cos17.IconGlassNativeCacheProbeActivity" android:exported="true" />
+    <activity android:name="com.dreamglass.cos17.IconGlassRecordingProbeActivity" android:exported="true" />
     <activity android:name="com.dreamglass.cos17.BackdropLatencyProbeActivity" android:exported="true" />
     <activity android:name="com.dreamglass.cos17.LockWallpaperProbeActivity" android:exported="true" />
     <activity android:name="com.dreamglass.cos17.AppSurfaceGeometryProbeActivity" android:exported="true" />

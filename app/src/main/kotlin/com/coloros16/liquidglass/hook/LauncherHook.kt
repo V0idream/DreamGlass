@@ -2088,6 +2088,7 @@ object LauncherHook {
 
     /** offset 变化 → 平移壁纸条带快照的 region（复用同一位图，零重裁、零入队）；region 未变则完全静默。 */
     private fun applyWallpaperParallaxShift() {
+        syncIconWallpaperTransform()
         val snap = screenSnapshot ?: return
         if (!snap.isWallpaperStrip) return
         val base = snap.stripBaseRect ?: return
@@ -2209,7 +2210,13 @@ object LauncherHook {
         if (abs(s - zoomAppliedScale) < WP_SCALE_EPS) return
         zoomAppliedScale = s
         wallpaperZoomScale = s
+        syncIconWallpaperTransform()
         postInvalidateRegistered()
+    }
+
+    /** Read-only coordinates for the icon material; no extra capture, decode or animation. */
+    internal fun syncIconWallpaperTransform() {
+        LauncherIconGlassHook.wallpaperTransform(wallpaperOffsetX,wallpaperOffsetY,wallpaperZoomScale)
     }
 
     /** [拖动态] hookBefore：mBgView 屏幕位置 + 尺寸 → 注册内层 BlurDrawable 的 screenRegionMap。 */
@@ -2706,6 +2713,18 @@ object LauncherHook {
      * [整屏快照 doc/spec/07 + 2026-08-13] 解析渲染背景源：共享整屏快照，srcRect = 元素当前 region
      * 折算到快照坐标（移动实时跟手，不重抓）。快照缺失 → 异步请求后台 worker 抓屏，本帧 null 回退系统模糊。
      */
+    /** Read an already-published clean wallpaper only. Icons never enqueue captures here. */
+    internal fun publishedIconBackdrop(screenRegion:RectF):IconGlassWallpaper.Frame? {
+        val snap=screenSnapshot ?: return null
+        if(snap.bitmap.isRecycled || snap.region.width()<=0f || snap.region.height()<=0f)return null
+        val image=LowResTier.tierBitmapOf(snap.bitmap,4) ?: return null
+        if(image.isRecycled)return null
+        val region=zoomedRegionForWallpaper(screenRegion,snap.screenRect,snap.wallpaperZoomAtCapture)
+        val sx=image.width/snap.region.width();val sy=image.height/snap.region.height()
+        return IconGlassWallpaper.Frame(image,RectF((region.left-snap.region.left)*sx,
+            (region.top-snap.region.top)*sy,(region.right-snap.region.left)*sx,(region.bottom-snap.region.top)*sy))
+    }
+
     private fun resolveRenderSource(id: Int, screenRegion: RectF): RenderSource? {
         val snap = requestScreenSnapshotAsync()
         if (snap != null && snap.bitmap.width > 0 && snap.bitmap.height > 0 && snap.region.width() > 0f) {
