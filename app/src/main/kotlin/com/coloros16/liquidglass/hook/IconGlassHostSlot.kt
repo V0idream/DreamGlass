@@ -34,8 +34,10 @@ internal object IconGlassHostSlot {
         try {
             c.setter.invoke(view,drawable)
             // COS17 can veto setIcon, leaving both mIcon and its retained icon node unchanged.
-            if(c.icon.get(view)!==drawable)c.icon.set(view,drawable)
-            if(c.visible?.invoke(view)!=false)c.compound.invoke(view,drawable)
+            if(c.icon.get(view)!==drawable) {
+                c.icon.set(view,drawable)
+                if(c.visible?.invoke(view)!=false)c.compound.invoke(view,drawable)
+            }
             view.invalidate()
             check(c.icon.get(view)===drawable)
             return true

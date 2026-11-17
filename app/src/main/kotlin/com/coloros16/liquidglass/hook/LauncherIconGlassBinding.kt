@@ -25,13 +25,13 @@ internal object LauncherIconGlassBinding {
     }
     fun prepareBitmap(context:Context,item:Any?,raw:Bitmap,component:ComponentName?,userId:Int,
         screen:RectF,params:IconGlassMaterial.Params,ready:()->Unit,
-        frame:IconGlassWallpaper.Frame?=null):Bitmap? {
+        frame:IconGlassWallpaper.Frame?=null,wallpaperReady:()->Unit=ready):Bitmap? {
         val source=LauncherIconGlassAssets.original(raw)
         if(source.isRecycled || source.width<16 || source.height<16)return null
         val cached=LauncherIconGlassAssets.prefabFor(item) ?: LauncherIconGlassAssets.generated(source)
         if(cached!=null)return cached
         val mask=IconGlassMasks.resolve(context,component,userId,source,ready) ?: return null
-        val background=frame ?: IconGlassWallpaper.resolve(context,screen,ready)
+        val background=frame ?: IconGlassWallpaper.resolve(context,screen,wallpaperReady)
         return LauncherIconGlassAssets.request(source,mask.foreground,
             background?.bitmap ?: IconGlassFallback.backdrop,
             background?.sourceRect ?: RectF(0f,0f,8f,8f),params.copy(reliefArtwork=mask.relief,detailedArtwork=mask.detailed,customImage=mask.passthrough),

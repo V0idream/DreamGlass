@@ -274,6 +274,12 @@ internal object LauncherIconGlassAssets {
                 action(next);viewSwaps[view]=ViewSwap(first,next)
             }
         }
+        primeItem(item,rendered)
+        RuntimeDiagnostics.mark("icon_assets_applied","已替换运行时图标位图与ItemInfo缓存；原始APK/图标包未修改")
+    }
+    /** Seed the model cache while the folder is closed, before animation consumers bind. */
+    fun primeItem(item:Any?,rendered:Bitmap) {
+        if(!active || !main())return
         if(item!=null && itemType?.isInstance(item)==true) {
             val field=itemBitmap ?: return
             val current=field.get(item) ?: return
@@ -291,7 +297,6 @@ internal object LauncherIconGlassAssets {
                 while(componentAssets.size>192)componentAssets.remove(componentAssets.keys.first())
             }}
         }
-        RuntimeDiagnostics.mark("icon_assets_applied","已替换运行时图标位图与ItemInfo缓存；原始APK/图标包未修改")
     }
     /** Native FastBitmapDrawable.draw still owns press scale, translation and badges. */
     fun drawCached(drawable:Drawable,canvas:Canvas,rect:Rect):Boolean {

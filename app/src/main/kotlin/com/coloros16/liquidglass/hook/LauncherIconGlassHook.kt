@@ -46,7 +46,7 @@ import java.util.WeakHashMap
 internal object LauncherIconGlassHook {
     private data class Contract(val host:Class<*>,val icon:Field,val display:Field,
         val fast:Class<*>,val bitmap:Field,val paint:Field?,val disabled:Method?,
-        val bounds:Method?,val visible:Method?)
+        val bounds:Method?,val visible:Method?,val content:Method?)
     private class State(view:View):ViewTreeObserver.OnPreDrawListener,View.OnAttachStateChangeListener {
         val host=WeakReference(view)
         var observer=WeakReference(view.viewTreeObserver)
@@ -54,6 +54,7 @@ internal object LauncherIconGlassHook {
         val screenRect=RectF();val bounds=RectF();val visibleRect=Rect()
         val materials=WeakHashMap<Drawable,IconGlassMaterial>()
         val artwork=WeakHashMap<Drawable,Artwork>()
+        var liveMaterialPainted=false
         private val motionRect=RectF()
         private val lastMotion=RectF(Float.NaN,0f,0f,0f)
         var ancestryParent=WeakReference<View>(null);var ancestryRoot=WeakReference<View>(null);var ancestryRevision=-1
@@ -68,21 +69,15 @@ internal object LauncherIconGlassHook {
             }
             if(!view.isAttachedToWindow)return true
             preferences()
-            if(contract?.host?.isInstance(view)==true)runCatching {
+            // Native View.draw owns binding. Repeating it here used to prepare every
+            // folder child twice per frame before its drawable was even painted.
+            if(com.coloros16.liquidglass.BuildConfig.DEBUG &&
+                component?.packageName in setOf("com.codex.floatingcamera","me.sukimon.mdl"))runCatching {
                 val qualified=enabled && inspect(view,this)
-                if(qualified) {
-                    (contract?.icon?.get(view) as? Drawable)?.let {prepareNative(view,this,it)}
-                    // prepareNative already syncs the live effect; avoid a second transform,
-                    // mask lookup and compositor check for every child in an expanding folder.
-                    if(!liveMode)IconGlassLiveSurface.restore(view)
-                } else IconGlassLiveSurface.restore(view)
-                val packageName=component?.packageName
-                if(packageName=="com.codex.floatingcamera" || packageName=="me.sukimon.mdl") {
-                    val icon=contract?.icon?.get(view) as? Drawable
-                    val bitmap=if(icon!=null && contract?.fast?.isInstance(icon)==true)contract?.bitmap?.get(icon) as? Bitmap else null
-                    RuntimeDiagnostics.update("icon_example_"+component?.packageName,
-                        "eligible=$qualified container=$container display=${contract?.display?.getInt(view)} drawable=${icon?.javaClass?.simpleName} generated=${bitmap?.let(LauncherIconGlassAssets::isGenerated)} live=${IconGlassLiveSurface.owns(view)}")
-                }
+                val icon=contract?.icon?.get(view) as? Drawable
+                val bitmap=if(icon!=null && contract?.fast?.isInstance(icon)==true)contract?.bitmap?.get(icon) as? Bitmap else null
+                RuntimeDiagnostics.update("icon_example_"+component?.packageName,
+                    "eligible=$qualified container=$container drawable=${icon?.javaClass?.simpleName} generated=${bitmap?.let(LauncherIconGlassAssets::isGenerated)} live=foreground")
             }.onFailure(::report)
             var dirty=revision!=prefsRevision
             revision=prefsRevision
@@ -135,6 +130,7 @@ internal object LauncherIconGlassHook {
     private var scopeRevision=0
     private val nativeEngines=WeakHashMap<Any,WeakReference<View>>()
     private val nativeEngineMethods=HashSet<Method>()
+    private val nativeRenderMethods=HashSet<Method>()
     private val ui=Handler(Looper.getMainLooper())
     private var api:XposedInterface?=null
     private var contract:Contract?=null
@@ -320,7 +316,8 @@ internal object LauncherIconGlassHook {
             contract=Contract(host,icon,display,fast,bitmap,field(fast,"mPaint"),
                 fast.methods.firstOrNull {it.name=="isDisabled" && it.parameterCount==0},
                 runCatching {host.getMethod("getIconBounds",Rect::class.java)}.getOrNull(),
-                runCatching {host.getMethod("getIconVisible")}.getOrNull())
+                runCatching {host.getMethod("getIconVisible")}.getOrNull(),
+                runCatching {host.getMethod("drawWithoutDot",Canvas::class.java)}.getOrNull())
             val draw=fast.getDeclaredMethod("drawInternal",Canvas::class.java,Rect::class.java)
             check(draw.returnType==Void.TYPE)
             mountSlot(module,draw)
@@ -384,6 +381,7 @@ internal object LauncherIconGlassHook {
             val ancestor=owner.current()
             if(ancestor?.state?.host?.get()===view && ancestor.canvas===canvas) {
                 if(name=="drawIcon")return@intercept drawPreparedViewIcon(chain,view,canvas,ancestor)
+                if(name=="drawWithoutDot")return@intercept drawNativeContent(chain,view,canvas,ancestor)
                 return@intercept chain.proceed()
             }
             var context:Draw?=null
@@ -407,8 +405,13 @@ internal object LauncherIconGlassHook {
                 }
             } catch(t:Throwable) {report(t)}
             if(name=="drawIcon" && context!=null)return@intercept drawPreparedViewIcon(chain,view,canvas,context)
+            if(name=="drawWithoutDot" && context!=null)return@intercept drawNativeContent(chain,view,canvas,context)
             // An inactive nested view must mask an ancestor's draw owner, even on exceptions.
-            owner.run(context) {chain.proceed()}
+            owner.run(context) {
+                // The OEM also paints cached layers in executeAfterIconDraw, after drawIcon.
+                // Keep both phases out of an owned generated slot, while retaining animations.
+                IconGlassNativeDrawScope.run(nativeManager(context)) {chain.proceed()}
+            }
         }
         }
     }
@@ -419,7 +422,6 @@ internal object LauncherIconGlassHook {
         if(native!=null && LauncherIconGlassAssets.current(native)) {
             if(!LauncherIconGlassAssets.hostSlotBound(view,drawable,native))
                 LauncherIconGlassAssets.apply(view,drawable,view.tag,LauncherIconGlassAssets.original(native),native)
-            if(liveMode)syncLiveHost(view,state)
             return
         }
         val source=hostSource(view,drawable) ?: run {
@@ -432,7 +434,6 @@ internal object LauncherIconGlassHook {
         RuntimeDiagnostics.mark("icon_glass_prepare","已从 View 入口请求图标准备，不依赖 Drawable 内层 Hook")
         LauncherIconGlassBinding.prepare(view,drawable,view.tag,source,state.component,state.userId,
             state.screenRect,params,artworkReady)
-        if(liveMode)syncLiveHost(view,state)
     }
     private fun iconBounds(view:View):Rect?=runCatching {
         val bounds=Rect()
@@ -447,47 +448,92 @@ internal object LauncherIconGlassHook {
             IconGlassRecordingSources.get(drawable) ?: IconGlassRecordingSources.get(view) ?:
             IconGlassRasterSources.resolve(view.context,drawable,artworkReady)
     }
-    private fun syncLiveHost(view:View,state:State) {
-        val c=contract ?: return
-        if(!liveMode || !enabled ||
-            runCatching {contract?.visible?.invoke(view)==false}.getOrDefault(false)) {
-            IconGlassLiveSurface.restore(view);return
-        }
-        val drawable=c.icon.get(view) as? Drawable ?: return
-        val raw=hostSource(view,drawable) ?: return
-        val source=LauncherIconGlassAssets.original(raw)
-        val cached=state.artwork[drawable]
-        val mask=cached?.takeIf {it.source===source && it.generation==source.generationId && it.variant==IconGlassDynamicIcons.variant(state.component?.flattenToString())}?.mask ?:
-            IconGlassMasks.resolve(view.context,state.component,state.userId,source,artworkReady)?.also {
-                state.artwork[drawable]=Artwork(source,source.generationId,it,IconGlassDynamicIcons.variant(state.component?.flattenToString()))
-            } ?: return
-        val bounds=iconBounds(view) ?: return
-        if(mask.passthrough) {IconGlassLiveSurface.restore(view);return}
-        state.global.reset();view.transformMatrixToGlobal(state.global)
-        state.screenRect.set(bounds);state.global.mapRect(state.screenRect)
-        val frame=IconGlassWallpaper.resolve(view.context,state.screenRect,artworkReady)
-        IconGlassLiveSurface.sync(view,mask.foreground,RectF(bounds),params.copy(reliefArtwork=mask.relief,detailedArtwork=mask.detailed),frame)
-    }
     /** Paint at the real View icon slot, even when an OEM engine bypasses Drawable hooks. */
     private fun drawPreparedViewIcon(chain:XposedInterface.Chain,view:View,canvas:Canvas,scope:Draw):Any? {
         val bounds=iconBounds(view) ?: return owner.run(scope) {chain.proceed()}
         if(runCatching {contract?.visible?.invoke(view)==false}.getOrDefault(false))
             return owner.run(scope) {IconGlassLiveSurface.restore(view);chain.proceed()}
-        if(liveMode)runCatching {syncLiveHost(view,scope.state)}.onFailure(::report)
-        val surface=liveMode && canvas.isHardwareAccelerated && IconGlassLiveSurface.owns(view)
+        // A generated FastBitmapDrawable already occupies the native compound slot.
+        // Keep OEM icon animation, native Paint alpha, press scale and badges together.
+        // Live content is routed through drawWithoutDot by the native engine hook below;
+        // it must not depend on drawInternal surviving TextView/ART compiled call sites.
+        if(contract?.fast?.isInstance(scope.drawable)==true) {
+            IconGlassLiveSurface.restore(view)
+            return owner.run(scope) {chain.proceed()}
+        }
         val prefab=LauncherIconGlassAssets.prefabFor(view.tag) ?:
             LauncherIconGlassAssets.sourceForItem(view.tag)?.let(LauncherIconGlassAssets::generated)
-        if(!surface && prefab==null) {
+        if(prefab==null) {
             if(contract?.fast?.isInstance(scope.drawable)!=true && scope.drawable !is BitmapDrawable)
                 return drawFancyView(chain,view,canvas,scope)
             return owner.run(scope) {chain.proceed()}
         }
         val save=canvas.save();canvas.clipOutRect(bounds)
         val result=try {owner.run(null) {chain.proceed()}}finally {canvas.restoreToCount(save)}
-        if(!surface && prefab!=null) {
+        run {
             canvas.drawBitmap(prefab,null,bounds,Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {alpha=scope.drawable.alpha})
             RuntimeDiagnostics.mark("icon_glass_view_slot","已从 View 的实际图标区域绘制，绕过厂商旧图标缓存")
         }
+        return result
+    }
+    private fun nativeManager(scope:Draw?):Any? {
+        val c=contract ?: return null
+        val drawable=scope?.drawable ?: return null
+        if(!c.fast.isInstance(drawable))return null
+        val bitmap=c.bitmap.get(drawable) as? Bitmap ?: return null
+        if(!LauncherIconGlassAssets.isGenerated(bitmap))return null
+        val engine=scope.state.engine.get() ?: return null
+        return field(engine.javaClass,"mRenderManager")?.get(engine)
+    }
+
+    /** This is the same content entry used by the OEM animator, after its Canvas transforms.
+     * Paint the GPU material here even if native TextView bypasses drawInternal. Native text,
+     * press transforms, badges, outer animation clipping and opacity remain in this slot.
+     */
+    private fun drawNativeContent(chain:XposedInterface.Chain,view:View,canvas:Canvas,scope:Draw):Any? {
+        val c=contract ?: return owner.run(scope) {chain.proceed()}
+        if(!liveMode || !enabled || !canvas.isHardwareAccelerated || !c.fast.isInstance(scope.drawable) ||
+            runCatching {c.visible?.invoke(view)==false}.getOrDefault(false))return owner.run(scope) {chain.proceed()}
+        val bitmap=c.bitmap.get(scope.drawable) as? Bitmap
+        val bounds=iconBounds(view)
+        if(bitmap==null || !LauncherIconGlassAssets.isGenerated(bitmap) || bounds==null)
+            return owner.run(scope) {chain.proceed()}
+        val type=scope.drawable.javaClass
+        val scale=(field(type,"mScale")?.get(scope.drawable) as? Number)?.toFloat() ?: 1f
+        val tx=(field(type,"mTransX")?.get(scope.drawable) as? Number)?.toFloat() ?: 0f
+        val ty=(field(type,"mTransY")?.get(scope.drawable) as? Number)?.toFloat() ?: 0f
+        if(!scale.isFinite() || scale<=0f || !tx.isFinite() || !ty.isFinite())return owner.run(scope) {chain.proceed()}
+        IconGlassLiveSurface.restore(view)
+        val iconSave=canvas.save()
+        val painted=try {
+            canvas.translate(tx,ty)
+            canvas.scale(scale,scale,bounds.exactCenterX(),bounds.exactCenterY())
+            owner.run(scope) {runCatching {draw(scope,canvas,bounds)}.onFailure(::report).getOrDefault(false)}
+        }finally {canvas.restoreToCount(iconSave)}
+        if(!painted)return owner.run(scope) {chain.proceed()}
+        // Exclude only the native bitmap. Relying on its inner hook to suppress a prefab
+        // would paint the stale image on top of the freshly drawn live material again.
+        val halfWidth=bounds.width()*scale*.5f;val halfHeight=bounds.height()*scale*.5f
+        val textSave=canvas.save()
+        canvas.clipOutRect(bounds.exactCenterX()+tx-halfWidth,bounds.exactCenterY()+ty-halfHeight,
+            bounds.exactCenterX()+tx+halfWidth,bounds.exactCenterY()+ty+halfHeight)
+        val result=try {owner.run(null) {chain.proceed()}}finally {canvas.restoreToCount(textSave)}
+        if(field(type,"mIsShowBadge")?.get(scope.drawable)==true) {
+            val badge=field(type,"mBadge")?.get(scope.drawable) as? Drawable
+            if(badge!=null) {
+                val save=canvas.save()
+                try {
+                    canvas.translate(tx,ty)
+                    canvas.scale(scale,scale,bounds.exactCenterX(),bounds.exactCenterY())
+                    canvas.translate((bounds.left-scope.drawable.bounds.left).toFloat(),
+                        (bounds.top-scope.drawable.bounds.top).toFloat())
+                    owner.run(null) {badge.draw(canvas)}
+                }finally {canvas.restoreToCount(save)}
+            }
+        }
+        if(scope.state.liveMaterialPainted)
+            RuntimeDiagnostics.mark("icon_live_native_content","3.0.1：原生动画内容入口已执行当前坐标 GPU 着色，不依赖内层 Drawable Hook")
+        else RuntimeDiagnostics.mark("icon_live_native_fallback","本帧使用预制或自定义图像；实时资源未完成时由回调刷新")
         return result
     }
     private fun ensureNativeEngine(view:View,state:State) {
@@ -503,14 +549,34 @@ internal object LauncherIconGlassHook {
         }
         val target=method?.takeIf {it.returnType==Boolean::class.javaPrimitiveType} ?: return
         if(!nativeEngineMethods.add(target))return
-        api?.hook(target)?.setExceptionMode(ExceptionMode.PROTECTIVE)?.intercept {chain ->
+        val module=api ?: return
+        val renderManager=field(engine.javaClass,"mRenderManager")?.get(engine) ?: return
+        val render=renderManager.javaClass.methods.firstOrNull {it.name=="renderIcon" &&
+            it.parameterTypes.contentEquals(arrayOf(Canvas::class.java,Boolean::class.javaPrimitiveType)) &&
+            it.returnType==Void.TYPE} ?: return
+        if(nativeRenderMethods.add(render))module.hook(render).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+            if(IconGlassNativeDrawScope.suppresses(chain.getThisObject()))null else chain.proceed()
+        }
+        runCatching {module.deoptimize(target)}.onFailure(::report)
+        module.hook(target).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
             val host=nativeEngines[chain.getThisObject()]?.get()
             val drawable=host?.let {c.icon.get(it) as? Drawable}
             val bitmap=if(drawable!=null && c.fast.isInstance(drawable))c.bitmap.get(drawable) as? Bitmap else null
             if(main() && enabled && host!=null && bitmap!=null && LauncherIconGlassAssets.isGenerated(bitmap) &&
                 inspect(host,state(host))) {
-                RuntimeDiagnostics.mark("icon_glass_native_engine","已让准备好的图标回到原生位图槽；避免主题引擎继续显示旧缓存")
-                false
+                val manager=field(chain.getThisObject().javaClass,"mRenderManager")?.get(chain.getThisObject())
+                RuntimeDiagnostics.mark("icon_glass_native_engine","仅屏蔽旧主题节点，保留原生图标动画及返回值")
+                IconGlassNativeDrawScope.run(manager) {
+                    val intercepted=chain.proceed() as Boolean
+                    val scope=owner.current()
+                    val canvas=chain.getArg(0) as? Canvas
+                    IconGlassNativeDrawScope.finish(intercepted,liveMode && scope!=null && scope.state.host.get()===host &&
+                        scope.canvas===canvas && canvas?.isHardwareAccelerated==true && c.content!=null) {
+                        // The animator did not take over: use its exact native content entry
+                        // once, then tell drawIcon not to draw the cached TextView icon again.
+                        c.content!!.invoke(host,canvas)
+                    }
+                }
             } else chain.proceed()
         }
     }
@@ -545,6 +611,7 @@ internal object LauncherIconGlassHook {
         }
     }
     private fun draw(scope:Draw,canvas:Canvas,rect:Rect):Boolean {
+        scope.state.liveMaterialPainted=false
         if(IconGlassRecordingSources.isRecording())return false
         val c=contract ?: return false
         val state=scope.state;val view=state.host.get() ?: return false
@@ -601,9 +668,10 @@ internal object LauncherIconGlassHook {
         val material=state.materials.getOrPut(scope.drawable) {IconGlassMaterial()}
         val result=material.draw(canvas,state.bounds,mask.foreground,backdrop,crop,
             params.copy(alpha=alpha,disabled=disabled,reliefArtwork=mask.relief,detailedArtwork=mask.detailed),background?.sharpBitmap ?: backdrop)
+        state.liveMaterialPainted=liveMode && background!=null && result
         if(result && !rendered) {
             rendered=true
-            RuntimeDiagnostics.mark("icon_glass_render","3.0.0：图标曲边使用清晰壁纸折射；图案采用浅色分层玻璃")
+            RuntimeDiagnostics.mark("icon_glass_render","3.0.1：图标曲边使用清晰壁纸折射；图案采用浅色分层玻璃")
         }
         if(result && scope.suggestionImage)suggestionRendered(view)
         if(result)RuntimeDiagnostics.mark("icon_glass_source_${mask.kind}","图标轮廓来源：${mask.kind}")
@@ -968,6 +1036,19 @@ internal object LauncherIconGlassHook {
             IconGlassFallback.empty(canvas,Rect(0,0,view.width,view.height));return null
     }
 
+    private fun prepareFolderItem(view:View,item:Any,ready:()->Unit) {
+        val source=LauncherIconGlassAssets.sourceForItem(item) ?: return
+        val meta=metadata(item)
+        val position=IntArray(2);view.getLocationOnScreen(position)
+        val size=minOf(view.width,view.height).coerceAtLeast(48).toFloat()
+        val screen=RectF(position[0].toFloat(),position[1].toFloat(),position[0]+size,position[1]+size)
+        val completed:()->Unit={ready();artworkReady()}
+        val generated=LauncherIconGlassBinding.prepareBitmap(view.context,item,source,meta.component,meta.user,
+            screen,params,completed,wallpaperReady=artworkReady) ?: return
+        LauncherIconGlassAssets.primeItem(item,generated)
+        RuntimeDiagnostics.mark("icon_folder_warm","已在文件夹关闭时准备首屏图标模型缓存；空闲分片，不抓屏")
+    }
+
     /** Large folder preview icons are manually painted by the manager, not child TextViews.
      * Bypass only its pre-rasterized preview cache while our visible folder owns the Canvas. */
     private fun mountFolderPreviews(module:XposedInterface,loader:ClassLoader) {
@@ -998,6 +1079,10 @@ internal object LauncherIconGlassHook {
                     var scope:FolderDraw?=null
                     if(main() && canvas?.isHardwareAccelerated==true && host!=null && !IconGlassRecordingSources.isRecording())runCatching {
                         preferences()
+                        if(enabled && inspect(host,state(host),host.tag,true)) {
+                            IconGlassFolderWarmup.observe(host,prefsRevision,IconGlassWallpaper.revision(),
+                                {enabled && interactive && !locked && !powerSave},::prepareFolderItem)
+                        }
                         if(enabled && isBig.invoke(host)==true && inspect(host,state(host),host.tag,true)) {
                             val base=Matrix();canvas.getMatrix(base);scope=FolderDraw(host,canvas,base)
                         }
@@ -1094,12 +1179,18 @@ internal object LauncherIconGlassHook {
             })
         } catch(t:Throwable) {report(t)}
     }
-    private fun field(type:Class<*>,name:String):Field? {
+    private val fields=WeakHashMap<Class<*>,MutableMap<String,Field?>>()
+    @Synchronized private fun field(type:Class<*>,name:String):Field? {
+        val cached=fields.getOrPut(type) {HashMap()}
+        if(cached.containsKey(name))return cached[name]
         var current:Class<*>?=type
         while(current!=null) {
-            runCatching {current!!.getDeclaredField(name).apply {isAccessible=true}}.getOrNull()?.let {return it}
+            val found=runCatching {current!!.getDeclaredField(name).apply {isAccessible=true}}.getOrNull()
+            if(found!=null) {cached[name]=found;return found}
             current=current.superclass
         }
+        // Missing monochrome fields are a normal case, not an exception per icon/frame.
+        cached[name]=null
         return null
     }
 }
