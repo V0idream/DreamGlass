@@ -1,0 +1,18 @@
+{
+  "product": "DreamGlass",
+  "version": "3.0.3",
+  "versionCode": 3000005,
+  "buildType": "release",
+  "debuggable": false,
+  "apkSha256": "9e2a2d7df456cbecbe6c20d2192066aad8b6363b98e775a0aec73fe82c0984bf",
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "unitTests": 418,
+  "testFailures": 0,
+  "lintErrors": 0,
+  "lintWarnings": 432,
+  "legalAssetsVerified": true,
+  "bundledCustomIcons": false,
+  "gpuProbeExecutedThisRelease": false,
+  "physicalInstall": false,
+  "physicalVisualVerified": false
+}

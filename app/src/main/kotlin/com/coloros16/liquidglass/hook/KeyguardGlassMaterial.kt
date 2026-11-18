@@ -1,5 +1,7 @@
 /* DreamGlass contributors, 2026-10-29. GPL-3.0. GPU glyph-mask and glass material. */
 package com.coloros16.liquidglass.hook
+
+import com.coloros16.liquidglass.config.SafeAreas
 import android.graphics.*
 import android.graphics.drawable.Drawable
 
@@ -8,19 +10,43 @@ internal class KeyguardGlassMaterial(val glyph:Boolean) {
     val shader=RuntimeShader(SOURCE)
     // RenderEffect snapshots the shader builder. Create it after update() has bound the image
     // and uniforms, and recreate only when the attachment geometry/material changes.
-    val effect:RenderEffect? get()=if(glyph)RenderEffect.createRuntimeShaderEffect(shader,"uContent") else null
+    val effect: RenderEffect? get() = glyphEffect()
+    private val clip by lazy { RuntimeShader(CLIP) }
+    private val clipBinding = SafeAreas.Binding()
+    private var mapping: SafeAreas.Mapping? = null
+    val protectsGlyph get() = glyph && mapping != null
+    fun glyphEffect(native: RenderEffect? = null, nativeOnTop: Boolean = false): RenderEffect? {
+        if (!glyph) return null
+        val glass = RenderEffect.createRuntimeShaderEffect(shader, "uContent")
+        if (native == null) return glass
+        val regular = if (nativeOnTop) RenderEffect.createChainEffect(native, glass)
+            else RenderEffect.createChainEffect(glass, native)
+        val mask = mapping ?: return regular
+        // Both branches receive the original glyph. Native distortion must not run on the
+        // protected branch, and the clip must be applied at the output, after any displacement.
+        clipBinding.set(clip, SafeAreas.Scene.LOCK, mask)
+        fun clipped(effect: RenderEffect, inside: Float): RenderEffect {
+            clip.setFloatUniform("uSafeInside", inside)
+            val filter = RenderEffect.createRuntimeShaderEffect(clip, "uLayer")
+            return RenderEffect.createChainEffect(filter, effect)
+        }
+        return RenderEffect.createBlendModeEffect(clipped(regular, 0f), clipped(glass, 1f), BlendMode.PLUS)
+    }
     private var image:Bitmap?=null
+    private val safeAreas=SafeAreas.Binding()
     init {
         shader.setFloatUniform("uMode",if(glyph)0f else 1f)
         shader.setFloatUniform("uStateTint",0f,0f,0f,0f)
         if(!glyph)shader.setInputShader("uContent",LinearGradient(0f,0f,1f,1f,Color.TRANSPARENT,Color.TRANSPARENT,Shader.TileMode.CLAMP))
     }
     fun clearImage() {
-        image=null
+        image=null;mapping=null
         shader.setInputShader("uWallpaper",LinearGradient(0f,0f,1f,1f,Color.TRANSPARENT,Color.TRANSPARENT,Shader.TileMode.CLAMP))
     }
-    fun update(bitmap:Bitmap,matrix:FloatArray,width:Float,height:Float,screenW:Int,screenH:Int,strength:Float,corner:Float) {
+    fun update(bitmap:Bitmap,matrix:FloatArray,width:Float,height:Float,screenW:Int,screenH:Int,strength:Float,corner:Float,safeMapping:SafeAreas.Mapping?=null) {
         if(image!==bitmap) { image=bitmap;shader.setInputShader("uWallpaper",BitmapShader(bitmap,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP).apply { setFilterMode(BitmapShader.FILTER_MODE_LINEAR) }) }
+        mapping=safeMapping
+        safeAreas.set(shader,SafeAreas.Scene.LOCK,safeMapping)
         val map=KeyguardGlassPolicy.mapping(bitmap.width,bitmap.height,screenW,screenH)
         shader.setFloatUniform("uMapX",matrix[0]*map[0],matrix[1]*map[0],matrix[2]*map[0]+map[1])
         shader.setFloatUniform("uMapY",matrix[3]*map[0],matrix[4]*map[0],matrix[5]*map[0]+map[2])
@@ -44,7 +70,17 @@ internal class KeyguardGlassMaterial(val glyph:Boolean) {
         @Deprecated("Deprecated in Android") override fun getOpacity()=PixelFormat.TRANSLUCENT
     }
     companion object {
-        const val SOURCE="""
+        private const val CLIP=SafeAreas.AGSL + """
+            uniform shader uLayer;
+            uniform float uSafeInside;
+            half4 main(float2 p) {
+                float outside = safeDistortion(p);
+                float weight = uSafeInside > 0.5 ? 1.0 - outside : outside;
+                if (weight <= 0.0) return half4(0.0);
+                return uLayer.eval(p) * half(weight);
+            }
+        """
+        const val SOURCE=SafeAreas.AGSL + """
             uniform shader uContent;
             uniform shader uWallpaper;
             uniform float3 uMapX;
@@ -79,7 +115,7 @@ internal class KeyguardGlassMaterial(val glyph:Boolean) {
                 }
                 float edge=clamp(length(grad),0.0,1.0);
                 float2 normal=-grad/max(length(grad),0.001);
-                float2 q=p+normal*edge*(bevel*0.9*uStrength);
+                float2 q=p+normal*edge*(bevel*0.9*uStrength)*safeDistortion(p);
                 float2 source=float2(dot(float3(q,1.0),uMapX),dot(float3(q,1.0),uMapY));
                 half3 glass=uWallpaper.eval(source).rgb;
                 float lum=dot(float3(glass),float3(0.2126,0.7152,0.0722));

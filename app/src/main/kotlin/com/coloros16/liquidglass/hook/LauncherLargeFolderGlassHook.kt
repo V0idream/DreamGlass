@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026. GPL-3.0-or-later. */
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.graphics.Canvas
 import android.graphics.RectF
 import android.graphics.RenderEffect
@@ -101,7 +103,8 @@ internal object LauncherLargeFolderGlassHook {
     }
     private class State(view:View):ViewTreeObserver.OnPreDrawListener,View.OnAttachStateChangeListener {
         private val host=WeakReference(view)
-        private val material by lazy {AppGlassEffect()}
+        private val material by lazy {AppGlassEffect(desktop=true)}
+        private val safeAreaMapper=SafeAreas.ViewMapper()
         var nativeEffect:RenderEffect?=null
         var dirty=true
         private var active=false
@@ -125,8 +128,10 @@ internal object LauncherLargeFolderGlassHook {
                 val params=SharedGlassParams.resolve(snapshot.values,snapshot.preset,GlassRegistry.overridesFor(key),
                     bounds.width(),bounds.height(),GlassRegistry.cornerOverrideFor(key) ?: corner,
                     false,snapshot.compactOptics,snapshot.grayBaseLuma)
-                val hash=params.hashCode()
-                if(effect==null || effectHash!=hash) {effect=material.create(params,bounds);effectHash=hash;dirty=true}
+                val mapping=safeAreaMapper.desktop(view,bounds)
+                val safeHash=if(mapping==null)0 else 31*mapping.hashCode()+SafeAreas.stamp(SafeAreas.Scene.DESKTOP)
+                val hash=31*params.hashCode()+safeHash
+                if(effect==null || effectHash!=hash) {effect=material.create(params,bounds,safeMapping=mapping);effectHash=hash;dirty=true}
                 NativeSurfaceBackgroundLease.sync(view,true)
                 check(NativeSurfaceBackgroundLease.owns(view))
                 if(!active || dirty) {

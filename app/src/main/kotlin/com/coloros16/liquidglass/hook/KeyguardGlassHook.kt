@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026-10-29. GPL-3.0. No screen/notification capture. */
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.app.Application
 import android.app.WallpaperManager
 import android.content.*
@@ -31,6 +33,9 @@ object KeyguardGlassHook {
     const val KEY_STRENGTH="keyguard_glass_strength"
     private val ui=Handler(Looper.getMainLooper())
     private val entries=WeakHashMap<View,Entry>()
+    internal fun safeAreasChanged() {
+        ui.post { entries.forEach { (view, entry) -> entry.dirty(); view.invalidate() } }
+    }
     private val nativeEffects=WeakHashMap<View,RenderEffect?>()
     private val asyncEffects=WeakHashMap<View,Boolean>()
     private var asyncEffectSetter:java.lang.reflect.Method?=null
@@ -577,6 +582,7 @@ object KeyguardGlassHook {
         val background get()=attachment.background
         private val matrix=Matrix();private val values=FloatArray(9);private val origin=IntArray(2)
         private var previous=0
+        private val safeAreaMapper=SafeAreas.ViewMapper()
         val applied get()=attachment.applied
         fun dirty() { previous=0 }
         fun compose(native:RenderEffect?):RenderEffect?=if(membershipGranted())attachment.compose(native) else native
@@ -600,6 +606,9 @@ object KeyguardGlassHook {
             var hash=System.identityHashCode(image)
             for(value in values)hash=hash*31+value.toRawBits()
             hash=hash*31+v.width;hash=hash*31+v.height;hash=hash*31+strength.toRawBits()
+            val safeMapping=safeAreaMapper.lock(v,values,v.width.toFloat(),v.height.toFloat())
+            hash=hash*31+(safeMapping?.hashCode() ?: 0)
+            hash=hash*31+SafeAreas.stamp(SafeAreas.Scene.LOCK)
             if(role==KeyguardGlassPolicy.SHORTCUT && v is android.widget.ImageView)hash=hash*31+System.identityHashCode(v.drawable)
             if(hash!=previous || !applied) {
                 val first=!applied
@@ -608,7 +617,7 @@ object KeyguardGlassHook {
                 val radius=if(role==KeyguardGlassPolicy.SHORTCUT)minOf(v.width,v.height)*.5f else
                     if(outline.radius>0f)outline.radius else minOf(v.width,v.height)*.24f
                 val dm=v.resources.displayMetrics
-                attachment.apply(image,values,dm.widthPixels,dm.heightPixels,strength,radius)
+                attachment.apply(image,values,dm.widthPixels,dm.heightPixels,strength,radius,safeMapping)
                 previous=hash;v.invalidate()
                 if(first) {
                     RuntimeDiagnostics.mark("keyguard_material","锁屏角色=${role}已挂载GPU材质；真机外观待确认")

@@ -25,6 +25,7 @@
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <package android:name="com.android.systemui" />
         <package android:name="com.android.launcher" />
+        <intent><action android:name="android.service.wallpaper.WallpaperService" /></intent>
         <package android:name="com.coloros.gallery3d" />
         <package android:name="com.coloros.smartsidebar" />
         <package android:name="com.coloros.assistantscreen" />
@@ -59,6 +60,9 @@
         </receiver>
         <activity android:name=".ui.MembershipActivity" android:exported="false" />
         <activity android:name=".ui.LicenseActivity" android:exported="false" />
+        <provider android:name=".config.SafeAreaWallpaperProvider"
+            android:authorities="${applicationId}.wallpaper-preview" android:exported="true" />
+        <activity android:name=".ui.SafeAreaActivity" android:exported="false" />
         <activity android:name=".ui.IconCustomizationActivity" android:exported="false" />
         <!-- 完整高级配置。 -->
         <activity

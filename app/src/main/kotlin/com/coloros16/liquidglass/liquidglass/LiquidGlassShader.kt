@@ -18,6 +18,8 @@
  * The combined DreamGlass application is distributed under GPL-3.0. */
 package com.coloros16.liquidglass.liquidglass
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Color
@@ -1053,8 +1055,16 @@ object LiquidGlassShader {
      * @param metaball true = FULL 源（通知卡/侧滑等 MetaBall 元素，需黏连桥）；
      *                 false = BASE 源（小元素，编译量 -31%）。默认 BASE。
      */
-    fun create(metaball: Boolean = false): RuntimeShader =
-        RuntimeShader(if (metaball) AGSL_SOURCE else AGSL_SOURCE_BASE)
+    private val safeDesktopSource by lazy {
+        SafeAreas.AGSL + AGSL_SOURCE_BASE.replace(
+            "if (-sdRaw >= lensHeight) {",
+            "float distortion = -sdRaw >= lensHeight || uRefractionAmount == 0.0 ? 1.0 : safeDistortion(coord);\n" +
+                "            if (-sdRaw >= lensHeight || distortion <= 0.0) {",
+        ).replace("float2 refrVec = -d * n * length(nBlend);",
+            "float2 refrVec = -d * n * length(nBlend) * distortion;")
+    }
+    fun create(metaball: Boolean = false, safeDesktop: Boolean = false): RuntimeShader =
+        RuntimeShader(if (metaball) AGSL_SOURCE else if (safeDesktop) safeDesktopSource else AGSL_SOURCE_BASE)
 
     /** 兼容别名（BlurDrawHook 注释引用 createShader()，语义同 [create]）。 */
     fun createShader(): RuntimeShader = create()

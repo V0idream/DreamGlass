@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026-11-13. GPL-3.0. Static desktop-wallpaper input only. */
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.app.WallpaperManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -27,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * This object keeps only a weak callback reference so it cannot retain a View or Activity.
  */
 internal object IconGlassWallpaper {
-    data class Frame(val bitmap: Bitmap, val sourceRect: RectF, val sharpBitmap:Bitmap=bitmap)
+    data class Frame(val bitmap: Bitmap, val sourceRect: RectF, val sharpBitmap:Bitmap=bitmap, val safeMapping:SafeAreas.Mapping?=null)
     private data class Transform(val x:Float=0f,val y:Float=0f,val zoom:Float=1f)
     private val ui=Handler(Looper.getMainLooper())
     private val worker=RuntimeWorkPolicy.executor("DreamGlass-icon-wallpaper")
@@ -73,17 +75,21 @@ internal object IconGlassWallpaper {
         ensureReceiver()
         if(screenWidth<=0 || screenHeight<=0)updateScreen(context)
         scheduleLoad()
+        val safeMapping = safeMapping(iconScreen)
         val bitmap=image?.takeUnless {it.isRecycled}
         if(bitmap==null) {
             scheduleLoad()
-            return LauncherHook.publishedIconBackdrop(iconScreen)
+            return LauncherHook.publishedIconBackdrop(iconScreen)?.let { if (safeMapping == null) it else it.copy(safeMapping = safeMapping) }
         }
         val current=transform
         val projection=projections.get(bitmap.width,bitmap.height,screenWidth,screenHeight,current.x,current.y,current.zoom)
             ?: return null
         return Frame(bitmap,RectF(projection.x(iconScreen.left),projection.y(iconScreen.top),
-            projection.x(iconScreen.right),projection.y(iconScreen.bottom)),sharp ?: bitmap)
+            projection.x(iconScreen.right),projection.y(iconScreen.bottom)),sharp ?: bitmap, safeMapping)
     }
+
+    fun safeMapping(iconScreen: RectF): SafeAreas.Mapping? =
+        SafeAreas.desktopMapping(iconScreen.left, iconScreen.top, iconScreen.width(), iconScreen.height(), screenWidth, screenHeight)
 
     /** Pure coordinate update: no wallpaper manager call, decode, copy or work submission. */
     fun onTransform(x:Float,y:Float,zoom:Float) {

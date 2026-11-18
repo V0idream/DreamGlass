@@ -22,6 +22,7 @@ import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.diagnostics.RuntimeStore
 import com.coloros16.liquidglass.root.ScopeRestarter
+import com.coloros16.liquidglass.root.RootGrant
 import io.github.libxposed.service.XposedService
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -250,6 +251,14 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
             val c = card(); c.addView(text(title, 11f, accent, true))
             for ((id, label, detail) in rows) DreamUi.row(c, label, detail) { advanced(id) }
         }
+        val safeAreas = card()
+        safeAreas.addView(text("安全区域", 11f, accent, true))
+        DreamUi.row(safeAreas, "桌面安全区域", "在桌面壁纸上圈画不扭曲的范围") {
+            startActivity(Intent(this, SafeAreaActivity::class.java))
+        }
+        DreamUi.row(safeAreas, "锁屏安全区域", "在锁屏壁纸上圈画不扭曲的范围") {
+            startActivity(Intent(this, SafeAreaActivity::class.java).putExtra("lock", true))
+        }
         val member=card()
         DreamUi.row(member,"会员功能","桌面图标、粒子、倾斜、锁屏与组件玻璃") {
             startActivity(Intent(this,MembershipActivity::class.java))
@@ -292,6 +301,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         Thread({
             val result = if (scope == null) ScopeRestarter.requestAccess() else ScopeRestarter.restart(appContext, scope)
             val report = result.message
+            if (result.ok) RootGrant.remember(appContext, true)
             RuntimeStore.local(appContext).edit().putString("root_last_status", "上次操作：$report").apply()
             runOnUiThread {
                 if (!isDestroyed && !isFinishing) {

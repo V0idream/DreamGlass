@@ -1,4 +1,4 @@
-# DreamGlass 3.0.2 — 修改声明
+# DreamGlass 3.0.3 — 修改声明
 
 修改者：DreamGlass contributors；维护者：V0idream。修改日期：2026-10-22 至 2026-11-17。
 
@@ -95,3 +95,5 @@ Added opt-in GPU neutral backing and a shade slider, consistent explicit dim pri
 ## 2026-11-02 — 1.1.7 native animation regression hotfix
 
 Quarantined all module window-tilt installers after reports of disappearing native app launch animation. Removed the COS17 transaction hooks, 4x4 writes and asynchronous identity reset from the compatibility installer. Existing enabled preferences cannot reactivate this path; the UI reports the unavailable capability. The pure projection helpers remain diagnostic math only. No shader, payment, notification-tilt or component behavior was changed. No new dependency was added.
+
+- 2026-11-18，3.0.3：新增桌面和锁屏安全区域；处理部分锁屏时钟的原生效果叠加，并支持使用已授权的 Root 读取对应壁纸。

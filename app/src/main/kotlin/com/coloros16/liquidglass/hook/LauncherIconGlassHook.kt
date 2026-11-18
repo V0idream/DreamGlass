@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026-11-13. GPL-3.0. */
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
@@ -147,6 +149,13 @@ internal object LauncherIconGlassHook {
     private var readAt=-1000L
     private var enabled=false
     private var liveMode=false
+    private val safeAreaMapper=SafeAreas.ViewMapper()
+    private val safeIconBounds=RectF()
+    private fun mayProtect(view: View, bounds: Rect): Boolean {
+        if(!SafeAreas.active(SafeAreas.Scene.DESKTOP))return false
+        safeIconBounds.set(bounds)
+        return safeAreaMapper.desktop(view,safeIconBounds)!=null
+    }
     private var params=IconGlassMaterial.Params()
     private var prefsRevision=0
     private var powerAt=-1000L
@@ -292,6 +301,8 @@ internal object LauncherIconGlassHook {
         return false
     }
     private fun isSuggestionCard(view:View):Boolean=IconGlassSuggestionContract.matches(view)
+    internal fun safeAreasChanged() = invalidateHosts()
+
     private fun invalidateHosts() {
         if(!main()) {ui.post {invalidateHosts()};return}
         if(invalidationPending)return
@@ -480,7 +491,8 @@ internal object LauncherIconGlassHook {
         val save=canvas.save();canvas.clipOutRect(bounds)
         val result=try {owner.run(null) {chain.proceed()}}finally {canvas.restoreToCount(save)}
         run {
-            canvas.drawBitmap(prefab,null,bounds,Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {alpha=scope.drawable.alpha})
+            if(!mayProtect(view,bounds) || !runCatching {draw(scope,canvas,bounds)}.getOrDefault(false))
+                canvas.drawBitmap(prefab,null,bounds,Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {alpha=scope.drawable.alpha})
             RuntimeDiagnostics.mark("icon_glass_view_slot","已从 View 的实际图标区域绘制，绕过厂商旧图标缓存")
         }
         return result
@@ -501,11 +513,11 @@ internal object LauncherIconGlassHook {
      */
     private fun drawNativeContent(chain:XposedInterface.Chain,view:View,canvas:Canvas,scope:Draw):Any? {
         val c=contract ?: return owner.run(scope) {chain.proceed()}
-        if(!liveMode || !enabled || !canvas.isHardwareAccelerated || !c.fast.isInstance(scope.drawable) ||
+        if((!liveMode && !SafeAreas.active(SafeAreas.Scene.DESKTOP)) || !enabled || !canvas.isHardwareAccelerated || !c.fast.isInstance(scope.drawable) ||
             runCatching {c.visible?.invoke(view)==false}.getOrDefault(false))return owner.run(scope) {chain.proceed()}
         val bitmap=c.bitmap.get(scope.drawable) as? Bitmap
         val bounds=iconBounds(view)
-        if(bitmap==null || !LauncherIconGlassAssets.isGenerated(bitmap) || bounds==null)
+        if(bitmap==null || !LauncherIconGlassAssets.isGenerated(bitmap) || bounds==null || (!liveMode && !mayProtect(view,bounds)))
             return owner.run(scope) {chain.proceed()}
         val type=scope.drawable.javaClass
         val scale=(field(type,"mScale")?.get(scope.drawable) as? Number)?.toFloat() ?: 1f
@@ -579,7 +591,7 @@ internal object LauncherIconGlassHook {
                     val intercepted=chain.proceed() as Boolean
                     val scope=owner.current()
                     val canvas=chain.getArg(0) as? Canvas
-                    IconGlassNativeDrawScope.finish(intercepted,liveMode && scope!=null && scope.state.host.get()===host &&
+                    IconGlassNativeDrawScope.finish(intercepted,(liveMode || iconBounds(host)?.let {mayProtect(host,it)}==true) && scope!=null && scope.state.host.get()===host &&
                         scope.canvas===canvas && canvas?.isHardwareAccelerated==true && c.content!=null) {
                         // The animator did not take over: use its exact native content entry
                         // once, then tell drawIcon not to draw the cached TextView icon again.
@@ -611,7 +623,7 @@ internal object LauncherIconGlassHook {
             val drawable=chain.getThisObject() as? Drawable
             val scope=drawOwner(drawable,canvas)
             val owned=scope?.drawable===drawable && scope?.canvas===canvas
-            if((!liveMode || !owned) && drawable!=null && canvas!=null && rect!=null &&
+            if((!owned || (!liveMode && !SafeAreas.active(SafeAreas.Scene.DESKTOP))) && drawable!=null && canvas!=null && rect!=null &&
                 runCatching {LauncherIconGlassAssets.drawCached(drawable,canvas,rect)}.getOrDefault(false))return@intercept null
             if(scope==null || scope.drawable!==chain.getThisObject() || scope.canvas!==canvas ||
                 canvas==null || rect==null || !main())return@intercept chain.proceed()
@@ -635,7 +647,7 @@ internal object LauncherIconGlassHook {
         val original=LauncherIconGlassAssets.original(raw)
         // Low-res placeholders must remain eligible for the launcher's real icon load.
         if(original.isRecycled || original.width<16 || original.height<16)return false
-        if(!liveMode)LauncherIconGlassAssets.prefabFor(scope.item ?: view.tag)?.let {prefab ->
+        if(!liveMode && !mayProtect(view,rect))LauncherIconGlassAssets.prefabFor(scope.item ?: view.tag)?.let {prefab ->
             LauncherIconGlassAssets.apply(view,scope.drawable,scope.item ?: view.tag,original,prefab)
             if(LauncherIconGlassAssets.drawCached(scope.drawable,canvas,rect))return true
             canvas.drawBitmap(prefab,null,rect,Paint(Paint.FILTER_BITMAP_FLAG).apply {this.alpha=scope.drawable.alpha});return true
@@ -660,6 +672,7 @@ internal object LauncherIconGlassHook {
             state.global.mapRect(state.screenRect)
             IconGlassWallpaper.resolve(view.context,state.screenRect,artworkReady)
         }
+        val safeMapping=if(mask.passthrough)null else background?.safeMapping ?: IconGlassWallpaper.safeMapping(state.screenRect)
         val backdrop=background?.bitmap ?: IconGlassFallback.backdrop
         val crop=background?.sourceRect ?: RectF(0f,0f,8f,8f)
         val disabled=if(c.fast.isInstance(scope.drawable))c.disabled?.invoke(scope.drawable) as? Boolean ?: false else !view.isEnabled
@@ -669,7 +682,7 @@ internal object LauncherIconGlassHook {
                 artwork.style(params),artworkReady,LauncherIconGlassAssets.identity(scope.item ?: view.tag),background?.sharpBitmap ?: backdrop)
         if(generated!=null) {
             if(raw!==generated)LauncherIconGlassAssets.apply(view,scope.drawable,scope.item ?: view.tag,original,generated)
-            if(!liveMode || background==null || mask.passthrough) {
+            if(safeMapping==null && (!liveMode || background==null || mask.passthrough)) {
                 if(LauncherIconGlassAssets.drawCached(scope.drawable,canvas,rect))return true
                 canvas.drawBitmap(generated,null,rect,Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {this.alpha=alpha})
                 return true
@@ -681,7 +694,7 @@ internal object LauncherIconGlassHook {
         }
         val material=state.materials.getOrPut(scope.drawable) {IconGlassMaterial()}
         val result=material.draw(canvas,state.bounds,mask.foreground,backdrop,crop,
-            artwork.style(params,alpha,disabled),background?.sharpBitmap ?: backdrop)
+            artwork.style(params,alpha,disabled),background?.sharpBitmap ?: backdrop,safeMapping)
         state.liveMaterialPainted=liveMode && background!=null && result
         if(result && !rendered) {
             rendered=true
@@ -975,7 +988,7 @@ internal object LauncherIconGlassHook {
             suggestionRendered(view)
             RuntimeDiagnostics.mark("icon_suggestion_bound","小布建议图片已在 pre-draw 直接替换，不依赖 onDraw 拦截")
         }
-        if(liveMode) {
+        if(liveMode || safeAreaMapper.desktop(view,bounds)!=null) {
             val mask=IconGlassMasks.resolve(view.context,state.component,state.userId,source,artworkReady) ?: return
             if(mask.passthrough) {IconGlassLiveSurface.restore(view);return}
             val global=RectF(bounds);val transform=Matrix();view.transformMatrixToGlobal(transform);transform.mapRect(global)
@@ -1038,7 +1051,7 @@ internal object LauncherIconGlassHook {
             if(!inspect(view,state,tag,suggestionImage=true))return chain.proceed()
             if(source!=null) {
                 val prefab=LauncherIconGlassAssets.generated(source)
-                if(!liveMode && prefab!=null) {canvas.drawBitmap(prefab,null,Rect(0,0,view.width,view.height),Paint(Paint.FILTER_BITMAP_FLAG));return null}
+                if(!liveMode && prefab!=null && !mayProtect(view,Rect(0,0,view.width,view.height))) {canvas.drawBitmap(prefab,null,Rect(0,0,view.width,view.height),Paint(Paint.FILTER_BITMAP_FLAG));return null}
                 val base=Matrix();canvas.getMatrix(base);drawable.setBounds(0,0,view.width,view.height)
                 if(runCatching {draw(Draw(state,drawable,canvas,base,tag,source=source,suggestionImage=true),canvas,drawable.bounds)}.getOrDefault(false))return null
             }

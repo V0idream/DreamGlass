@@ -10,6 +10,7 @@ import android.widget.*
 import android.util.TypedValue
 import android.util.Log
 import com.coloros16.liquidglass.hook.*
+import com.coloros16.liquidglass.config.SafeAreas
 import java.io.File
 import org.json.JSONObject
 
@@ -118,7 +119,7 @@ class KeyguardGlassProbeActivity:Activity() {
     customAlphaDelta=maxOf(customAlphaDelta,kotlin.math.abs(reference-actual))
    }
    check(customCoverage>20000 && customAlphaDelta<=1) { "Custom glyph coverage $customCoverage alpha delta $customAlphaDelta identity/native=$identityNativeDelta glass/native=$glassNativeDelta" }
-   val report=glyphMask().put("nativeGlyphDrawSlot",glyphDrawSlot()).put("nativeParentComposition",parentComposition()).put("customClockGlyphPixels",customCoverage).put("customClockAlphaMaxDeltaVsIdentityEffect",customAlphaDelta).put("customClockIdentityVsNativeAlphaMaxDelta",identityNativeDelta).put("customClockGlassVsNativeAlphaMaxDelta",glassNativeDelta).put("customCanvasClockInPluginRoot",targets[0].first is FrameLayout).put("cardForegroundRetention",retained.toDouble()/white).put("clickCallbacksPreserved",clicks).put("paddingPreserved",true)
+   val report=glyphMask().put("nativeGlyphDrawSlot",glyphDrawSlot()).put("glyphSafeRegion",glyphSafeRegion()).put("nativeParentComposition",parentComposition()).put("customClockGlyphPixels",customCoverage).put("customClockAlphaMaxDeltaVsIdentityEffect",customAlphaDelta).put("customClockIdentityVsNativeAlphaMaxDelta",identityNativeDelta).put("customClockGlassVsNativeAlphaMaxDelta",glassNativeDelta).put("customCanvasClockInPluginRoot",targets[0].first is FrameLayout).put("cardForegroundRetention",retained.toDouble()/white).put("clickCallbacksPreserved",clicks).put("paddingPreserved",true)
    attachments.forEach {it.restore()};root.invalidate()
    ui.postDelayed({try {
     val restored=render(root);save(restored,"restored.png")
@@ -221,6 +222,52 @@ class KeyguardGlassProbeActivity:Activity() {
   return JSONObject().put("nativeDrawCalledOncePerFrame",true).put("maskAlphaMaxDelta",alphaDelta)
    .put("glassPixels",colourChanged).put("changedDigitMaskPixels",maskChanged)
    .put("noEffectRestorationMaxDelta",restoredDelta).put("nativeFontAndReturnPreserved",true)
+ }
+ private fun glyphSafeRegion():JSONObject {
+  val scene=SafeAreas.Scene.LOCK
+  val prefs=getSharedPreferences("synthetic-keyguard-safe-area",MODE_PRIVATE)
+  val testWidth=160
+  val testHeight=64
+  val region=listOf(SafeAreas.Point(0f,0f),SafeAreas.Point(.5f,0f),SafeAreas.Point(.5f,1f),SafeAreas.Point(0f,1f))
+  check(prefs.edit().putString(scene.key,SafeAreas.encode(listOf(region))).commit())
+  val loaded=java.util.concurrent.CountDownLatch(1)
+  SafeAreas.install(scene,prefs) { loaded.countDown() }
+  check(loaded.await(2,java.util.concurrent.TimeUnit.SECONDS))
+  try {
+   val glyph=object:View(this) {
+    private val ink=Paint().apply { color=Color.WHITE }
+    override fun onDraw(c:Canvas) {
+     c.drawRect(12f,12f,42f,52f,ink);c.drawRect(101f,12f,131f,52f,ink)
+    }
+   }.apply { layout(0,0,testWidth,testHeight) }
+   val m=floatArrayOf(1f,0f,0f,0f,1f,0f,0f,0f,1f)
+   val material=KeyguardGlassMaterial(true)
+   val shift=RenderEffect.createOffsetEffect(12f,0f)
+   val w=testWidth.toFloat();val h=testHeight.toFloat()
+   material.update(texture,m,w,h,testWidth,testHeight,1f,0f)
+   val regular=render(glyph,material.glyphEffect(shift))
+   val regularSlot=render(glyph,material.glyphEffect(shift,nativeOnTop=true))
+   val mapping=checkNotNull(SafeAreas.lockMapping(m,w,h,testWidth,testHeight))
+   material.update(texture,m,w,h,testWidth,testHeight,1f,0f,mapping)
+   val safe=render(glyph,material.glyphEffect())
+   val actual=render(glyph,material.glyphEffect(shift))
+   val slot=render(glyph,material.glyphEffect(shift,nativeOnTop=true))
+   check(Color.alpha(regular.getPixel(16,24))==0 && Color.alpha(actual.getPixel(16,24))>=250) {
+    "Shifted native effect leaked into the protected clock"
+   }
+   var mismatch=0
+   for(y in 0 until testHeight)for(x in 0 until testWidth) {
+    if(x in 76..84)continue
+    val expected=(if(x<76)safe else regular).getPixel(x,y)
+    val pixel=actual.getPixel(x,y)
+    if(kotlin.math.abs(Color.alpha(pixel)-Color.alpha(expected))>2) mismatch++
+    val expectedSlot=(if(x<76)safe else regularSlot).getPixel(x,y)
+    if(kotlin.math.abs(Color.alpha(slot.getPixel(x,y))-Color.alpha(expectedSlot))>2) mismatch++
+   }
+   check(mismatch==0) { "Clock safe/outside branches disagreed with their references: $mismatch" }
+   save(actual,"glyph-safe-region.png")
+   return JSONObject().put("protectedGlyphUnshifted",true).put("outsideNativeEffectPreserved",true)
+  } finally { prefs.edit().remove(scene.key).apply() }
  }
  private fun glyphMask():JSONObject {
   val v=object:TextView(this) { override fun onDraw(c:Canvas) { paint.shader=null;super.onDraw(c) } }

@@ -1,5 +1,8 @@
 package com.coloros16.liquidglass.entry
 
+import com.coloros16.liquidglass.config.SafeAreas
+import com.coloros16.liquidglass.config.SafeAreaWallpaper
+
 import com.coloros16.liquidglass.BuildConfig
 
 import android.os.Build
@@ -187,6 +190,13 @@ class XposedEntry : XposedModule() {
         Lg.e("lg-boot", "host=$packageName pid=${android.os.Process.myPid()} module=${BuildConfig.VERSION_NAME}/${BuildConfig.VERSION_CODE}")
         RuntimeDiagnostics.update("module-build","${BuildConfig.VERSION_NAME}/${BuildConfig.VERSION_CODE}; process=${android.app.Application.getProcessName()}")
         RuntimeDiagnostics.update("member-confirmation",if(Prefs.memberAllowed(this))"诚信确认有效（跨版本保留）" else "尚未确认或配置读取不可用；会员渲染不会执行")
+        val safeScene = when (packageName) {
+            PACKAGE_LAUNCHER -> SafeAreas.Scene.DESKTOP
+            PACKAGE_SYSTEMUI -> SafeAreas.Scene.LOCK
+            else -> null
+        }
+        if (Build.VERSION.SDK_INT >= 33 && safeScene != null)
+            runCatching { SafeAreaWallpaper.install(safeScene, Prefs.read(this)) }
         // 模块默认全关（Prefs.masterEnabled=false 直接跳过，零侵入）。
         if (!Prefs.masterEnabled(this)) {
             RuntimeDiagnostics.mark("configured", "总开关关闭，未安装效果 Hook")
@@ -201,6 +211,17 @@ class XposedEntry : XposedModule() {
             return
         }
         Lg.i(TAG, "installing hooks into $packageName")
+        if (Build.VERSION.SDK_INT >= 33 && safeScene != null) runCatching {
+            SafeAreas.install(safeScene, Prefs.read(this)) {
+                when (safeScene) {
+                    SafeAreas.Scene.DESKTOP -> {
+                        com.coloros16.liquidglass.hook.LauncherIconGlassHook.safeAreasChanged()
+                        LauncherHook.safeAreasChanged()
+                    }
+                    SafeAreas.Scene.LOCK -> com.coloros16.liquidglass.hook.KeyguardGlassHook.safeAreasChanged()
+                }
+            }
+        }.onFailure { Lg.w(TAG, "safe-area preferences unavailable", it) }
         com.coloros16.liquidglass.hook.SceneBackdropBlurHook.install(this, classLoader, packageName)
         when (packageName) {
             // SystemUI：Hook B 绘制替换 / Hook C 场景过滤（占位实现，保持现状）。

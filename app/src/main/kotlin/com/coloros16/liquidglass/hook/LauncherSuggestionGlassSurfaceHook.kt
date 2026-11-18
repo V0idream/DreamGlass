@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026. GPL-3.0-or-later. */
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.RectF
@@ -140,7 +142,8 @@ internal object LauncherSuggestionGlassSurfaceHook {
 
     private class State(view:View):ViewTreeObserver.OnPreDrawListener,View.OnAttachStateChangeListener {
         private val target=WeakReference(view)
-        private val material by lazy {AppGlassEffect()}
+        private val material by lazy {AppGlassEffect(desktop=true)}
+        private val safeAreaMapper=SafeAreas.ViewMapper()
         var nativeEffect:RenderEffect?=null
         var dirty=false
         private var active=false
@@ -190,8 +193,10 @@ internal object LauncherSuggestionGlassSurfaceHook {
                 val p=SharedGlassParams.resolve(snapshot.values,snapshot.preset,GlassRegistry.overridesFor(key),
                     geometry.first.width(),geometry.first.height(),GlassRegistry.cornerOverrideFor(key) ?: geometry.second,
                     false,snapshot.compactOptics,snapshot.grayBaseLuma)
-                val hash=31*p.hashCode()+geometry.first.hashCode()
-                if(effect==null || hash!=effectHash) {effect=material.create(p,geometry.first);effectHash=hash;dirty=true}
+                val mapping=safeAreaMapper.desktop(view,geometry.first)
+                val safeHash=if(mapping==null)0 else 31*mapping.hashCode()+SafeAreas.stamp(SafeAreas.Scene.DESKTOP)
+                val hash=31*(31*p.hashCode()+geometry.first.hashCode())+safeHash
+                if(effect==null || hash!=effectHash) {effect=material.create(p,geometry.first,safeMapping=mapping);effectHash=hash;dirty=true}
                 // A successful default-setter lease removes the solid backing
                 // and updates HWUI opacity metadata before enabling our surface.
                 NativeSurfaceBackgroundLease.sync(view,true)

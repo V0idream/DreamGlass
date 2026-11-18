@@ -1,5 +1,8 @@
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+import com.coloros16.liquidglass.liquidglass.ShaderInstancePool
+
 import android.app.WallpaperManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -28,7 +31,6 @@ import com.coloros16.liquidglass.glass.GlassRegistry
 import com.coloros16.liquidglass.glass.SharedGlassParams
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 import com.coloros16.liquidglass.liquidglass.LowResTier
-import com.coloros16.liquidglass.liquidglass.ShaderInstancePool
 import com.coloros16.liquidglass.log.Lg
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
@@ -2468,7 +2470,8 @@ object LauncherHook {
         }
         val corner = if (handlerRadius > 0f) handlerRadius else minOf(w, h) / 2f
         val params = buildParams(w.toFloat(), h.toFloat(), corner, elementId = id)
-        val shader = shaderCache.getOrPut(id) { ShaderInstancePool.pollOrCreate() }
+        val shader = shaderForSafeAreaMode(id)
+        bindSafeArea(shader, btn, region)
         shaderOwnerSet.add(shader)
         if (shaderCache.size > 128) { shaderCache.clear(); shaderOwnerSet.clear() }
         val sourceShader = LiquidGlassShader.createSourceBitmapShader(renderSource.source)
@@ -2581,7 +2584,7 @@ object LauncherHook {
             null
         }
         // 已是本模块缓存的液态玻璃实例 → 每帧重跑 uniform（源/尺寸/位置变化才重设）
-        if (current is RuntimeShader && shaderOwnerSet.contains(current)) {
+        if (current is RuntimeShader && shaderOwnerSet.contains(current) && matchesSafeAreaMode(current)) {
             return refreshShaderUniforms(paint, current, id, bounds)
         }
         val liquid = try {
@@ -2621,7 +2624,8 @@ object LauncherHook {
         val renderSource = resolveRenderSource(id, region) ?: return null
         val srcRect = renderSource.srcRect
         val source = renderSource.source
-        val shader = shaderCache.getOrPut(id) { ShaderInstancePool.pollOrCreate() }
+        val shader = shaderForSafeAreaMode(id)
+        bindSafeArea(shader, entry.host.get(), region)
         shaderOwnerSet.add(shader)
         if (shaderCache.size > 128) { shaderCache.clear(); shaderOwnerSet.clear() }
         val params = buildParams(bounds.width().toFloat(), bounds.height().toFloat(), entry.cornerRadius, elementId = id)
@@ -2657,6 +2661,7 @@ object LauncherHook {
             val entry = screenRegionMap[id] ?: return true
             val region = entry.region
             if (region.width() <= 0f || region.height() <= 0f) return true
+            bindSafeArea(shader, entry.host.get(), region)
             val renderSource = resolveRenderSource(id, region) ?: return true
             val srcRect = renderSource.srcRect
             val viewport = RectF(0f, 0f, bounds.width().toFloat(), bounds.height().toFloat())
@@ -3669,6 +3674,34 @@ object LauncherHook {
             Lg.e(TAG, "launcher taskG+: track single host failed", t)
         }
     }
+
+    private val safeAreaMapper = ThreadLocal.withInitial { SafeAreas.ViewMapper() }
+    private val safeAreaBindings = java.util.WeakHashMap<RuntimeShader, SafeAreas.Binding>()
+    @Volatile private var usedSafeAreaShader = false
+    private fun matchesSafeAreaMode(shader: RuntimeShader): Boolean {
+        val active = SafeAreas.active(SafeAreas.Scene.DESKTOP)
+        return if (!active && !usedSafeAreaShader) true
+            else active == synchronized(safeAreaBindings) { safeAreaBindings.containsKey(shader) }
+    }
+    private fun shaderForSafeAreaMode(id: Int): RuntimeShader {
+        shaderCache[id]?.let { if (matchesSafeAreaMode(it)) return it }
+        val shader = if (SafeAreas.active(SafeAreas.Scene.DESKTOP)) {
+            LiquidGlassShader.create(safeDesktop = true).also {
+                synchronized(safeAreaBindings) { safeAreaBindings[it] = SafeAreas.Binding() }
+                usedSafeAreaShader = true
+            }
+        } else ShaderInstancePool.pollOrCreate()
+        shaderCache[id] = shader
+        return shader
+    }
+    private fun bindSafeArea(shader: RuntimeShader, host: View?, region: RectF) {
+        if (!usedSafeAreaShader) return
+        val binding = synchronized(safeAreaBindings) { safeAreaBindings[shader] } ?: return
+        val mapping = host?.let { safeAreaMapper.get()?.desktop(it, region, preMapped=true) }
+        binding.set(shader, SafeAreas.Scene.DESKTOP, mapping)
+    }
+
+    internal fun safeAreasChanged() { android.os.Handler(android.os.Looper.getMainLooper()).post { invalidateRegisteredHostViews() } }
 
     @Synchronized
     private fun invalidateRegisteredHostViews() {

@@ -1,12 +1,15 @@
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.graphics.*
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 
 /** GPU-only native backdrop filter. Geometry and source use the same host-local
  * bounds; never substitute window coordinates or ignore a native inset. */
-internal class AppGlassEffect {
-    private val shader=LiquidGlassShader.create()
+internal class AppGlassEffect(private val desktop:Boolean=false) {
+    private val shader=LiquidGlassShader.create(safeDesktop=desktop)
+    private val safeAreas=SafeAreas.Binding()
     private val empty=LinearGradient(0f,0f,1f,1f,Color.TRANSPARENT,Color.TRANSPARENT,Shader.TileMode.CLAMP)
     private val fade=RuntimeShader("""
         uniform shader material;
@@ -14,7 +17,9 @@ internal class AppGlassEffect {
         half4 main(float2 p) { return material.eval(p) * opacity; }
     """.trimIndent())
     fun create(params:LiquidGlassShader.Params,
-        bounds:RectF=RectF(0f,0f,params.viewportWidth,params.viewportHeight),opacity:Float=1f):RenderEffect {
+        bounds:RectF=RectF(0f,0f,params.viewportWidth,params.viewportHeight),opacity:Float=1f,
+        safeMapping:SafeAreas.Mapping?=null):RenderEffect {
+        if(desktop)safeAreas.set(shader,SafeAreas.Scene.DESKTOP,safeMapping)
         // Native widgets already own their position. The common shader's
         // parallax offsets move its SDF, which would displace/crop this fixed
         // button mask relative to the native foreground. Keep QS optics intact;

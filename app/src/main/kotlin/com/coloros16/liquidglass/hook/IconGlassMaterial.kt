@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026-11-13. GPL-3.0. Original GPU icon material. */
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
@@ -37,9 +39,10 @@ internal class IconGlassMaterial {
     private var sharpGeneration=-1
     private var wallpaperGeneration = -1
     private val uniforms=IconGlassUniformCache()
+    private var safeAreas = SafeAreas.Binding()
 
     fun draw(canvas: Canvas, bounds: RectF, foreground: Bitmap, wallpaper: Bitmap,
-             wallpaperSource: RectF, params: Params = Params(),sharpWallpaper:Bitmap=wallpaper): Boolean {
+             wallpaperSource: RectF, params: Params = Params(),sharpWallpaper:Bitmap=wallpaper, safeMapping: SafeAreas.Mapping? = null): Boolean {
         if (Build.VERSION.SDK_INT < 33 || !canvas.isHardwareAccelerated || unavailable ||
             foreground.isRecycled || wallpaper.isRecycled || !valid(bounds) || !valid(wallpaperSource) ||
             foreground.width <= 0 || foreground.height <= 0 || wallpaper.width <= 0 || wallpaper.height <= 0 ||
@@ -53,7 +56,7 @@ internal class IconGlassMaterial {
                 unavailable = true
                 return false
             }
-            configure(shader,bounds,foreground,wallpaper,wallpaperSource,params,sharpWallpaper)
+            configure(shader,bounds,foreground,wallpaper,wallpaperSource,params,sharpWallpaper,safeMapping)
             // Shader premultiplies its output once. Applying the native alpha to Paint too would
             // square the entrance/pressed opacity and cause dim outlines during transitions.
             paint.alpha = 255
@@ -66,7 +69,8 @@ internal class IconGlassMaterial {
     }
 
     private fun configure(shader:RuntimeShader,bounds:RectF,foreground:Bitmap,wallpaper:Bitmap,
-        wallpaperSource:RectF,params:Params,sharpWallpaper:Bitmap) {
+        wallpaperSource:RectF,params:Params,sharpWallpaper:Bitmap,safeMapping:SafeAreas.Mapping?) {
+        safeAreas.set(shader, SafeAreas.Scene.DESKTOP, safeMapping)
         if (foregroundImage !== foreground || foregroundGeneration != foreground.generationId) {
             shader.setInputShader("uForeground", input(foreground))
             foregroundImage = foreground; foregroundGeneration = foreground.generationId
@@ -114,7 +118,7 @@ internal class IconGlassMaterial {
     fun createWallpaperEffect(bounds:RectF,foreground:Bitmap,frame:IconGlassWallpaper.Frame,params:Params):android.graphics.RenderEffect {
         require(valid(bounds) && valid(frame.sourceRect) && !foreground.isRecycled && !frame.bitmap.isRecycled)
         val shader=material ?: RuntimeShader(SOURCE).also {material=it}
-        configure(shader,bounds,foreground,frame.bitmap,frame.sourceRect,params,frame.sharpBitmap)
+        configure(shader,bounds,foreground,frame.bitmap,frame.sourceRect,params,frame.sharpBitmap,frame.safeMapping)
         return android.graphics.RenderEffect.createShaderEffect(shader)
     }
 
@@ -122,7 +126,7 @@ internal class IconGlassMaterial {
     fun clear() {
         material = null; paint.shader = null; foregroundImage = null; wallpaperImage = null
         foregroundGeneration = -1; wallpaperGeneration = -1; sharpImage=null;sharpGeneration=-1
-        uniforms.clear()
+        uniforms.clear(); safeAreas = SafeAreas.Binding()
     }
 
     private fun input(bitmap: Bitmap) = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
@@ -134,7 +138,7 @@ internal class IconGlassMaterial {
     companion object {
         // The shared wallpaper is already blurred once. One refracted substrate lookup keeps
         // the plate translucent without doing a second blur for every icon and animation frame.
-        internal const val SOURCE = """
+        internal const val SOURCE = SafeAreas.AGSL + """
 uniform shader uForeground;
 uniform shader uWallpaper;
 uniform shader uSharpWallpaper;
@@ -187,14 +191,15 @@ half4 main(float2 position) {
     float surfaceXY=.94*bevel;
     float surfaceZ=sqrt(max(1.0-surfaceXY*surfaceXY,.001));
     float2 samplePoint=p;
-    if(uRefraction>0.0) {
+    float distortion = safeDistortion(p/uSize);
+    if(uRefraction*distortion>0.0) {
         float eta=.69;
         float transmittedZ=sqrt(max(1.0-eta*eta*(1.0-surfaceZ*surfaceZ),.001));
         float travel=(transmittedZ-eta*surfaceZ)*surfaceXY/
             max(eta+(transmittedZ-eta*surfaceZ)*surfaceZ,.1);
         float opticalDepth=side*(.16+.22*uThickness);
         float bend=opticalDepth*travel*uRefraction;
-        samplePoint=p-normal*bend-centered*(.12*uRefraction);
+        samplePoint=p-(normal*bend+centered*(.12*uRefraction))*distortion;
     }
     float edge=bevel;
     half3 glass=background(samplePoint);
@@ -235,7 +240,7 @@ half4 main(float2 position) {
     // wallpaper texture or mix generic ink only to discard that work immediately.
     if(uReliefArtwork<=.5 && uDetailedArtwork<=.5) {
         half3 ink=mix(half3(.76,.84,.92),half3(.99,1.0,1.0),half(clamp(1.0-p.y/uSize.y,0.0,1.0)));
-        glyphGlass=background(p+float2(glyphGradient.x,-glyphGradient.y)*side*.022);
+        glyphGlass=background(p+float2(glyphGradient.x,-glyphGradient.y)*side*.022*distortion);
         glyphGlass=mix(glyphGlass,ink,half(.73+.20*uClarity));
         glyphGlass=mix(glyphGlass,original,half(uKeepColor*.045));
     }

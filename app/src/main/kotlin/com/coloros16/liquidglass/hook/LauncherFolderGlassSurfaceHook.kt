@@ -1,6 +1,8 @@
 /* DreamGlass contributors, 2026. GPL-3.0-or-later. */
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.graphics.Canvas
 import android.graphics.PixelFormat
 import android.graphics.RectF
@@ -139,7 +141,9 @@ internal object LauncherFolderGlassSurfaceHook {
 
     private class State(view:View):ViewTreeObserver.OnPreDrawListener,View.OnAttachStateChangeListener {
         private val target=WeakReference(view)
-        private val material by lazy {AppGlassEffect()}
+        private val material by lazy {AppGlassEffect(desktop=true)}
+        private val safeAreaMapper=SafeAreas.ViewMapper()
+        private val bounds=RectF()
         var active=false
         var dirty=false
         var nativeEffect:RenderEffect?=null
@@ -162,9 +166,13 @@ internal object LauncherFolderGlassSurfaceHook {
                 val params=SharedGlassParams.resolve(config.values,config.preset,GlassRegistry.overridesFor(key),
                     view.width.toFloat(),view.height.toFloat(),GlassRegistry.cornerOverrideFor(key) ?: radius,
                     false,config.compactOptics,config.grayBaseLuma)
-                if(effect==null || hash!=params.hashCode()) {
-                    effect=material.create(params,RectF(0f,0f,view.width.toFloat(),view.height.toFloat()))
-                    hash=params.hashCode();dirty=true
+                bounds.set(0f,0f,view.width.toFloat(),view.height.toFloat())
+                val mapping=safeAreaMapper.desktop(view,bounds)
+                val safeHash=if(mapping==null)0 else 31*mapping.hashCode()+SafeAreas.stamp(SafeAreas.Scene.DESKTOP)
+                val nextHash=31*params.hashCode()+safeHash
+                if(effect==null || hash!=nextHash) {
+                    effect=material.create(params,bounds,safeMapping=mapping)
+                    hash=nextHash;dirty=true
                 }
                 if(!active || dirty) {
                     assign(view,effect);active=true;dirty=false;view.invalidate()

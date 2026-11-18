@@ -1,5 +1,7 @@
 package com.coloros16.liquidglass.hook
 
+import com.coloros16.liquidglass.config.SafeAreas
+
 import android.graphics.*
 import android.os.Looper
 import android.view.View
@@ -25,6 +27,8 @@ internal object IconGlassLiveSurface {
         var params:IconGlassMaterial.Params?=null
         val bounds=RectF()
         var active=false
+        var safeMapping: SafeAreas.Mapping?=null
+        var safeStamp=0
         var imageAlpha:Int?=null
     }
     private val leases=WeakHashMap<View,Lease>()
@@ -61,14 +65,17 @@ internal object IconGlassLiveSurface {
         val lease=leases.getOrPut(view) {Lease()}
         return try {
             var changed=false
+            val safeStamp=if(frame.safeMapping==null)0 else SafeAreas.stamp(SafeAreas.Scene.DESKTOP)
             if(lease.effect==null || lease.image!==foreground || lease.generation!=foreground.generationId ||
                 lease.bounds!=bounds || lease.params!=params || lease.wallpaper!==frame.bitmap ||
+                lease.safeMapping!=frame.safeMapping || lease.safeStamp!=safeStamp ||
                 lease.wallpaperGeneration!=frame.bitmap.generationId || lease.crop!=frame.sourceRect ||
                 lease.sharpWallpaper!==frame.sharpBitmap || lease.sharpGeneration!=frame.sharpBitmap.generationId) {
                 lease.effect=lease.material.createWallpaperEffect(bounds,foreground,frame,params)
                 lease.wallpaper=frame.bitmap;lease.wallpaperGeneration=frame.bitmap.generationId;lease.crop.set(frame.sourceRect)
                 lease.sharpWallpaper=frame.sharpBitmap;lease.sharpGeneration=frame.sharpBitmap.generationId
                 lease.image=foreground;lease.generation=foreground.generationId;lease.bounds.set(bounds);lease.params=params
+                lease.safeMapping=frame.safeMapping;lease.safeStamp=safeStamp
                 changed=true
             }
             if(!lease.active || changed) {assign(view,lease.effect);lease.active=true}
