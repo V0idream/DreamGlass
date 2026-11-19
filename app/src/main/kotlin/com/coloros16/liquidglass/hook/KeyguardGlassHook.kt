@@ -489,7 +489,7 @@ object KeyguardGlassHook {
     }
     private fun active(view:View,role:Int):Boolean {
         preferences()
-        if(!enabled)return false
+        if(!enabled || LockMediaBackdrop.active)return false
         val now=SystemClock.uptimeMillis()
         if(now-powerAt>=400L) {
             powerAt=now

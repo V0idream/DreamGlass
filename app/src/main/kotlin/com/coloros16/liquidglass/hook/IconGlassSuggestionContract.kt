@@ -1,13 +1,17 @@
 package com.coloros16.liquidglass.hook
 
+import java.lang.reflect.Method
+
 /** Use the launcher's own semantic ownership. Card type IDs vary by engine/version. */
 internal object IconGlassSuggestionContract {
-    fun matches(card:Any):Boolean {
+    fun matches(card:Any,nativePredicate:Method?=null):Boolean {
         val semantic=runCatching {card.javaClass.getMethod("isSuggestCardNoBg").invoke(card) as? Boolean}.getOrNull()
         if(semantic!=null)return semantic
         if(runCatching {card.javaClass.getMethod("getMSuggestNoPaddingViewWrapper").invoke(card)}.getOrNull()!=null)return true
         return runCatching {
             val info=card.javaClass.getMethod("getItemInfo").invoke(card) ?: return@runCatching false
+            // ColorOS 16 publishes the card classifier in LauncherCardUtil rather than TitleCardView.
+            runCatching {nativePredicate?.invoke(null,info) as? Boolean}.getOrNull()?.let {return@runCatching it}
             fun value(name:String):Int? {
                 var type:Class<*>?=info.javaClass
                 while(type!=null) {

@@ -14,6 +14,7 @@ import android.widget.ImageView
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
+import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.util.WeakHashMap
 
@@ -59,6 +60,8 @@ internal object LauncherIconGlassAssets {
     private var requestedActive=false
     private var bitmapField:Field?=null
     private var fastType:Class<*>?=null
+    private var fastConstructor:Constructor<*>?=null
+    private var fastIconColor:Field?=null
     private var infoType:Class<*>?=null
     private var itemType:Class<*>?=null
     private var itemBitmap:Field?=null
@@ -214,11 +217,17 @@ internal object LauncherIconGlassAssets {
         bitmapField!!.set(drawable,rendered)
         synchronized(lock) {drawables[drawable]=swap(drawable,original(source),rendered)}
     }
+    private fun newNativeDrawable(bitmap:Bitmap,original:Drawable):Drawable {
+        val constructor=checkNotNull(fastConstructor)
+        if(constructor.parameterCount==1)return constructor.newInstance(bitmap) as Drawable
+        val color=if(fastType?.isInstance(original)==true)fastIconColor?.getInt(original) ?: 0 else 0
+        return constructor.newInstance(bitmap,color) as Drawable
+    }
     /** Folder preview params are drawable slots, not Views. Keep each stacked child separate. */
     fun applySlot(view:View,owner:Any,field:Field,drawable:Drawable,item:Any?,source:Bitmap,rendered:Bitmap):Drawable {
         if(!active || !main())return drawable
         val target=if(fastType?.isInstance(drawable)==true)drawable else {
-            val replacement=fastType!!.getConstructor(Bitmap::class.java).newInstance(rendered) as Drawable
+            val replacement=newNativeDrawable(rendered,drawable)
             replacement.bounds=drawable.bounds;replacement.alpha=drawable.alpha
             replacement.state=drawable.state;replacement.level=drawable.level
             replacement.callback=drawable.callback
@@ -242,7 +251,7 @@ internal object LauncherIconGlassAssets {
         if(IconGlassHostSlot.supported(view)) {
             val current=viewSwaps[view]
             if(current?.replacement!==drawable || bitmapField?.get(drawable)!==rendered) {
-                val next=fastType!!.getConstructor(Bitmap::class.java).newInstance(rendered) as Drawable
+                val next=newNativeDrawable(rendered,drawable)
                 next.alpha=drawable.alpha;next.state=drawable.state;next.level=drawable.level
                 next.bounds=android.graphics.Rect(drawable.bounds);next.layoutDirection=drawable.layoutDirection
                 // Copy only native foreground state, not OEM cover/picture/cache fields.
@@ -266,7 +275,7 @@ internal object LauncherIconGlassAssets {
             // OEM engine drawables. A fresh bitmap's default density must not move/crop it.
             if((drawable as? BitmapDrawable)?.bitmap!==rendered || viewSwaps[view]?.replacement!==drawable) {
                 val next:Drawable=if(view is ImageView)NativeSizedBitmap(view.resources,rendered,drawable.intrinsicWidth,drawable.intrinsicHeight)
-                    .apply {alpha=drawable.alpha} else fastType!!.getConstructor(Bitmap::class.java).newInstance(rendered) as Drawable
+                    .apply {alpha=drawable.alpha} else newNativeDrawable(rendered,drawable)
                 if(fastType?.isInstance(next)==true)swapDrawable(next,source,rendered)
                 val action:(Drawable)->Unit=if(view is ImageView)({view.setImageDrawable(it)}) else ({d ->
                     view.javaClass.getMethod("setIcon",Drawable::class.java).invoke(view,d);Unit
@@ -290,8 +299,11 @@ internal object LauncherIconGlassAssets {
             if(replacement!==current) {
                 copyFields.forEach {it.set(replacement,it.get(native))}
                 // Do not retain the platform monochrome layer: newIcon must use our generated bitmap.
-                field.set(item,replacement)
-                synchronized(lock) {items[item]=ItemSwap(field,native,replacement);infoOrigins[replacement]=native}
+                synchronized(lock) {
+                    infoOrigins[replacement]=native
+                    field.set(item,replacement)
+                    items[item]=ItemSwap(field,native,replacement)
+                }
             }
             identity(item)?.let {id ->synchronized(lock) {
                 infoComponents[native]=id;infoComponents[replacement]=id;componentAssets[id]=rendered
@@ -326,9 +338,13 @@ internal object LauncherIconGlassAssets {
         val itemSource=find(item,"bitmap") ?: error("Missing item bitmap info")
         check(icon.type==Bitmap::class.java && itemSource.type==info)
         info.getConstructor(Bitmap::class.java,Int::class.javaPrimitiveType)
-        val metadata=listOf("flags","badgeInfo","mUserHandle").map {find(info,it) ?: error("Missing native metadata $it")}
+        val metadata=listOf("flags","badgeInfo").map {find(info,it) ?: error("Missing native metadata $it")}
+        fastConstructor=IconGlassNativeFactories.drawableConstructor(fast,Bitmap::class.java)
+        fastIconColor=find(fast,"mIconColor")?.takeIf {it.type==Int::class.javaPrimitiveType}
         fastType=fast;infoType=info;itemType=item;bitmapField=mutable
-        infoIcon=icon;infoColor=color;itemBitmap=itemSource;copyFields=metadata;configured=true
+        // ColorOS 16 keeps the user on ItemInfo and passes it to ContentWriter.
+        infoIcon=icon;infoColor=color;itemBitmap=itemSource
+        copyFields=metadata+listOfNotNull(find(info,"mUserHandle"));configured=true
         active=requestedActive
         RuntimeDiagnostics.mark("icon_assets_configured","原生位图缓存字段已验证，准备器可用")
     }
@@ -337,8 +353,36 @@ internal object LauncherIconGlassAssets {
             val fast=Class.forName("com.android.launcher3.icons.FastBitmapDrawable",false,loader)
             val info=Class.forName("com.android.launcher3.icons.BitmapInfo",false,loader)
             val item=Class.forName("com.android.launcher3.model.data.ItemInfoWithIcon",false,loader)
+            // Resolve persistence protection before enabling ItemInfo replacements.
+            val forDatabase=item.declaredMethods.firstOrNull {
+                it.name=="getIconForDatabase" && it.returnType==info && it.parameterTypes.contentEquals(arrayOf(info))
+            }
+            if(forDatabase!=null) {
+                module.hook(forDatabase).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    val result=chain.proceed();synchronized(lock) {infoOrigins[result]} ?: result
+                }
+            } else {
+                val writer=Class.forName("com.android.launcher3.util.ContentWriter",false,loader)
+                val putIcon=writer.getDeclaredMethod("putIcon",info,android.os.UserHandle::class.java)
+                check(putIcon.returnType==writer)
+                module.hook(putIcon).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    val source=synchronized(lock) {infoOrigins[chain.getArg(0)]}
+                    if(source==null)chain.proceed() else chain.proceed(arrayOf(source,chain.getArg(1)))
+                }
+                // ART may inline the short putIcon setter into the launcher model writer.
+                runCatching {
+                    val workspace=Class.forName("com.android.launcher3.model.data.WorkspaceItemInfo",false,loader)
+                    module.deoptimize(workspace.getDeclaredMethod("onAddToDatabase",writer))
+                }.onFailure(::error)
+            }
+            module.hook(info.getDeclaredMethod("canPersist")).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val bitmap=infoIcon?.get(chain.getThisObject()) as? Bitmap
+                if(bitmap!=null && synchronized(lock) {reverse.containsKey(bitmap)})false else chain.proceed()
+            }
             configure(fast,info,item)
-            module.hook(info.getDeclaredMethod("newIcon",Context::class.java,Int::class.javaPrimitiveType))
+            val factories=IconGlassNativeFactories.bitmapInfoFactories(info,Context::class.java,fast)
+            if(factories.isEmpty())RuntimeDiagnostics.mark("icon_assets_factory_missing","桌面未提供已知的 BitmapInfo 图标工厂")
+            for(factory in factories)module.hook(factory)
                 .setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                     val result=chain.proceed()
                     if(result is Drawable)runCatching {
@@ -347,7 +391,9 @@ internal object LauncherIconGlassAssets {
                         val component=synchronized(lock) {infoComponents[chain.getThisObject()]}
                         val cached=if(active)component?.let {synchronized(lock) {componentAssets[it]}}?.takeIf(::current)
                             ?: available(bitmap) ?: available(source) else null
-                        if(cached!=null)swapDrawable(result,source,cached)
+                        if(cached!=null) {
+                            if(bitmapField!!.get(result)!==cached)swapDrawable(result,source,cached)
+                        }
                         else if(source!==bitmap && !source.isRecycled)bitmapField!!.set(result,source)
                         if(main())ensureDrawable(result.javaClass)
                     }.onFailure(::error)
@@ -367,13 +413,6 @@ internal object LauncherIconGlassAssets {
                     result
                 }
             }.onFailure(::error)
-            module.hook(info.getDeclaredMethod("canPersist")).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-                val bitmap=infoIcon!!.get(chain.getThisObject()) as? Bitmap
-                if(bitmap!=null && synchronized(lock) {reverse.containsKey(bitmap)})false else chain.proceed()
-            }
-            module.hook(item.getDeclaredMethod("getIconForDatabase",info)).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-                val result=chain.proceed();synchronized(lock) {infoOrigins[result]} ?: result
-            }
             val floating=Class.forName("com.android.launcher3.views.FloatingIconView",false,loader)
             val loadResult=find(floating,"mIconLoadResult") ?: error("Missing floating icon result")
             floating.declaredMethods.firstOrNull {it.name=="fetchIcon" && it.parameterCount==4 && it.parameterTypes[1]==View::class.java}

@@ -3,10 +3,13 @@ package com.coloros16.liquidglass.hook
 
 import com.coloros16.liquidglass.config.SafeAreas
 
+import android.graphics.Canvas
 import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.RenderEffect
+import android.graphics.drawable.DrawableWrapper
+import android.graphics.drawable.GradientDrawable
 import android.os.Looper
 import android.os.SystemClock
 import android.view.View
@@ -79,6 +82,12 @@ internal object LauncherSuggestionGlassSurfaceHook {
 
     fun install(api:XposedInterface,loader:ClassLoader) {
         this.api=api;contract=null
+        if (runCatching {
+                Class.forName("com.android.launcher3.card.appsuggestnopadding.SuggestNoPaddingViewWrapper", false, loader)
+            }.isFailure) {
+            installLegacy(api, loader)
+            return
+        }
         runCatching {
             val background=Class.forName("com.android.launcher3.card.appsuggestnopadding.SuggestCompactBgView",false,loader)
             val card=Class.forName("com.android.launcher3.card.TitleCardView",false,loader)
@@ -137,6 +146,70 @@ internal object LauncherSuggestionGlassSurfaceHook {
         }.onFailure {
             contract=null
             RuntimeDiagnostics.mark("launcher-suggestion-contract","小布建议结构未匹配，保留原生：${it.javaClass.simpleName}")
+        }
+    }
+
+    /** ColorOS 16 uses the card manager's default rounded drawable for eligible cards. */
+    private fun installLegacy(api: XposedInterface, loader: ClassLoader) {
+        runCatching {
+            val card = Class.forName("com.android.launcher3.card.LauncherCardView", false, loader)
+            val util = Class.forName("com.android.launcher3.card.LauncherCardUtil", false, loader)
+            val predicate = util.getMethod("isSuggestCard", Any::class.java)
+            check(Modifier.isStatic(predicate.modifiers) && predicate.returnType == Boolean::class.javaPrimitiveType)
+            val manager = Class.forName("com.android.launcher3.card.CardBackgroundBlurManager", false, loader)
+            val create = manager.getDeclaredMethod("createDefaultBackground", View::class.java, Boolean::class.javaPrimitiveType)
+            check(create.returnType == Boolean::class.javaPrimitiveType)
+            fun suggestionOwner(view: View): View? {
+                var parent: View? = view
+                repeat(5) {
+                    val node = parent ?: return null
+                    if (card.isInstance(node)) return node.takeIf { IconGlassSuggestionContract.matches(it, predicate) }
+                    parent = node.parent as? View
+                }
+                return null
+            }
+            api.hook(create).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val result = chain.proceed()
+                if (result == true && ui()) runCatching {
+                    val target = chain.getArg(0) as? View ?: return@runCatching
+                    val original = target.background as? GradientDrawable ?: return@runCatching
+                    val owner = suggestionOwner(target) ?: return@runCatching
+                    if (NativeSurfaceBackgroundLease.canMount(target))
+                        target.background = LegacyBackground(target, owner, original)
+                }
+                result
+            }
+            manager.declaredMethods.filter { it.name == "createBackgroundImmediately" }.forEach {
+                runCatching { api.deoptimize(it) }
+            }
+            RuntimeDiagnostics.mark("launcher-suggestion-contract", "ColorOS 16 小布建议背景使用卡片管理器入口")
+        }.onFailure {
+            RuntimeDiagnostics.update("launcher-suggestion-contract", "保留系统卡片：${it.javaClass.simpleName}")
+        }
+    }
+
+    private class LegacyBackground(view: View, owner: View, private val original: GradientDrawable) :
+        DrawableWrapper(original) {
+        private val host = WeakReference(view)
+        private val card = WeakReference(owner)
+        private val material by lazy { LauncherWallpaperSurface() }
+        private val localBounds = RectF()
+        private val wallpaperReady: () -> Unit = { host.get()?.invalidate() }
+
+        override fun draw(canvas: Canvas) {
+            val drawn = runCatching {
+                val view = host.get() ?: return@runCatching false
+                val owner = card.get() ?: return@runCatching false
+                // The engine can ask for a background for individual tiles too.
+                if (view.width < owner.width * .85f || view.height < owner.height * .85f || !canvas.isHardwareAccelerated)
+                    return@runCatching false
+                preferences()
+                val snapshot = config ?: return@runCatching false
+                if (!enabled) return@runCatching false
+                localBounds.set(bounds)
+                material.draw(view, canvas, localBounds, original.cornerRadius, snapshot, wallpaperReady)
+            }.getOrDefault(false)
+            if (!drawn) super.draw(canvas)
         }
     }
 

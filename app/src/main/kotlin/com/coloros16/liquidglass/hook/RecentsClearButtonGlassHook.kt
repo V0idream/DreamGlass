@@ -77,8 +77,14 @@ internal object RecentsClearButtonGlassHook {
             }
             val button=Class.forName("com.android.launcher.views.PressFeedbackButton",false,loader)
             val panel=Class.forName("com.oplus.quickstep.views.OplusClearAllPanelView",false,loader)
-            check(button.superclass.name=="androidx.appcompat.widget.AppCompatButton")
-            val slot=panel.getDeclaredField("a").apply {check(type==button);isAccessible=true}
+            check(android.widget.Button::class.java.isAssignableFrom(button))
+            val blurType = button.getDeclaredMethod("getBlurDrawable").returnType
+            val relocatedBase = generateSequence(blurType) { it.superclass }.firstOrNull {
+                it.name == Cos17Contract.RELOCATED_DRAWABLE
+            }
+            val relocated = relocatedBase?.let(Cos17Contract::relocatedRecord) != null
+            check(relocated || button.superclass.name=="androidx.appcompat.widget.AppCompatButton")
+            val slot=panel.getDeclaredField(if (relocated) "c" else "a").apply {check(type==button);isAccessible=true}
             val getter=panel.getDeclaredMethod("getClearPressButton").apply {check(returnType==View::class.java)}
             val bounds=button.getDeclaredMethod("getItemBackgroundRect").apply {check(returnType==RectF::class.java)}
             button.getDeclaredMethod("getForceBlockDraw").apply {check(returnType==Boolean::class.javaPrimitiveType)}
@@ -86,7 +92,8 @@ internal object RecentsClearButtonGlassHook {
             val inflate=panel.getDeclaredMethod("onFinishInflate")
             val attached=button.getDeclaredMethod("onAttachedToWindow")
             val onDraw=button.getDeclaredMethod("onDraw",Canvas::class.java)
-            val useBlur=button.getDeclaredMethod("f",Boolean::class.javaPrimitiveType).apply {check(returnType==Boolean::class.javaPrimitiveType)}
+            val useBlur=button.getDeclaredMethod(if (relocated) "d" else "f",Boolean::class.javaPrimitiveType)
+                .apply {check(returnType==Boolean::class.javaPrimitiveType)}
             api.hook(inflate).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 val result=chain.proceed()
                 if(ui())(getter.invoke(chain.getThisObject()) as? View)?.takeIf(::eligible)?.let(::observe)

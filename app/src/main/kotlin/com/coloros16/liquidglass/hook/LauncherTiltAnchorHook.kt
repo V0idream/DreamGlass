@@ -7,13 +7,14 @@ import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
 import java.lang.reflect.Field
 
-/** Read the source/target icon of the EXECUTING native animation. Legacy COS16
- * callback numbering changed from 7/8 to 9/10 on both supplied COS17 APKs.
+/** Read the source/target icon of the executing native animation. The native
+ * launch, close and swipe callbacks have different names across OEM builds.
  * Endpoint capture never changes animation arguments, surfaces or timestamps.
  */
 internal object LauncherTiltAnchorHook {
     private data class Site(val name:String,val icon:String,val helper:String="\$rectTransformHelper",
         val screen:String="\$screenRectF")
+    private data class DeferredSite(val owner:String,val method:String,val carriers:List<String>)
     private data class Reader(val helper:Field,val icon:Field,val screen:Field) {
         fun read(owner:Any):LauncherTiltIconAnchor? {
             val i=icon.get(owner) as? RectF ?: return null
@@ -24,6 +25,9 @@ internal object LauncherTiltAnchorHook {
     private val sites=listOf(
         // These are stable icon endpoints in window/screen coordinates. The
         // separately captured iconRect is a mutable drawing scratch rectangle.
+        Site("com.android.launcher3.anim.OplusLauncherAppTransitionHelper\$startAppLaunchWindowAnim\$10","\$startRect"),
+        Site("com.android.launcher3.anim.OplusLauncherAppTransitionHelper\$startAppCloseWindowAnim\$11","\$targetRect"),
+        Site("com.android.launcher3.anim.engine.creator.SwipeToHomeAnimCreator\$Companion\$buildSpringAnimation\$7","\$targetRect"),
         Site("com.android.launcher3.anim.OplusLauncherAppTransitionHelper\$startAppLaunchWindowAnim\$9","\$startRect"),
         Site("com.android.launcher3.anim.OplusLauncherAppTransitionHelper\$startAppCloseWindowAnim\$10","\$targetRect"),
         Site("com.android.launcher3.anim.engine.creator.SwipeToHomeAnimCreator\$Companion\$buildSpringAnimation\$6","\$targetRect"),
@@ -33,7 +37,8 @@ internal object LauncherTiltAnchorHook {
         Site("com.oplus.quickstep.gesture.OplusBaseSwipeUpHandler\$createAppToHomeAnimation\$5","\$targetRect"),
     )
 
-    fun install(api:XposedInterface,loader:ClassLoader,helperType:Class<*>,scope:LauncherTiltAnchorScope):Int {
+    fun install(api:XposedInterface,loader:ClassLoader,helperType:Class<*>,paramsType:Class<*>,txType:Class<*>,
+        scope:LauncherTiltAnchorScope):Int {
         var mounted=0
         val readers=HashMap<Class<*>,Reader>()
         for(site in sites)runCatching {
@@ -63,11 +68,17 @@ internal object LauncherTiltAnchorHook {
         val registry=LauncherTiltAnchorRegistry()
         val carrierHelpers=HashMap<Class<*>,Field>()
         val function=Class.forName("kotlin.jvm.functions.Function2",false,loader)
-        for(name in listOf("o6.v","o6.x","o6.z","o6.b0","o6.d0","q6.m1","q6.n1"))runCatching {
+        val deferred = when (helperType.name) {
+            "i69" -> DeferredSite("idb","f",listOf("lg7","lma","pg7","rg7","ng7"))
+            "l69" -> DeferredSite("y4b","e",listOf("ch7","eh7","ih7","gh7","kma"))
+            else -> DeferredSite("com.android.quickstep.util.animation.k","b",
+                listOf("o6.v","o6.x","o6.z","o6.b0","o6.d0","q6.m1","q6.n1"))
+        }
+        for(name in deferred.carriers)runCatching {
             val carrier=Class.forName(name,false,loader)
             check(function.isAssignableFrom(carrier))
             val helper=carrier.declaredFields.single {it.type==helperType}.apply {isAccessible=true}
-            check(carrier.declaredFields.count {it.type.name=="xi.q"}==1)
+            check(carrier.declaredFields.count {it.type==txType}==1)
             val invoke=carrier.getDeclaredMethod("invoke",Any::class.java,Any::class.java)
             check(invoke.returnType==Any::class.java)
             api.hook(invoke).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
@@ -78,11 +89,11 @@ internal object LauncherTiltAnchorHook {
             api.deoptimize(invoke);carrierHelpers[carrier]=helper;mounted++
         }
         if(readers.isNotEmpty())runCatching {
-            val delayer=Class.forName("com.android.quickstep.util.animation.k",false,loader)
+            val delayer=Class.forName(deferred.owner,false,loader)
             val methods=delayer.declaredMethods.filter {method ->
                 val p=method.parameterTypes
-                method.name=="b" && method.returnType==Void.TYPE && p.size==6 &&
-                    p[1]==Float::class.javaPrimitiveType && p[2].name=="${helperType.name}\$TransformParams" &&
+                method.name==deferred.method && method.returnType==Void.TYPE && p.size==6 &&
+                    p[1]==Float::class.javaPrimitiveType && p[2]==paramsType &&
                     p[3]==RectF::class.java && p[4]==Runnable::class.java && p[5]==function
             }
             for(method in methods) {

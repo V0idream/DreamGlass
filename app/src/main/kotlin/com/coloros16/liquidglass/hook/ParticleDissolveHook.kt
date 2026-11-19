@@ -13,11 +13,13 @@ import android.graphics.drawable.Drawable
 import android.hardware.HardwareBuffer
 import android.media.ImageReader
 import android.os.Build
+import android.os.Binder
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Choreographer
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -133,6 +135,9 @@ object ParticleDissolveHook {
             interfaceApi = api
             if (installed) return
             val row = Class.forName(ROW, false, loader)
+            runCatching {installHeadsUpGesture(api,loader,row)}.onFailure {
+                current("heads_up_route","横幅入口未安装：${it.javaClass.simpleName}: ${it.message?.take(120)}")
+            }
             val helper = Class.forName("com.android.systemui.SwipeHelper", false, loader)
             // COS17 overrides both the gesture and menu paths in NotificationSwipeHelper.
             // Hook every concrete declaration; Capture.requested/consumed deduplicates wrappers.
@@ -181,33 +186,155 @@ object ParticleDissolveHook {
             runCatching {installMixedGroupCommit(api,loader,row)}.onFailure {
                 report("mixed_group_route","保留原生集合删除：${it.javaClass.simpleName}")
             }
-            runCatching {installHeadsUpGesture(api,loader,row)}.onFailure {
-                report("heads_up_route","保留原生横幅滑动：${it.javaClass.simpleName}")
-            }
             installed = true
         }
+
+        private data class HeadsUpTarget(val row:View,val container:View,val manager:WindowManager?,val position:IntArray)
+        private data class HeadsUpTouch(val target:HeadsUpTarget?,val fingerUp:Boolean)
 
         private fun installHeadsUpGesture(api:XposedInterface,loader:ClassLoader,row:Class<*>) {
             val animator=Class.forName("com.oplus.systemui.notification.headsup.windowframe.OplusHeadsUpAnimator",false,loader)
             val control=animator.getDeclaredField("control").apply {isAccessible=true}
-            val view=control.type.getMethod("getView")
+            val getView=control.type.getMethod("getView")
+            val getContainer=control.type.getMethod("getCcView")
+            val getManager=runCatching {control.type.getMethod("getWm")}.getOrNull()
+            var activeTouch:HeadsUpTouch?=null
+            fun target(receiver:Any?,picked:View?=null):HeadsUpTarget? {
+                if(receiver==null || !animator.isInstance(receiver))return null
+                val owner=control.get(receiver) ?: return null
+                val container=getContainer.invoke(owner) as? View ?: return null
+                val root=container.rootView
+                val manager=runCatching {getManager?.invoke(owner) as? WindowManager}.getOrNull()
+                fun attached(view:View)=row.isInstance(view) && view.isAttachedToWindow && view.rootView===root
+                fun selected(view:View)=HeadsUpTarget(view,container,manager,IntArray(2).also(view::getLocationOnScreen))
+                if(picked!=null && attached(picked))return selected(picked)
+                val holder=getView.invoke(owner) as? View ?: container
+                val queue=ArrayDeque<View>();queue.add(holder)
+                repeat(32) {
+                    val view=queue.removeFirstOrNull() ?: return null
+                    if(attached(view))return selected(view)
+                    if(view is android.view.ViewGroup) for(i in 0 until minOf(view.childCount,32)) {
+                        if(queue.size<32)queue.add(view.getChildAt(i))
+                    }
+                }
+                return null
+            }
             val dismiss=animator.declaredMethods.single {it.name=="dismiss" && it.parameterCount==3 &&
                 it.parameterTypes[0]==Boolean::class.javaPrimitiveType && it.parameterTypes[1]==String::class.java}
             api.hook(dismiss).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-                var selected:View?=null
                 safe {
-                    if(HeadsUpDissolveContract.accepted(chain.getArg(0)==true,chain.getArg(1) as? String)) {
-                        val native=view.invoke(control.get(chain.getThisObject())) as? View
-                        if(native!=null && row.isInstance(native) && allowed(api,native.context)) {
-                            request(native)?.let {it.vertical=true;particleRoot(native,it);selected=native}
-                        }
+                    if(activeTouch?.fingerUp!=false &&
+                        HeadsUpDissolveContract.accepted(chain.getArg(0)==true,chain.getArg(1) as? String)) {
+                        val found=activeTouch?.target ?: target(chain.getThisObject()) ?: return@safe
+                        commitHeadsUp(api,found)
                     }
                 }
-                val result=chain.proceed() // Native drag dismissal executes once and is never delayed.
-                selected?.let {native ->safe {if(allowed(api,native.context))dismiss(native)}}
-                result
+                chain.proceed()
             }
-            report("heads_up_route","横幅上划确认入口已接入；超时与替换不播放粒子")
+            runCatching {
+                val start=animator.getDeclaredMethod("onStartDrag")
+                val end = HeadsUpDissolveContract.dragEnd(animator, dismiss.parameterTypes[2])
+                api.hook(start).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    val result=chain.proceed()
+                    safe {
+                        val found=target(chain.getThisObject()) ?: return@safe
+                        warmHeadsUp(api,found.row)
+                    }
+                    result
+                }
+                api.hook(end).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    var selected:HeadsUpTarget?=null
+                    safe {
+                        selected=activeTouch?.target ?: target(chain.getThisObject())
+                        selected?.row?.let {native -> captures[native]?.let {rememberHeadsUpPosition(native,it)}}
+                    }
+                    val result=chain.proceed()
+                    selected?.let {found ->safe {
+                        if(result==true && activeTouch?.fingerUp!=false)commitHeadsUp(api,found)
+                        else cancel(found.row)
+                    }}
+                    result
+                }
+                runCatching {api.deoptimize(start)}
+                runCatching {api.deoptimize(end)}
+            }.onFailure {report("heads_up_tracking","上划跟踪入口不匹配，使用已确认的原生删除入口")}
+            runCatching {api.deoptimize(dismiss)}
+            runCatching {
+                val helper=Class.forName("com.oplus.systemui.notification.headsup.windowframe.OplusHeadsUpTouchHelper",false,loader)
+                val getControl=helper.getMethod("getControl")
+                val picked=helper.getDeclaredField("mPickedChild").apply {isAccessible=true}
+                val managerField=helper.getDeclaredField("mHeadsUpManager").apply {isAccessible=true}
+                val releaseHooks=HashSet<Method>()
+                val tracked=WeakHashMap<Any,WeakReference<View>>()
+                val intercept=helper.getDeclaredMethod("onInterceptTouchEvent",MotionEvent::class.java)
+                val touch=helper.getDeclaredMethod("onTouchEvent",MotionEvent::class.java)
+                api.hook(intercept).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    val owner=chain.getThisObject()
+                    val action=(chain.getArg(0) as? MotionEvent)?.actionMasked
+                    val before=if(owner!=null && action==MotionEvent.ACTION_MOVE)
+                        runCatching {picked.get(owner) as? View}.getOrNull() else null
+                    val result=chain.proceed()
+                    if(owner!=null && action==MotionEvent.ACTION_MOVE && result==true)safe {
+                        val found=target(getControl.invoke(owner),before) ?: return@safe
+                        tracked[owner]=WeakReference(found.row)
+                        warmHeadsUp(api,found.row)
+                    }
+                    result
+                }
+                api.hook(touch).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    val owner=chain.getThisObject()
+                    val action=(chain.getArg(0) as? MotionEvent)?.actionMasked
+                    if(owner==null || (action!=MotionEvent.ACTION_UP && action!=MotionEvent.ACTION_CANCEL && action!=MotionEvent.ACTION_OUTSIDE))
+                        return@intercept chain.proceed()
+                    val previous=activeTouch
+                    safe {
+                        val found=target(getControl.invoke(owner),tracked.remove(owner)?.get())
+                        activeTouch=HeadsUpTouch(found,action==MotionEvent.ACTION_UP)
+                        val nativeManager=managerField.get(owner) ?: return@safe
+                        val release=nativeManager.javaClass.getMethod("releaseAllImmediately",String::class.java)
+                        if(!Modifier.isAbstract(release.modifiers) && releaseHooks.add(release)) {
+                            try {
+                                api.hook(release).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {releaseChain ->
+                                    val gesture=activeTouch
+                                    if(gesture!=null && HeadsUpDissolveContract.managerRelease(gesture.fingerUp,releaseChain.getArg(0) as? String))
+                                        gesture.target?.let {target ->safe {commitHeadsUp(api,target)}}
+                                    releaseChain.proceed()
+                                }
+                            } catch(error:Throwable) {releaseHooks.remove(release);throw error}
+                        }
+                    }
+                    try {chain.proceed()}finally {activeTouch=previous}
+                }
+                runCatching {api.deoptimize(intercept)}
+                runCatching {api.deoptimize(touch)}
+                current("heads_up_route","已安装横幅手势和原生释放入口")
+            }.onFailure {current("heads_up_route","已安装横幅动画入口；释放接口不可用：${it.javaClass.simpleName}")}
+        }
+
+        private fun warmHeadsUp(api:XposedInterface,view:View) {
+            if(allowed(api,view.context) && !effects.containsKey(view)) {
+                val capture=captures[view] ?: prepare(view,headsUp=true)
+                capture?.let {rememberHeadsUpPosition(view,it)}
+            }
+        }
+        private fun commitHeadsUp(api:XposedInterface,target:HeadsUpTarget) {
+            val view=target.row
+            if(!allowed(api,view.context) || effects.containsKey(view))return
+            val capture=captures[view]?.takeIf {!it.cancelled}
+                ?: runCatching {prepare(view,headsUp=true)}.getOrNull()
+                ?: headsUpFallbackCapture(target) ?: return
+            if(capture.committed)return
+            capture.headsUp=true
+            capture.vertical=true
+            rememberHeadsUpPosition(view,capture)
+            particleRoot(view,capture,target.container,target.manager)
+            finishDismiss(view,capture)
+        }
+        private fun rememberHeadsUpPosition(view:View,c:Capture) {
+            if(!view.isAttachedToWindow)return
+            val position=IntArray(2)
+            view.getLocationOnScreen(position)
+            c.screenPosition=position
         }
 
         /** The OEM removes the entire heads-up window. A bounded, non-touchable SystemUI
@@ -220,26 +347,39 @@ object ParticleDissolveHook {
             }
         }
         @android.annotation.SuppressLint("WrongConstant") // Hidden TYPE_STATUS_BAR_SUB_PANEL (2017), verified OEM window type.
-        private fun particleRoot(view:View,c:Capture) {
+        private fun particleRoot(view:View,c:Capture,verifiedContainer:View?=null,nativeManager:WindowManager?=null) {
             if(headsUpLeases.containsKey(view))return
-            val nativeRoot=view.rootView
-            val type=(nativeRoot.layoutParams as? WindowManager.LayoutParams)?.type ?: -1
-            if(!HeadsUpDissolveContract.windowRoot(nativeRoot.javaClass.name,type))return
+            val candidate=verifiedContainer ?: view.rootView
+            val nativeRoot=candidate.rootView
+            val type=((candidate.layoutParams as? WindowManager.LayoutParams) ?:
+                (nativeRoot.layoutParams as? WindowManager.LayoutParams))?.type ?: -1
+            if(!HeadsUpDissolveContract.windowRoot(nativeRoot.javaClass.name,type,verifiedContainer!=null))return
+            c.headsUp=true
+            if(!c.vertical)rememberHeadsUpPosition(view,c)
+            val position=c.screenPosition ?: return
             runCatching {
-                val context=view.context.createWindowContext(2017,null)
-                val manager=context.getSystemService(WindowManager::class.java) ?: return@runCatching
-                val root=FrameLayout(context).apply {setBackgroundColor(Color.TRANSPARENT)}
                 val flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
-                val layout=WindowManager.LayoutParams(-1,-1,2017,flags,PixelFormat.TRANSLUCENT).apply {
-                    gravity=Gravity.TOP or Gravity.START;title="DreamGlass heads-up particles";setFitInsetsTypes(0)
+                fun attach(context:Context,manager:WindowManager,token:Binder?):HeadsUpLease {
+                    val root=FrameLayout(context).apply {setBackgroundColor(Color.TRANSPARENT)}
+                    val layout=WindowManager.LayoutParams(-1,-1,2017,flags,PixelFormat.TRANSLUCENT).apply {
+                        gravity=Gravity.TOP or Gravity.START;title="DreamGlass heads-up particles";setFitInsetsTypes(0)
+                        layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                        this.token=token
+                    }
+                    val lease=HeadsUpLease(root,manager)
+                    try {manager.addView(root,layout)}catch(error:Throwable) {lease.close();throw error}
+                    return lease
                 }
-                val lease=HeadsUpLease(root,manager)
-                try {manager.addView(root,layout)}catch(t:Throwable) {lease.close();throw t}
+                val manager=nativeManager ?: candidate.context.getSystemService(WindowManager::class.java)
+                val lease=manager?.let {runCatching {attach(candidate.context,it,Binder())}.getOrNull()} ?: run {
+                    val context=view.context.createWindowContext(2017,null)
+                    attach(context,checkNotNull(context.getSystemService(WindowManager::class.java)),null)
+                }
                 headsUpLeases.remove(view)?.close();headsUpLeases[view]=lease
-                val location=IntArray(2);view.getLocationOnScreen(location)
-                c.root=WeakReference(root);c.x=location[0].toFloat();c.y=location[1].toFloat();c.releaseX=c.x;c.releaseY=c.y
+                c.root=WeakReference(lease.root);c.screenPosition=position;c.screenSpace=true
+                current("heads_up_window","横幅粒子独立窗口已创建")
                 ui.postDelayed({safe {
                     if(headsUpLeases[view]===lease) {headsUpLeases.remove(view);lease.close()}
                 }},durationMs(speed)+1000L)
@@ -580,21 +720,48 @@ object ParticleDissolveHook {
             var direction=1f;var initialProgress=0f
             var hiddenAlpha:Float?=null
             var vertical=false
+            var headsUp=false
             var waitingForRoot=false
+            var screenPosition:IntArray?=null
+            var screenSpace=false
+            var headsUpFallbackReady=false
             var finished: (() -> Unit)? = null
         }
-        private fun prepare(view: View): Capture? {
+        private fun rowHeight(view:View):Int =
+            runCatching { (view.javaClass.getMethod("getActualHeight").invoke(view) as Number).toInt() }
+                .getOrDefault(view.height).coerceIn(1,view.height)
+
+        private val headsUpFallback by lazy(LazyThreadSafetyMode.NONE) {
+            Bitmap.createBitmap(160,56,Bitmap.Config.ARGB_8888).apply {
+                val tint=Paint(Paint.ANTI_ALIAS_FLAG).also {
+                    it.shader=LinearGradient(0f,0f,0f,height.toFloat(),0xd9f8fbff.toInt(),0x8c9eb9db.toInt(),Shader.TileMode.CLAMP)
+                }
+                Canvas(this).drawRoundRect(0f,0f,width.toFloat(),height.toFloat(),11f,11f,tint)
+            }
+        }
+        private fun headsUpFallbackCapture(target:HeadsUpTarget):Capture? {
+            val view=target.row
+            val container=target.container
+            if(view.width<=0 || view.height<=0 || captures.size>=MAX_ACTIVE || effects.size>=MAX_ACTIVE)return null
+            val row=target.position;val root=IntArray(2)
+            container.rootView.getLocationOnScreen(root)
+            return Capture(WeakReference(container.rootView),(row[0]-root[0]).toFloat(),(row[1]-root[1]).toFloat(),
+                view.width,rowHeight(view),view.resources.displayMetrics.density,RenderNode("DreamGlass heads-up outline")).also {
+                it.screenPosition=row;it.headsUpFallbackReady=true;it.rowTranslation=view.translationX
+                captures[view]=it
+            }
+        }
+        private fun prepare(view: View,headsUp:Boolean=false): Capture? {
             captures.remove(view)?.cancelled = true
             val root = view.rootView
             if (!view.isShown || !view.isHardwareAccelerated || root == view ||
                 view.width <= 0 || view.height <= 0 || captures.size >= MAX_ACTIVE || effects.size >= MAX_ACTIVE) return null
             val pos = IntArray(2);val parent = IntArray(2)
             view.getLocationInWindow(pos);root.getLocationInWindow(parent)
-            if (pos[1] + view.height <= parent[1] || pos[1] >= parent[1] + root.height) return null
+            if (!headsUp && (pos[1] + view.height <= parent[1] || pos[1] >= parent[1] + root.height)) return null
             // ExpandableNotificationRow may measure its tallest content layout even while a
             // short card is visible. Record the native actual-height, not that offscreen area.
-            val actualHeight=runCatching { (view.javaClass.getMethod("getActualHeight").invoke(view) as Number).toInt() }
-                .getOrDefault(view.height).coerceIn(1,view.height)
+            val actualHeight=rowHeight(view)
             val node = RenderNode("LiquidGlass dismissed notification")
             node.setPosition(0, 0, view.width, actualHeight)
             val canvas = node.beginRecording(view.width, actualHeight)
@@ -625,7 +792,12 @@ object ParticleDissolveHook {
                             if (!c.cancelled) { c.bitmap = image;current("snapshot","hardware texture ${image.width}x${image.height}") }
                         }
                     } catch (error: Throwable) {
-                        ui.post { safe { throw error } }
+                        ui.post {
+                            if(c.headsUp || headsUp) {
+                                c.headsUpFallbackReady=true
+                                current("heads_up_snapshot","横幅纹理不可用，使用轮廓粒子：${error.javaClass.simpleName}")
+                            } else safe { throw error }
+                        }
                     } finally {
                         c.node.discardDisplayList()
                         ui.post { safe { c.finished?.invoke() } }
@@ -646,8 +818,11 @@ object ParticleDissolveHook {
         }
         private fun dismiss(view: View) {
             val image = request(view) ?: return
+            finishDismiss(view,image)
+        }
+        private fun finishDismiss(view:View,image:Capture) {
             if (image.committed) return
-            particleRoot(view,image)
+            if(!image.headsUp || !image.vertical)particleRoot(view,image)
             image.committed = true
             val translation=runCatching { (view.javaClass.getMethod("getTranslation").invoke(view) as Number).toFloat() }.getOrDefault(view.translationX)
             image.releaseX=handoffX(image.x,image.rowTranslation,translation)
@@ -656,17 +831,29 @@ object ParticleDissolveHook {
             // Keep the committed row until the bounded GPU job completes; native removal can
             // otherwise release its last strong reference before the image is ready.
             image.finished = { start(view, image) }
-            if (image.bitmap != null) start(view, image)
+            if(image.bitmap!=null || image.headsUpFallbackReady)start(view,image)
+            else if(image.headsUp)ui.postDelayed({safe {
+                if(!image.consumed && !image.cancelled && image.bitmap==null) {
+                    image.headsUpFallbackReady=true
+                    start(view,image)
+                }
+            }},84L)
         }
         private fun start(view: View, c: Capture) {
             if (c.cancelled || c.consumed || !c.committed) return
             if (!membershipGranted()) { c.cancelled = true; captures.remove(view); stopAll(); return }
-            val bitmap = c.bitmap ?: return
+            val bitmap = c.bitmap ?: if(c.headsUp && c.headsUpFallbackReady)headsUpFallback else return
             val root = c.root.get() ?: return
-            if(!root.isAttachedToWindow && headsUpLeases.containsKey(view)) {
+            if((!root.isAttachedToWindow || root.width==0 || root.height==0) && headsUpLeases.containsKey(view)) {
                 if(!c.waitingForRoot) {
                     c.waitingForRoot=true
-                    root.post {safe {c.waitingForRoot=false;start(view,c)}}
+                    root.addOnLayoutChangeListener(object:View.OnLayoutChangeListener {
+                        override fun onLayoutChange(v:View,l:Int,t:Int,r:Int,b:Int,ol:Int,ot:Int,or:Int,ob:Int) {
+                            if(r<=l || b<=t)return
+                            v.removeOnLayoutChangeListener(this)
+                            safe {c.waitingForRoot=false;start(view,c)}
+                        }
+                    })
                 }
                 return
             }
@@ -677,7 +864,16 @@ object ParticleDissolveHook {
                 captures.remove(view);c.cancelled = true;headsUpLeases.remove(view)?.close();return
             }
             c.consumed = true;captures.remove(view)
-            if(view.isAttachedToWindow) {
+            if(c.screenSpace) c.screenPosition?.let { position ->
+                val origin=IntArray(2);root.getLocationOnScreen(origin)
+                val x=(position[0]-origin[0]).toFloat()
+                val contentShift=if(c.vertical)0f else runCatching {
+                    (view.javaClass.getMethod("getTranslation").invoke(view) as Number).toFloat()-view.translationX
+                }.getOrDefault(0f)
+                c.releaseX=HeadsUpDissolveContract.releaseX(x+contentShift,c.width,root.width)
+                c.releaseY=HeadsUpDissolveContract.releaseY((position[1]-origin[1]).toFloat(),c.height)
+            }
+            if(!c.screenSpace && view.isAttachedToWindow) {
                 val current=runCatching { (view.javaClass.getMethod("getTranslation").invoke(view) as Number).toFloat() }.getOrDefault(view.translationX)
                 val currentX=handoffX(c.x,c.rowTranslation,current)
                 if(current.isFinite() && (currentX-c.releaseX)*c.direction>=0f)c.releaseX=currentX
@@ -695,6 +891,7 @@ object ParticleDissolveHook {
             c.hiddenAlpha=view.alpha;view.alpha=0f
             current("handoff","已从滑动位置接管：x=${c.releaseX.toInt()}；原生删除回调继续运行")
             current("playing","GPU dust started")
+            if(c.headsUp)current("heads_up_playing","横幅粒子已启动；texture=${c.bitmap!=null}; independent=${c.screenSpace}")
         }
         private fun cancel(view: View) {
             val c = captures[view]
@@ -703,6 +900,10 @@ object ParticleDissolveHook {
             headsUpLeases.remove(view)?.close()
         }
         private fun abort(view: View) {
+            // An accepted vertical banner is released from the list underneath us. Its
+            // independent animation must survive the swipe helper cancelling that old row.
+            if(captures[view]?.let {it.committed && it.headsUp && it.vertical}==true ||
+                (headsUpLeases.containsKey(view) && effects[view]?.vertical==true))return
             captures.remove(view)?.cancelled = true
             headsUpLeases.remove(view)?.close()
             effects.remove(view)?.stop()
@@ -747,7 +948,7 @@ object ParticleDissolveHook {
 
         internal class Dust(private val root: View, bitmap: Bitmap, x: Float, y: Float,
             width: Int, height: Int, density: Float, private val speed: Int, direction:Float=1f,
-            private val initialProgress:Float=0f,private val vertical:Boolean=false,
+            private val initialProgress:Float=0f,val vertical:Boolean=false,
             private val remainsAllowed: (() -> Boolean)? = null, private val ended: () -> Unit)
             : Drawable(), Choreographer.FrameCallback, View.OnAttachStateChangeListener {
             private val shader = RuntimeShader(SHADER)

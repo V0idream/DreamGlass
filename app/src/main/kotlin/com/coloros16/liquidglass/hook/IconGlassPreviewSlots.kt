@@ -1,8 +1,25 @@
 package com.coloros16.liquidglass.hook
 
+import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import java.util.ArrayList
+
+internal object IconGlassFolderPreviewContract {
+    fun pageEntry(manager: Class<*>): Method {
+        val prefix = arrayOf(Canvas::class.java, Integer.TYPE, ArrayList::class.java)
+        // ColorOS 17.5.5 removed the explicit scale from the paged draw method.
+        // Keep the page/nav branch with the cache check, not the list-only overload.
+        return listOf(
+            prefix + java.lang.Boolean::class.java,
+            prefix + arrayOf(java.lang.Float.TYPE, java.lang.Boolean::class.java),
+        ).firstNotNullOfOrNull { signature ->
+            runCatching { manager.getDeclaredMethod("drawParams", *signature) }.getOrNull()
+                ?.takeIf { it.returnType == Void.TYPE }
+        } ?: throw NoSuchMethodException("${manager.name}#drawParams(Canvas, int, ArrayList, …)")
+    }
+}
 
 /** A stacked tile is a layout of independent icon slots, never one app icon. Reflection is
  * resolved once against the launcher ABI; traversal does not inspect arbitrary view trees. */

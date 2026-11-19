@@ -39,6 +39,14 @@ class IconLibraryProbeActivity:Activity() {
         val pkg="com.dreamglass.probe.fake"
         val before=IconLibrary.local(this).map {it.pkg}.toSet()
         check(pkg !in before)
+        fun awaitIcon(name: String): IconGlassMasks.Prepared {
+            val deadline = android.os.SystemClock.uptimeMillis() + 7_000
+            while (android.os.SystemClock.uptimeMillis() < deadline) {
+                IconGlassLibraryRuntime.create(this, name, 128)?.let { return it }
+                Thread.sleep(45)
+            }
+            error("Local provider did not restore $name")
+        }
         try {
             IconLibrary.saveUploads(this,mapOf(pkg to normalized))
             check(IconLibrary.local(this).first {it.pkg==pkg}.source=="upload")
@@ -46,19 +54,25 @@ class IconLibraryProbeActivity:Activity() {
             check(IconLibrary.parse(bundle.getString("catalog")!!).any {it.pkg==pkg})
             val file=contentResolver.openInputStream(android.net.Uri.parse("content://com.dreamglass.cos17.icons/$pkg"))!!.use {it.readBytes()}
             check(file.contentEquals(normalized))
-        } finally {IconLibrary.removeUpload(this,pkg)}
+            // A fresh renderer process must restore imports even with no LSPosed revision hint.
+            IconGlassLibraryRuntime.observe(this) {}
+            IconGlassLibraryRuntime.setEnabled(true)
+            check(awaitIcon(pkg).passthrough)
+        } finally {
+            IconLibrary.removeUpload(this,pkg)
+            contentResolver.notifyChange(IconLibrary.URI, null)
+        }
         check(IconLibrary.local(this).map {it.pkg}.toSet()==before)
         val transparent=Bitmap.createBitmap(128,128,Bitmap.Config.ARGB_8888)
         val clock=checkNotNull(IconGlassDynamicIcons.create("com.coloros.alarmclock",128))
         val result=JSONObject().put("passed",true).put("centeredCrop",true).put("zipImport",true)
             .put("rejectsTraversalDuplicateAndCorruptImages",true).put("providerPrivateStorageRoundtrip",true)
-            .put("existingIconsPreserved",true).put("dynamicClockGenerated",clock.foreground.getPixel(64,64)!=transparent.getPixel(64,64))
+            .put("restoredWithoutFrameworkRevision",true).put("existingIconsPreserved",true).put("dynamicClockGenerated",clock.foreground.getPixel(64,64)!=transparent.getPixel(64,64))
         if(intent.getBooleanExtra("download",false)) {
             val catalog=IconLibrary.fetchCatalog();val matches=catalog.filter {it.pkg in IconLibrary.installed(this)}
             check(matches.isNotEmpty());val revision=IconLibrary.download(this,matches) {_,_->}
             IconLibrary.publish(this,revision)
-            IconGlassLibraryRuntime.configure(revision)
-            for(e in matches)check(IconGlassLibraryRuntime.create(this,e.pkg,128)!=null) {"Missing downloaded artwork ${e.pkg}"}
+            for(e in matches)awaitIcon(e.pkg)
             result.put("downloadedCount",matches.size).put("catalogCount",catalog.size).put("allDownloadedArtworkDecoded",true)
         }
         return result

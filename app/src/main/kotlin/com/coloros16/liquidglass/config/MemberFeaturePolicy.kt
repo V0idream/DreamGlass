@@ -19,7 +19,7 @@ object MemberFeaturePolicy {
         "lockscreen_clock_glass_enable", "keyguard_glass_enable", "keyguard_glass_text",
         "keyguard_glass_cards", "keyguard_glass_shortcuts",
         "gallery_glass_enable", "smart_sidebar_glass_enable",
-        "assistant_screen_glass_enable", "gallery_shader_probe_enable",
+        "assistant_screen_glass_enable", "weather_glass_enable", "gallery_shader_probe_enable",
         "notification_popup_glass_enable",
         "launcher_icon_glass_enable",
         "seedling_card_glass_enable", "seedling_capsule_glass", "seedling_card_force_transparent_bg",

@@ -32,7 +32,8 @@ object AppGlassHook {
     private const val BRIDGE="com.oplus.view.OplusViewBackgroundRenderEffect"
     private val keys=mapOf(XposedEntry.PACKAGE_GALLERY to Prefs.KEY_GALLERY_GLASS,
         XposedEntry.PACKAGE_SMART_SIDEBAR to Prefs.KEY_SMART_SIDEBAR_GLASS,
-        XposedEntry.PACKAGE_ASSISTANT_SCREEN to Prefs.KEY_ASSISTANT_SCREEN_GLASS)
+        XposedEntry.PACKAGE_ASSISTANT_SCREEN to Prefs.KEY_ASSISTANT_SCREEN_GLASS,
+        XposedEntry.PACKAGE_WEATHER to Prefs.KEY_WEATHER_GLASS)
     private val states=WeakHashMap<View,State>()
     private var api:XposedInterface?=null
     private var bridge:Method?=null
@@ -69,6 +70,7 @@ object AppGlassHook {
                         state?.clip(view)
                         val result=chain.proceed(args)
                         state?.applied=true
+                        if (packageName == XposedEntry.PACKAGE_WEATHER) view.invalidate()
                         if(state?.liveContent==true)GalleryLiveBackdrop.activate(view)
                         nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,true)}
                         RuntimeDiagnostics.mark("app-glass-material","原生背景输入已接入统一 GPU 材质；前景保持原生")
@@ -117,6 +119,14 @@ object AppGlassHook {
         RuntimeDiagnostics.update("app-glass-enabled",if(enabled)"开启" else "关闭")
         if(enabled)snapshot=SharedGlassParams.read(p)
     }
+    internal fun weatherEnabled(): Boolean {
+        if (packageName != XposedEntry.PACKAGE_WEATHER || bridge == null) return false
+        preferences()
+        return enabled
+    }
+    internal fun observeWeatherCard(view: View) {
+        if (packageName == XposedEntry.PACKAGE_WEATHER) observe(view)
+    }
     internal fun materialApplied(view:View):Boolean = states[view]?.applied==true && Prefs.memberAllowed(api)
     /** Called only with the actual panel returned by the Gallery dialog builder,
      * not a class-name scan over unrelated activities or windows. */
@@ -161,7 +171,7 @@ object AppGlassHook {
         return false
     }
     private fun canObserve(view:View)=when(packageName) {
-        XposedEntry.PACKAGE_GALLERY,XposedEntry.PACKAGE_ASSISTANT_SCREEN ->
+        XposedEntry.PACKAGE_GALLERY,XposedEntry.PACKAGE_ASSISTANT_SCREEN,XposedEntry.PACKAGE_WEATHER ->
             Cos17AppSurfaceHooks.isTarget(view)
         else -> true
     }
@@ -219,6 +229,7 @@ object AppGlassHook {
             if(SystemClock.uptimeMillis()<blockedUntil) {gate(view,"此前渲染异常，正在原生回退退避期");return null}
             if(!view.isHardwareAccelerated) {gate(view,"原生回退：宿主不是硬件加速窗口");return null}
             if(!liveContent && bridge==null)return null
+            if(packageName==XposedEntry.PACKAGE_WEATHER && !WeatherSurfaceAdapter.acceptsBackdrop(view,nativeEffect))return null
             if(!GallerySurfaceAdapter.canAssign(view)) {gate(view,"原生回退：独立绘制入口或安全背景租用尚未就绪");return null}
             val kind=role(view);if(kind==AppGlassSurfacePolicy.NONE) { cached=null;gate(view,"保持原生：宿主角色不在已核对材质范围");return null }
             val s=snapshot ?: return null
@@ -264,9 +275,11 @@ object AppGlassHook {
             }
         }
         fun restore(view:View) {
+            val wasApplied=applied
             try {if(applied && bridge!=null)assign(view,nativeEffect)} finally {
                 // Always release native channels even when the OEM bridge fails.
                 applied=false;cached=null;paramsHash=0;lastApplied=null
+                if (wasApplied && packageName == XposedEntry.PACKAGE_WEATHER) view.invalidate()
                 runCatching {GalleryLiveBackdrop.release(view)}.onFailure(::failure)
                 runCatching {NativeSurfaceClipLease.restore(view)}.onFailure(::failure)
                 runCatching {nativeMutation {Cos17AppSurfaceHooks.onMaterialStateChanged(view,false)}}.onFailure(::failure)
@@ -285,6 +298,7 @@ object AppGlassHook {
                         // exists; missing it must not prevent the actual paint.
                         if(!liveContent || bridge!=null)assign(view,if(liveContent)null else effect)
                         lastApplied=effect;applied=true
+                        if (packageName == XposedEntry.PACKAGE_WEATHER) view.invalidate()
                         if(liveContent)GalleryLiveBackdrop.activate(view)
                         RuntimeDiagnostics.mark("app-glass-material","组件已使用统一预设；未添加工具栏外框")
                     } else restore(view)

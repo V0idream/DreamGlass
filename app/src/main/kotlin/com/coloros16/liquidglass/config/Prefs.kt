@@ -105,7 +105,7 @@ object Prefs {
      *  The obsolete button_transparency key is intentionally never read or reinterpreted. */
     const val KEY_BUTTON_BLUR_RADIUS = "button_blur_radius"
     const val DEFAULT_BUTTON_BLUR_RADIUS = -1f
-    const val BUTTON_BLUR_RADIUS_MAX = 64
+    const val BUTTON_BLUR_RADIUS_MAX = 128
     const val KEY_VIBRANCY = "vibrancy"
     const val KEY_LIGHT_ANGLE = "light_angle"
     const val KEY_PARALLAX_X = "parallax_x"
@@ -481,6 +481,9 @@ object Prefs {
     const val DEFAULT_SMART_SIDEBAR_GLASS = false
 
     /** 速览（负一屏）玻璃化（卡片/控件背景模糊）。默认 **false**，语义同 [KEY_GALLERY_GLASS]。 */
+    const val KEY_WEATHER_GLASS = "weather_glass_enable"
+    const val DEFAULT_WEATHER_GLASS = false
+
     const val KEY_ASSISTANT_SCREEN_GLASS = "assistant_screen_glass_enable"
     /** 速览（负一屏）玻璃化默认值（false = 不干预） */
     const val DEFAULT_ASSISTANT_SCREEN_GLASS = false

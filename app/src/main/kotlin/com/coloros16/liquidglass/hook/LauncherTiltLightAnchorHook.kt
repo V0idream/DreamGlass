@@ -2,6 +2,7 @@
 package com.coloros16.liquidglass.hook
 
 import android.graphics.Matrix
+import android.graphics.Point
 import android.graphics.Rect
 import android.graphics.RectF
 import android.view.SurfaceControl
@@ -9,25 +10,45 @@ import android.view.View
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
+import java.lang.reflect.Method
+import java.lang.reflect.Modifier
 
 /** Light windows have no RectTransformHelper. Their per-request creator still
  * supplies the genuine source/return icon, before constructing an update listener.
  * Bind that one listener to that one targets object; never use a last-click cache.
  */
 internal object LauncherTiltLightAnchorHook {
-    fun install(api:XposedInterface,loader:ClassLoader,scopes:LauncherTiltAffineScope,
+    private const val LISTENER = "com.android.launcher3.anim.light.AppLaunchAnimUtil\$getLightWindowAnimation\$1"
+
+    internal fun resolveSubmit(loader: ClassLoader): Method {
+        val listener = Class.forName(LISTENER, false, loader)
+        val bool = java.lang.Boolean.TYPE
+        val float = java.lang.Float.TYPE
+        return listener.declaredMethods.single { method ->
+            val p = method.parameterTypes
+            method.name == "b" && Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE &&
+                p.size == 16 && p[2] == bool && p[3] == bool && p[4] == float && p[5] == float &&
+                p[6] == bool && p[7] == bool && p[8] == listener && p[9] == Matrix::class.java &&
+                p[10] == float && p[11].name == "com.android.launcher3.Launcher" && p[12] == float &&
+                p[13] == Point::class.java && p[14].name == "kotlin.jvm.internal.Ref\$BooleanRef" && p[15] == Rect::class.java
+        }
+    }
+
+    fun install(api:XposedInterface,loader:ClassLoader,submit:Method,scopes:LauncherTiltAffineScope,
         configuration:()->Pair<Float,Float>?):Int = runCatching {
         val creator=Class.forName("com.android.launcher3.anim.engine.creator.LightAnimatorCreator",false,loader)
-        val requestType=Class.forName("com.oplus.animation.core.record.IAnimationRequest",false,loader)
-        val targetType=Class.forName("gi.c",false,loader)
-        val targetsType=Class.forName("gi.e",false,loader)
-        val txType=Class.forName("xi.q",false,loader)
-        val listener=Class.forName("com.android.launcher3.anim.light.AppLaunchAnimUtil\$getLightWindowAnimation\$1",false,loader)
-        val getTargets=requestType.getDeclaredMethod("getTargets")
-        val getIcon=requestType.getDeclaredMethod("getIconView")
-        check(getTargets.returnType==targetsType && getIcon.returnType==View::class.java)
-        val create=creator.getDeclaredMethod("create",requestType,View::class.java)
+        val targetType=submit.parameterTypes[0]
+        val txType=submit.parameterTypes[1]
+        val listener=submit.declaringClass
         val targets=listener.getDeclaredField("\$targets").apply {isAccessible=true}
+        val targetsType=targets.type
+        val create=creator.declaredMethods.single {
+            it.name=="create" && !it.isBridge && it.parameterCount==2 && it.parameterTypes[1]==View::class.java &&
+                runCatching { it.parameterTypes[0].getDeclaredMethod("getTargets").returnType==targetsType }.getOrDefault(false)
+        }
+        val requestType=create.parameterTypes[0]
+        val getTargets=requestType.getDeclaredMethod("getTargets")
+        val getIcon=requestType.getDeclaredMethod("getIconView").apply {check(returnType==View::class.java)}
         val centerX=listener.getDeclaredField("\$centerX").apply {isAccessible=true}
         val centerY=listener.getDeclaredField("\$centerY").apply {isAccessible=true}
         val leash=targetType.getDeclaredField("d").apply {isAccessible=true}
@@ -35,7 +56,7 @@ internal object LauncherTiltLightAnchorHook {
         val splitBounds=targetType.getDeclaredField("l").apply {isAccessible=true}
         val mode=targetType.getDeclaredField("c").apply {isAccessible=true}
         val windowType=targetType.getDeclaredField("s").apply {isAccessible=true}
-        check(targets.type==targetsType && centerX.type==Float::class.javaPrimitiveType &&
+        check(centerX.type==Float::class.javaPrimitiveType &&
             centerY.type==Float::class.javaPrimitiveType && leash.type==SurfaceControl::class.java &&
             bounds.type==Rect::class.java && splitBounds.type==Rect::class.java &&
             mode.type==Int::class.javaPrimitiveType && windowType.type==Int::class.javaPrimitiveType)
@@ -44,12 +65,8 @@ internal object LauncherTiltLightAnchorHook {
                 it.parameterTypes[7]==Float::class.javaPrimitiveType && it.parameterTypes[8]==Float::class.javaPrimitiveType
         }
         check(constructors.size==1)
-        val submit=listener.declaredMethods.single {m ->
-            val p=m.parameterTypes
-            m.name=="b" && m.returnType==Void.TYPE && p.size==16 &&
-                p[0]==targetType && p[1]==txType && p[8]==listener && p[9]==Matrix::class.java &&
-                p[12]==Float::class.javaPrimitiveType && p[15]==Rect::class.java
-        }
+        val schedule = targetType.getDeclaredMethod(if (txType.name == "xi.q") "g" else "e", Runnable::class.java)
+            .apply { check(returnType == Void.TYPE) }
         val requests=LauncherTiltLightAnchorScope()
         val bindings=LauncherTiltAnchorRegistry()
         api.hook(create).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
@@ -108,7 +125,7 @@ internal object LauncherTiltLightAnchorHook {
             .forEach {api.deoptimize(it)}
         listener.declaredMethods.filter {it.name=="onUpdate" && it.parameterCount==1 && it.parameterTypes[0]==Float::class.javaPrimitiveType}
             .forEach {api.deoptimize(it)}
-        api.deoptimize(targetType.getDeclaredMethod("g",Runnable::class.java))
+        api.deoptimize(schedule)
         runCatching {
             val runnable=Class.forName("a7.a",false,loader)
             check(runnable.getDeclaredField("a").type==targetType && runnable.getDeclaredField("b").type==txType &&

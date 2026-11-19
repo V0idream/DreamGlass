@@ -3,6 +3,7 @@ package com.coloros16.liquidglass.hook
 
 import android.graphics.Matrix
 import android.graphics.Rect
+import android.graphics.RectF
 import android.os.SystemClock
 import android.view.SurfaceControl
 import com.coloros16.liquidglass.config.Prefs
@@ -10,13 +11,19 @@ import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.ExceptionMode
 
-/** Only decorates xi.q$b.i(Matrix) INSIDE a verified per-target native callback.
+/** Only decorates the native matrix setter inside a verified per-target callback.
  * No SurfaceControl.Transaction hooks, 4x4 bridge, synthetic transaction, timers,
  * duration changes or retained surfaces. Every native method proceeds exactly once.
  */
 internal object LauncherTiltAffineHook {
     private const val HELPER="com.android.quickstep.util.animation.RectTransformHelper"
     private const val PARAMS="$HELPER\$TransformParams"
+    private data class StandardSite(val target: String, val helper: String, val params: String, val callback: List<String>)
+    private val standardSites = mapOf(
+        "xi.q" to StandardSite("gi.c", HELPER, PARAMS, listOf("ma.r0", "ma.p0")),
+        "w99" to StandardSite("w99", "i69", "h69", listOf("f69")),
+        "da9" to StandardSite("da9", "l69", "k69", listOf("h69")),
+    )
     private data class Config(val enabled:Boolean,val strength:Float,val depth:Float)
     @Volatile private var snapshot=Config(false,1f,1f)
     private var readAt=-1L
@@ -40,26 +47,15 @@ internal object LauncherTiltAffineHook {
     }
 
     fun install(api:XposedInterface,loader:ClassLoader):Boolean = runCatching {
-        val helper=Class.forName(HELPER,false,loader)
-        val params=Class.forName(PARAMS,false,loader)
-        val tx=Class.forName("xi.q",false,loader)
-        val props=Class.forName("xi.q\$b",false,loader)
-        val target=Class.forName("gi.c",false,loader)
+        val lightSubmit = runCatching { LauncherTiltLightAnchorHook.resolveSubmit(loader) }.getOrNull()
+        val tx = lightSubmit?.parameterTypes?.get(1) ?: Class.forName("xi.q",false,loader)
+        val prepare = tx.getDeclaredMethod(if (tx.name == "xi.q") "e" else "b", SurfaceControl::class.java)
+        val props = prepare.returnType
         val affine=props.getDeclaredMethod("i",Matrix::class.java)
         val owner=props.getDeclaredField("b").apply { isAccessible=true }
         val surface=props.getDeclaredField("a").apply { isAccessible=true }
-        val leash=target.getDeclaredField("d").apply { isAccessible=true }
-        val progress=params.getDeclaredField("l").apply { isAccessible=true }
-        val task=params.getDeclaredField("D").apply { isAccessible=true }
-        val source=helper.getDeclaredField("a").apply { isAccessible=true }
-        val crop=helper.getDeclaredField("c").apply { isAccessible=true }
-        check(affine.returnType==props && owner.type==tx && surface.type==SurfaceControl::class.java &&
-            leash.type==SurfaceControl::class.java &&
-            progress.type==Float::class.javaPrimitiveType && task.type==Boolean::class.javaPrimitiveType &&
-            source.type==Rect::class.java && crop.type==Rect::class.java)
+        check(affine.returnType==props && owner.type==tx && surface.type==SurfaceControl::class.java)
         val scopes=LauncherTiltAffineScope()
-        val anchors=LauncherTiltAnchorScope()
-        val anchorRoutes=LauncherTiltAnchorHook.install(api,loader,helper,anchors)
         api.hook(affine).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
             // Catch only preparation failures. Do not retry chain.proceed if the
             // host throws; replaying native methods can double-advance animation.
@@ -80,15 +76,38 @@ internal object LauncherTiltAffineHook {
                 val args=chain.getArgs().toTypedArray();args[0]=replacement;chain.proceed(args)
             }
         }
-        var routes=0
-        runCatching {
-            val callback=LauncherTiltContract.callback(listOf("ma.r0","ma.p0").mapNotNull {
+        val standardReady=runCatching {
+            val standardKey = if (tx.name == "xi.q") tx.name else checkNotNull(lightSubmit).parameterTypes[0].name
+            val site = standardSites.getValue(standardKey)
+            val helper=Class.forName(site.helper,false,loader)
+            val params=Class.forName(site.params,false,loader)
+            val target=Class.forName(site.target,false,loader)
+            val relocated = site.helper != HELPER
+            val update=helper.declaredMethods.single {
+                val p = it.parameterTypes
+                it.name=="a" && it.returnType==Void.TYPE && p.size==9 && p[0]==params &&
+                    p[1].isArray && p[1].componentType==target && p[2]==Integer.TYPE && p[3]==tx &&
+                    p[5]==RectF::class.java && p[6]==java.lang.Boolean.TYPE &&
+                    p[7]==RectF::class.java && p[8]==target
+            }
+            val leash=target.getDeclaredField("d").apply { isAccessible=true }
+            val progress=params.getDeclaredField("l").apply { isAccessible=true }
+            val task=params.getDeclaredField("D").apply { isAccessible=true }
+            val source=helper.getDeclaredField("a").apply { isAccessible=true }
+            val crop=helper.getDeclaredField("c").apply { isAccessible=true }
+            check(leash.type==SurfaceControl::class.java &&
+                progress.type==Float::class.javaPrimitiveType && task.type==Boolean::class.javaPrimitiveType &&
+                source.type==Rect::class.java && crop.type==Rect::class.java)
+            val captureFields = if (relocated) listOf("c", "q", "r", "s") else listOf("a", "b", "c", "d")
+            val callback=LauncherTiltContract.callback(site.callback.mapNotNull {
                 runCatching { Class.forName(it,false,loader) }.getOrNull()
-            },target,helper,tx,params) ?: error("No verified standard target callback")
-            val capturedTarget=callback.getDeclaredField("a").apply {isAccessible=true}
-            val capturedHelper=callback.getDeclaredField("b").apply {isAccessible=true}
-            val capturedTx=callback.getDeclaredField("c").apply {isAccessible=true}
-            val capturedParams=callback.getDeclaredField("d").apply {isAccessible=true}
+            },target,helper,tx,params,captureFields) ?: error("No verified standard target callback")
+            val (capturedTarget,capturedHelper,capturedTx,capturedParams) = captureFields.map {
+                callback.getDeclaredField(it).apply { isAccessible = true }
+            }
+            val anchors=LauncherTiltAnchorScope()
+            val anchorRoutes=LauncherTiltAnchorHook.install(api,loader,helper,params,tx,anchors)
+            check(anchorRoutes > 0) { "No verified standard icon anchor" }
             val run=callback.getDeclaredMethod("run")
             api.hook(run).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
                 val frame=runCatching {
@@ -114,17 +133,20 @@ internal object LauncherTiltAffineHook {
                 },{chain.proceed()})
             }
             api.deoptimize(run)
-            api.deoptimize(target.getDeclaredMethod("g",Runnable::class.java))
-            helper.declaredMethods.filter {it.name=="a" && it.parameterCount==9 && it.parameterTypes[0]==params}
-                .forEach {api.deoptimize(it)}
-            routes++
+            api.deoptimize(target.getDeclaredMethod(if (relocated) "e" else "g",Runnable::class.java))
+            api.deoptimize(update)
             RuntimeDiagnostics.mark("launcher-tilt-standard","已匹配标准窗口 ${callback.name}，仅修改该目标的原生仿射参数")
-        }.onFailure {RuntimeDiagnostics.mark("launcher-tilt-standard-missing",it.javaClass.simpleName)}
-        val lightRoutes=LauncherTiltLightAnchorHook.install(api,loader,scopes) {
-            val cfg=config(api)
-            if(cfg.enabled)cfg.strength to cfg.depth else null
+            true
+        }.getOrElse {
+            RuntimeDiagnostics.mark("launcher-tilt-standard-missing",it.javaClass.simpleName)
+            false
         }
-        ready=(routes>0 && anchorRoutes>0) || lightRoutes>0
+        val lightReady = lightSubmit != null &&
+            LauncherTiltLightAnchorHook.install(api,loader,lightSubmit,scopes) {
+                val cfg=config(api)
+                if(cfg.enabled)cfg.strength to cfg.depth else null
+            } > 0
+        ready=standardReady || lightReady
         RuntimeDiagnostics.mark("launcher-tilt",if(ready)"已接入图标端点驱动的兼容倾斜（平行投影，非完整透视）；方向效果待设备验证"
             else "未识别窗口动画入口，保留系统动画")
         ready

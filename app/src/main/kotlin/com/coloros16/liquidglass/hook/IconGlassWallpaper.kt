@@ -18,7 +18,7 @@ import android.util.DisplayMetrics
 import android.view.Choreographer
 import android.view.WindowManager
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
-import java.lang.ref.WeakReference
+import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** One file-backed system wallpaper shared by visible desktop icons. No lock wallpaper,
@@ -53,7 +53,8 @@ internal object IconGlassWallpaper {
     @Volatile private var app:Context?=null
     @Volatile private var registered=false
     @Volatile private var registrationBlocked=false
-    @Volatile private var onReady=WeakReference<()->Unit>(null)
+    private val callbacks=WeakHashMap<()->Unit, Boolean>()
+    private var launcherSourcePublished=false
 
     // Revision changes only after a completed blur is published. Existing icons stay valid
     // while the worker prepares a new setting; dragging/scrolling never decodes wallpaper.
@@ -69,7 +70,7 @@ internal object IconGlassWallpaper {
     fun resolve(context:Context,iconScreen:RectF,onReady:()->Unit):Frame? {
         if(Build.VERSION.SDK_INT<33 || !IconWallpaperGeometry.valid(iconScreen.left,iconScreen.top,
                 iconScreen.right,iconScreen.bottom))return null
-        this.onReady=WeakReference(onReady)
+        synchronized(lock) { callbacks[onReady]=true }
         app=context.applicationContext ?: return null
         active=true
         ensureReceiver()
@@ -105,7 +106,7 @@ internal object IconGlassWallpaper {
         synchronized(lock) {
             generation++;wallpaperGeneration++;imageSerial++;image=null;sharp=null;preparedGeneration=-1L;attemptedGeneration=-1L;active=false
             registrationBlocked=false
-            onReady=WeakReference(null)
+            callbacks.clear();launcherSourcePublished=false
         }
     }
 
@@ -134,7 +135,7 @@ internal object IconGlassWallpaper {
                             updateScreen(context)
                             if(active)notifyReady()
                         } else if(intent.action==Intent.ACTION_WALLPAPER_CHANGED) {
-                            synchronized(lock) {generation++;wallpaperGeneration++;imageSerial++;image=null;sharp=null;preparedGeneration=-1L;attemptedGeneration=-1L}
+                            synchronized(lock) {generation++;wallpaperGeneration++;imageSerial++;image=null;sharp=null;preparedGeneration=-1L;attemptedGeneration=-1L;launcherSourcePublished=false}
                             // No background activity while disabled/hidden. A visible owner first
                             // repaints its native fallback, then gets a second frame on load.
                             if(active) {notifyReady();scheduleLoad()}
@@ -153,7 +154,7 @@ internal object IconGlassWallpaper {
     }
 
     private fun scheduleLoad() {
-        if(!active || preparedGeneration==generation || !registered)return
+        if(!active || preparedGeneration==generation)return
         val version=generation
         val wallpaperVersion=wallpaperGeneration
         val blurValue=blur
@@ -191,7 +192,7 @@ internal object IconGlassWallpaper {
                     val result=decoded
                     val accepted=ui.post {
                         loading.set(false)
-                        if(active && version==generation && registered) {
+                        if(active && version==generation) {
                             preparedGeneration=version
                             image=result ?: image
                             if(result!=null) {
@@ -256,13 +257,27 @@ internal object IconGlassWallpaper {
         }
     }
 
+    fun launcherSourceChanged() {
+        if(!active || image!=null)return
+        synchronized(lock) {
+            if(!launcherSourcePublished) {
+                launcherSourcePublished=true
+                imageSerial++
+            }
+        }
+        notifyReady()
+    }
+
     private fun notifyReady() {
         if(!active || !notificationQueued.compareAndSet(false,true))return
         val posted=ui.post {
             try {
                 Choreographer.getInstance().postFrameCallback {
                     notificationQueued.set(false)
-                    if(active)RuntimeWorkPolicy.guarded({}) {onReady.get()?.invoke()}
+                    if(active) {
+                        val listeners=synchronized(lock) { callbacks.keys.toList() }
+                        for(listener in listeners)RuntimeWorkPolicy.guarded({},listener)
+                    }
                 }
             } catch(_:Throwable) {notificationQueued.set(false)}
         }

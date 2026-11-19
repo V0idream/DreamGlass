@@ -658,7 +658,7 @@ class SettingsActivity : AppCompatActivity() {
             ?: frameworkPrefs()?.getFloat(Prefs.KEY_BLUR_RADIUS, Prefs.DEFAULT_BLUR_RADIUS)
             ?: xmlPrefs.getFloat(Prefs.KEY_BLUR_RADIUS, Prefs.DEFAULT_BLUR_RADIUS)
         bindFloatSeekBar(
-            seek = view.findViewById(R.id.seekButtonBlurRadius),
+            seek = view.findViewById<SeekBar>(R.id.seekButtonBlurRadius).apply { max = Prefs.BUTTON_BLUR_RADIUS_MAX },
             valueText = view.findViewById(R.id.buttonBlurRadiusValue),
             key = Prefs.KEY_BUTTON_BLUR_RADIUS, default = inheritedButtonBlur,
             presetParams = presetParams, presetId = presetId,
@@ -1384,6 +1384,7 @@ class SettingsActivity : AppCompatActivity() {
         bindGlassSwitch(view, R.id.switchGalleryGlass, Prefs.KEY_GALLERY_GLASS, Prefs.DEFAULT_GALLERY_GLASS)
         bindGlassSwitch(view, R.id.switchSmartSidebarGlass, Prefs.KEY_SMART_SIDEBAR_GLASS, Prefs.DEFAULT_SMART_SIDEBAR_GLASS)
         bindGlassSwitch(view, R.id.switchAssistantScreenGlass, Prefs.KEY_ASSISTANT_SCREEN_GLASS, Prefs.DEFAULT_ASSISTANT_SCREEN_GLASS)
+        bindGlassSwitch(view, R.id.switchWeatherGlass, Prefs.KEY_WEATHER_GLASS, Prefs.DEFAULT_WEATHER_GLASS)
     }
 
     /** 组件级玻璃开关绑定（写 Prefs + 按权威值刷新；hook 端 TTL 500ms 重读，改动即时生效）。 */

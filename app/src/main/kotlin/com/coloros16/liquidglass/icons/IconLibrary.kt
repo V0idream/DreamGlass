@@ -15,7 +15,10 @@ object IconLibrary {
     const val HOME="https://github.com/V0idream/DreamGlass-Icons"
     const val ROOT="https://raw.githubusercontent.com/V0idream/DreamGlass-Icons/main/"
     const val REVISION="custom_icon_library_revision"
+    val URI: android.net.Uri by lazy { android.net.Uri.parse("content://${com.coloros16.liquidglass.BuildConfig.APPLICATION_ID}.icons") }
     fun publish(context:Context,revision:String) {
+        // The catalog files are already committed. The launcher can refresh even when LSPosed's binder has not arrived.
+        runCatching { context.contentResolver.notifyChange(URI, null) }
         com.coloros16.liquidglass.config.Prefs.write(context).putString(REVISION,revision).commit()
         com.coloros16.liquidglass.App.serviceRef?.let {syncRevision(context,it)}
     }
@@ -60,6 +63,27 @@ object IconLibrary {
         if(!file.isFile || file.length()>262144)emptyList() else parse(file.readText())
     }.getOrDefault(emptyList())
     fun local(context:Context)=(index(context,"installed.json")+index(context,"uploads.json")).associateBy {it.pkg}.values.toList()
+
+    /** Do not turn a storage/parse error into an authoritative empty catalog. */
+    internal fun forProvider(context: Context): List<Entry> {
+        check(context.getSystemService(android.os.UserManager::class.java)?.isUserUnlocked == true) {
+            "Icon library is unavailable until the user unlocks"
+        }
+        val root = File(context.filesDir, "custom-icons").toPath()
+        fun readIndex(name: String): List<Entry> {
+            val path = root.resolve(name)
+            val attrs = try {
+                java.nio.file.Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes::class.java)
+            } catch (_: java.nio.file.NoSuchFileException) {
+                return emptyList()
+            }
+            require(attrs.isRegularFile && attrs.size() in 1..262144)
+            val bytes = java.nio.file.Files.newInputStream(path).use { it.readNBytes(262145) }
+            require(bytes.size <= 262144)
+            return parse(bytes.toString(Charsets.UTF_8))
+        }
+        return (readIndex("installed.json") + readIndex("uploads.json")).associateBy { it.pkg }.values.toList()
+    }
     fun fetchCatalog():List<Entry> =parse(read("index.json",262144).toString(Charsets.UTF_8))
     fun file(context:Context,e:Entry)=File(folder(context),e.sha256+".png")
     fun downloaded(context:Context,e:Entry)=file(context,e).let {it.isFile && it.length() in 1..262144}

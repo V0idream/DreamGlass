@@ -25,9 +25,23 @@ class ReadabilityAndLauncherTest {
     private class Params
     private class Old { @JvmField var a=Target();@JvmField var b=Helper();@JvmField var c=Tx();@JvmField var d=Params();fun run() {} }
     private class New { @JvmField var a=Target();@JvmField var b=Helper();@JvmField var c=Tx();@JvmField var d=Params();fun run() {} }
+    private class Relocated : Runnable {
+        @JvmField val c = Target()
+        @JvmField val q = Helper()
+        @JvmField val r = Tx()
+        @JvmField val s = Params()
+        override fun run() = Unit
+    }
     private class ReusedOldName { @JvmField var a=Target();@JvmField var b=Tx();fun run() {} }
     private fun select(vararg classes:Class<*>)=LauncherTiltContract.callback(classes.toList(),Target::class.java,Helper::class.java,Tx::class.java,Params::class.java)
     @Test fun originalLauncherContractStillMatches() { assertEquals(Old::class.java,select(Old::class.java,New::class.java)) }
     @Test fun newlyReusedClassNameIsRejectedAndNewCallbackMatches() { assertEquals(New::class.java,select(ReusedOldName::class.java,New::class.java)) }
     @Test fun unknownCaptureLayoutKeepsNativeAnimation() { assertNull(select(ReusedOldName::class.java)) }
+    @Test fun launcherOtaUsesRelocatedTargetCallbackFields() {
+        assertNull(select(Relocated::class.java))
+        assertEquals(Relocated::class.java, LauncherTiltContract.callback(
+            listOf(Old::class.java, Relocated::class.java), Target::class.java, Helper::class.java,
+            Tx::class.java, Params::class.java, listOf("c", "q", "r", "s"),
+        ))
+    }
 }

@@ -237,6 +237,8 @@
     <string name="settings_volume_panel_clean_desc">把音量滑杆的进度条改成亮白磨砂填充，顶边加一道高光，在玻璃背景上更清晰。开启后立即生效，无需重启系统界面。</string>
     <string name="settings_volume_panel_backdrop">音量面板去白底</string>
     <string name="settings_volume_panel_backdrop_desc">去掉展开音量面板背后那层模糊的发白底色，只保留模糊效果。关闭即恢复系统原样。开启后立即生效，无需重启系统界面。</string>
+    <string name="settings_weather_glass">天气液态玻璃</string>
+    <string name="settings_weather_glass_desc">适用于天气应用的预报卡片和支持背景模糊的按钮。</string>
     <string name="settings_gallery_glass">相册材质边缘</string>
     <string name="settings_gallery_glass_desc">相册按钮跟随当前材质预设，不给整条工具栏添加外框。需启用相册作用域，支持的系统背景接口可用时生效。</string>
 

@@ -2,6 +2,7 @@ package com.coloros16.liquidglass.glass
 
 import android.content.SharedPreferences
 import com.coloros16.liquidglass.config.Prefs
+import com.coloros16.liquidglass.hook.QsSurfacePolicy
 import com.coloros16.liquidglass.liquidglass.LiquidGlassShader
 
 /** Cross-process surfaces use the same material keys, IOS overlay and optical shader as QS.
@@ -38,7 +39,9 @@ object SharedGlassParams {
         width:Float,height:Float,corner:Float,button:Boolean,compactOptics:Boolean=false,grayBaseLuma:Float=-1f):LiquidGlassShader.Params {
         val ov=IosGlassPreset.resolve(preset,true,custom)
         fun pick(key:String)=ov?.get(key)?.takeIf { it.isFinite() } ?: values[key]?.takeIf { it.isFinite() } ?: defaults[key] ?: 0f
-        val blur=if(button && pick(Prefs.KEY_BUTTON_BLUR_RADIUS)>=0f)pick(Prefs.KEY_BUTTON_BLUR_RADIUS) else pick(Prefs.KEY_BLUR_RADIUS)
+        val blur=QsSurfacePolicy.resolveButtonBlur(
+            IosGlassPreset.explicitButtonBlur(values[Prefs.KEY_BUTTON_BLUR_RADIUS],custom)
+                ?: pick(Prefs.KEY_BUTTON_BLUR_RADIUS),pick(Prefs.KEY_BLUR_RADIUS),button)
         val depth=ov?.get(Prefs.KEY_REFRACTION_HEIGHT_PX) ?: ov?.get(Prefs.KEY_REFRACTION_HEIGHT_RATIO)?.let { minOf(width,height)*it }
             ?: values[Prefs.KEY_REFRACTION_HEIGHT_PX] ?: minOf(width,height)*pick(Prefs.KEY_REFRACTION_HEIGHT_RATIO)
         return LiquidGlassShader.Params(width,height,cornerRadius=corner,

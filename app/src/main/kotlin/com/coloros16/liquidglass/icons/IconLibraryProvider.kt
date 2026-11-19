@@ -18,12 +18,12 @@ class IconLibraryProvider:ContentProvider() {
     }
     override fun call(method:String,arg:String?,extras:Bundle?):Bundle? {
         checkCaller();require(method=="catalog")
-        return Bundle().apply {putString("catalog",IconLibrary.encode(IconLibrary.local(context!!)))}
+        return Bundle().apply {putString("catalog",IconLibrary.encode(IconLibrary.forProvider(context!!)))}
     }
     override fun openFile(uri:Uri,mode:String):ParcelFileDescriptor {
         checkCaller();require(mode=="r" && uri.pathSegments.size==1)
         val pkg=uri.lastPathSegment!!;require(IconLibrary.validPackage(pkg))
-        val e=IconLibrary.local(context!!).firstOrNull {it.pkg==pkg} ?: throw java.io.FileNotFoundException(pkg)
+        val e=IconLibrary.forProvider(context!!).firstOrNull {it.pkg==pkg} ?: throw java.io.FileNotFoundException(pkg)
         return ParcelFileDescriptor.open(IconLibrary.file(context!!,e),ParcelFileDescriptor.MODE_READ_ONLY)
     }
     override fun query(uri:Uri,p:Array<out String>?,s:String?,a:Array<out String>?,o:String?):Cursor?=null

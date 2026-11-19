@@ -158,6 +158,7 @@ internal object LauncherIconGlassHook {
     }
     private var params=IconGlassMaterial.Params()
     private var prefsRevision=0
+    private var libraryHint: String?=null
     private var powerAt=-1000L
     private var interactive=false
     private var locked=true
@@ -174,6 +175,7 @@ internal object LauncherIconGlassHook {
     private val engineMethods=HashSet<Method>()
     private val suggestionRoots=WeakHashMap<View,EngineState>()
     private val verifiedSuggestionCards=WeakHashMap<View,Boolean>()
+    private var suggestionCardPredicate:Method?=null
     private val suggestionReady=WeakHashMap<View,Boolean>()
     private fun suggestionRendered(view:View) {
         var node:View?=view
@@ -191,6 +193,19 @@ internal object LauncherIconGlassHook {
             RuntimeWorkPolicy.guarded(::report) {LauncherIconGlassAssets.backdropChanged(IconGlassWallpaper.revision())}
             invalidateHosts()
         };Unit
+    }
+    private val libraryReady: () -> Unit = {
+        ui.post {
+            if (enabled) {
+                prefsRevision++
+                hosts.values.forEach { it.artwork.clear() }
+                IconGlassLiveSurface.clear()
+                IconGlassMasks.clear()
+                LauncherIconGlassAssets.restoreAndClear()
+                invalidateHosts()
+            }
+        }
+        Unit
     }
     private val prefListener=SharedPreferences.OnSharedPreferenceChangeListener {_,_ ->
         ui.post {runCatching {preferences(true)}.onFailure(::report)}
@@ -216,8 +231,11 @@ internal object LauncherIconGlassHook {
             val member=Prefs.memberAllowed(a)
             val next=IconGlassPolicy.enabled(master,glass,feature,member)
             RuntimeDiagnostics.update("icon_glass_gate","master=$master glass=$glass feature=$feature member=$member enabled=$next")
-            val libraryChanged=IconGlassLibraryRuntime.configure(p.getString(com.coloros16.liquidglass.icons.IconLibrary.REVISION,"") ?: "")
-            if(libraryChanged) {IconGlassMasks.clear();LauncherIconGlassAssets.restoreAndClear()}
+            val hint = runCatching { p.getString(com.coloros16.liquidglass.icons.IconLibrary.REVISION, "") }.getOrNull()
+            if (hint != null && hint != libraryHint) {
+                libraryHint = hint
+                if (enabled && next) IconGlassLibraryRuntime.requestRefresh()
+            }
             IconGlassWallpaper.configureBlur(Prefs.readIntCompat(p,Prefs.KEY_ICON_GLASS_BLUR,Prefs.DEFAULT_ICON_GLASS_BLUR))
             val nextLive=IconGlassMode.preferLive(p.getString(Prefs.KEY_ICON_GLASS_MODE,Prefs.DEFAULT_ICON_GLASS_MODE))
             val nextParams=IconGlassMaterial.Params(
@@ -225,11 +243,12 @@ internal object LauncherIconGlassHook {
                 refraction=Prefs.readIntCompat(p,Prefs.KEY_ICON_GLASS_REFRACTION,56).coerceIn(0,100)/100f,
                 thickness=Prefs.readIntCompat(p,Prefs.KEY_ICON_GLASS_THICKNESS,45).coerceIn(0,100)/100f,
                 keepColor=p.getBoolean(Prefs.KEY_ICON_GLASS_KEEP_COLOR,true))
-            if(libraryChanged || next!=enabled || nextParams!=params || nextLive!=liveMode) {
+            if(next!=enabled || nextParams!=params || nextLive!=liveMode) {
                 IconGlassLiveSurface.clear()
                 if(nextParams!=params && enabled)LauncherIconGlassAssets.restoreAndClear()
                 LauncherIconGlassAssets.setActive(next)
                 val wasEnabled=enabled;enabled=next;params=nextParams;liveMode=nextLive;prefsRevision++
+                IconGlassLibraryRuntime.setEnabled(next)
                 if(!next && wasEnabled) {
                     IconGlassImageClip.clear();IconGlassMasks.clear();IconGlassWallpaper.clear();IconGlassRasterSources.clear();IconGlassRecordingSources.clear()
                     hosts.values.forEach {it.materials.values.forEach {material -> material.clear()};it.materials.clear()}
@@ -241,6 +260,7 @@ internal object LauncherIconGlassHook {
             if(enabled) {
                 IconGlassLiveSurface.clear()
                 enabled=false;prefsRevision++
+                IconGlassLibraryRuntime.setEnabled(false)
                 LauncherIconGlassAssets.setActive(false)
                 IconGlassImageClip.clear();IconGlassMasks.clear();IconGlassWallpaper.clear();IconGlassRasterSources.clear();IconGlassRecordingSources.clear()
                 hosts.values.forEach {it.materials.values.forEach {material -> material.clear()};it.materials.clear()};invalidateHosts()
@@ -300,7 +320,7 @@ internal object LauncherIconGlassHook {
         while(type!=null) {if(type.name=="com.android.launcher3.card.TitleCardView")return true;type=type.superclass}
         return false
     }
-    private fun isSuggestionCard(view:View):Boolean=IconGlassSuggestionContract.matches(view)
+    private fun isSuggestionCard(view:View):Boolean=IconGlassSuggestionContract.matches(view,suggestionCardPredicate)
     internal fun safeAreasChanged() = invalidateHosts()
 
     private fun invalidateHosts() {
@@ -862,8 +882,14 @@ internal object LauncherIconGlassHook {
     private fun mountSuggestionImages(module:XposedInterface,loader:ClassLoader) {
         runCatching {
             val cardType=Class.forName("com.android.launcher3.card.TitleCardView",false,loader)
+            suggestionCardPredicate=runCatching {
+                val util=Class.forName("com.android.launcher3.card.LauncherCardUtil",false,loader)
+                util.getMethod("isSuggestCard",Any::class.java).takeIf {
+                    java.lang.reflect.Modifier.isStatic(it.modifiers) && it.returnType==Boolean::class.javaPrimitiveType
+                }
+            }.getOrNull()
             fun register(card:View) {
-                if(!isSuggestionCard(card) || card in suggestionRoots)return
+                if(!card.isAttachedToWindow || card in suggestionRoots || !isSuggestionCard(card))return
                 val state=EngineState(card);suggestionRoots[card]=state;scopeRevision++
                 card.viewTreeObserver.addOnGlobalLayoutListener(state);card.viewTreeObserver.addOnPreDrawListener(state);card.addOnAttachStateChangeListener(state);state.scan()
             }
@@ -884,10 +910,22 @@ internal object LauncherIconGlassHook {
                 if(bypass)saving?.set(card,true)
                 try {chain.proceed()}finally {if(bypass)saving?.set(card,false)}
             }
-            val wrapper=Class.forName("com.android.launcher3.card.appsuggestnopadding.SuggestNoPaddingViewWrapper",false,loader)
-            val cardField=field(wrapper,"titleCardView") ?: error("No suggestion card owner")
-            val add=wrapper.getDeclaredMethod("onAddChildView",View::class.java)
-            module.hook(add).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+            // ColorOS 16 delivers card views through TitleCardView without this wrapper.
+            val wrapper=runCatching {
+                Class.forName("com.android.launcher3.card.appsuggestnopadding.SuggestNoPaddingViewWrapper",false,loader)
+            }.getOrNull()
+            val cardField=wrapper?.let {field(it,"titleCardView")}
+            val add=wrapper?.let {runCatching {it.getDeclaredMethod("onAddChildView",View::class.java)}.getOrNull()}
+            if(add==null)runCatching {
+                val attach=cardType.getDeclaredMethod("onAttachedToWindow")
+                module.hook(attach).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                    val result=chain.proceed()
+                    val card=chain.getThisObject() as? View
+                    if(main() && card!=null)runCatching {register(card)}.onFailure(::report)
+                    result
+                }
+            }.onFailure(::report)
+            if(cardField!=null && add!=null)module.hook(add).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 val result=chain.proceed()
                 if(main())runCatching {
                     val child=chain.getArg(0) as? View ?: return@runCatching
@@ -1082,7 +1120,7 @@ internal object LauncherIconGlassHook {
         runCatching {
             val folder=Class.forName("com.android.launcher3.folder.FlexibleFolderIcon",false,loader)
             val manager=Class.forName("com.android.launcher3.folder.PreviewItemManager",false,loader)
-            val big=Class.forName("com.android.launcher3.folder.big.BigFolderPreviewItemManager",false,loader)
+            val big=runCatching {Class.forName("com.android.launcher3.folder.big.BigFolderPreviewItemManager",false,loader)}.getOrNull()
             val paramsType=Class.forName("com.android.launcher3.folder.PreviewItemDrawingParams",false,loader)
             val stacked=Class.forName("com.android.launcher3.folder.big.stacked.BFPreviewItemDrawingParams",false,loader)
             val isBig=folder.getMethod("isBigFolderIcon")
@@ -1094,10 +1132,25 @@ internal object LauncherIconGlassHook {
                 field(paramsType,"transX") ?: error("Missing preview x"),
                 field(paramsType,"transY") ?: error("Missing preview y"),
                 field(paramsType,"scale") ?: error("Missing preview scale"),stacked,stacked.getMethod("getCurrentStackedParams"))
+            val pageEntry = IconGlassFolderPreviewContract.pageEntry(manager)
+            val cacheEntry = manager.getDeclaredMethod("drawCache",Canvas::class.java,Integer.TYPE,java.lang.Boolean::class.java)
+            val paramsEntries=mutableListOf(pageEntry to 2)
+            big?.declaredMethods?.firstOrNull {it.name=="drawParamsWithAlpha" && it.returnType==Void.TYPE &&
+                it.parameterTypes.contentEquals(arrayOf(Canvas::class.java,java.util.ArrayList::class.java,
+                    Int::class.javaPrimitiveType,Boolean::class.javaPrimitiveType))
+            }?.let {paramsEntries.add(it to 1)}
             // Own the manager's real draw entry. This also covers closed folders whose parent
             // dispatch was compiled/inlined or whose preview RenderNode is already cached.
-            for(type in listOf(manager,big)) {
-                val draw=type.getDeclaredMethod("draw",Canvas::class.java,java.lang.Boolean::class.java)
+            val managers=listOfNotNull(manager,big)
+            // ColorOS 16 can call BigFolderPreviewItemManager's primitive overload
+            // directly; the boxed bridge is not guaranteed to see that draw.
+            val drawEntries=managers.flatMap {type -> type.declaredMethods.filter {method ->
+                method.name=="draw" && method.returnType==Void.TYPE && method.parameterCount==2 &&
+                    method.parameterTypes[0]==Canvas::class.java &&
+                    method.parameterTypes[1] in setOf(Boolean::class.javaPrimitiveType,java.lang.Boolean::class.java)
+            }}
+            check(drawEntries.isNotEmpty())
+            for(draw in drawEntries) {
                 module.hook(draw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                     val canvas=chain.getArg(0) as? Canvas
                     val host=managerHost.get(chain.getThisObject()) as? View
@@ -1116,22 +1169,22 @@ internal object LauncherIconGlassHook {
                     }.onFailure(::report)
                     folderOwner.run(scope) {chain.proceed()}
                 }
-                // drawParams can inline its tiny drawCache predicate.
-                type.declaredMethods.filter {it.name in setOf("draw","drawParams","drawParamsWithAlpha","drawPreviewItem")}
-                    .forEach {runCatching {module.deoptimize(it)}.onFailure(::report)}
             }
-            module.hook(manager.getDeclaredMethod("drawCache",Canvas::class.java,Int::class.javaPrimitiveType,java.lang.Boolean::class.java))
+            // drawParams can inline its tiny drawCache predicate.
+            managers.flatMap {it.declaredMethods.asList()}
+                .filter {it.name in setOf("draw","drawParams","drawParamsWithAlpha","drawPreviewItem")}
+                .forEach {runCatching {module.deoptimize(it)}.onFailure(::report)}
+            module.hook(cacheEntry)
                 .setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                     val scope=folderOwner.current()
                     if(scope!=null && enabled && managerHost.get(chain.getThisObject())===scope.host &&
                         chain.getArg(0)===scope.canvas && (liveMode || !scope.prefabsReady))false else chain.proceed()
                 }
-            val drawParams=manager.getDeclaredMethod("drawParams",Canvas::class.java,Int::class.javaPrimitiveType,
-                java.util.ArrayList::class.java,Float::class.javaPrimitiveType,java.lang.Boolean::class.java)
-            module.hook(drawParams).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+            for((entry,itemsArg) in paramsEntries)module.hook(entry).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
                 val scope=folderOwner.current()
                 if(scope!=null && enabled && managerHost.get(chain.getThisObject())===scope.host && chain.getArg(0)===scope.canvas)runCatching {
-                    val roots=chain.getArg(2) as? Iterable<*> ?: return@runCatching
+                    scope.prefabsReady=false
+                    val roots=chain.getArg(itemsArg) as? Iterable<*> ?: return@runCatching
                     val size=intrinsic.getFloat(chain.getThisObject())
                     var allReady=true;var visited=0;var changed=false
                     slots.visit(roots) {slot ->
@@ -1184,6 +1237,17 @@ internal object LauncherIconGlassHook {
         if(screenReceiverAttempted)return
         val app=context.applicationContext ?: return
         screenReceiverAttempted=true
+        IconGlassLibraryRuntime.observe(app, libraryReady)
+        try {
+            app.registerReceiver(object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    IconGlassLibraryRuntime.resume()
+                }
+            }, IntentFilter(Intent.ACTION_USER_UNLOCKED).apply {
+                addAction(Intent.ACTION_USER_PRESENT); addAction(Intent.ACTION_SCREEN_ON)
+            },
+                Context.RECEIVER_EXPORTED)
+        } catch (t: Throwable) { report(t) }
         try {
             app.registerReceiver(object:BroadcastReceiver() {
                 override fun onReceive(context:Context,intent:Intent) {

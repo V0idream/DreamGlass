@@ -378,6 +378,8 @@ object LauncherHook {
     private var mEnableBlurShaderField: Field? = null
     /** 17.3.12 内联录制方法 static void a(d)（16.x 恒 null） */
     private var mInlineRecordMethod: Method? = null
+    private var mRelocatedActiveField: Field? = null
+    private val relocatedGlassPaint = ThreadLocal.withInitial { Paint(Paint.ANTI_ALIAS_FLAG) }
     private var mContentDirtyField: Field? = null
     private val restoringNativeRecord = ThreadLocal.withInitial { false }
     /** CornerType.CONIC 兼容解析结果（旧 getField(CONIC) / 17.x values()[2]；当前渲染未消费，兼容链预留） */
@@ -754,6 +756,15 @@ object LauncherHook {
         } catch (t: Throwable) {
             Lg.w(TAG_FINGERPRINT, "launcher-glass: BaseDrawable old-name load error", t)
         }
+        val relocated = runCatching {
+            Class.forName(Cos17Contract.RELOCATED_DRAWABLE, false, classLoader)
+        }.getOrNull()
+        if (relocated != null && Cos17Contract.relocatedRecord(relocated) != null) {
+            mBaseDrawableCls = relocated
+            mBaseDrawableFp = "instance-recorder"
+            Lg.i(TAG_FINGERPRINT, "launcher-glass: resolved relocated recorder (${relocated.name})")
+            return relocated
+        }
         // ② 指纹探针仅在 ≥17.3.12 启用（版本未知/-1 不探，防误判）
         if (!isLauncher17Plus()) {
             Lg.w(
@@ -822,6 +833,23 @@ object LauncherHook {
 
     /** [spec/117 A2] 对已解析 BaseDrawable 逐项解析方法/字段：旧名优先，17.3.12 名/字段兜底。 */
     private fun resolveBaseDrawableMembers(base: Class<*>, classLoader: ClassLoader) {
+        val relocated = Cos17Contract.relocatedRecord(base)
+        if (relocated != null) {
+            val blurDrawable = Class.forName("com.oplus.posteffect.drawable.b", false, classLoader)
+            if (blurDrawable.superclass != base) return
+            mRelocatedActiveField = checkedField(blurDrawable, "P", java.lang.Boolean.TYPE)
+            mGetBounds = base.getMethod(METHOD_GET_BOUNDS)
+            mBlurShaderPaintField = checkedField(base, "L", Paint::class.java)
+            mPaintField = checkedField(base, FIELD_PAINT_17, Paint::class.java)
+            mRenderNodeField = checkedField(base, "h", RenderNode::class.java)
+            mDrawablePathField = checkedField(base, "i", Path::class.java)
+            mPaintAlphaField = checkedField(base, "E", Integer.TYPE)
+            mEnableBlurShaderField = checkedField(base, "a", java.lang.Boolean.TYPE)
+            mContentDirtyField = checkedField(base, "v", java.lang.Boolean.TYPE)
+            mInlineRecordMethod = relocated
+            resolveCornerCompat(classLoader)
+            return
+        }
         // getBlurShaderPaint：旧方法 → 17.x 字段 M
         try {
             mGetBlurShaderPaint = base.getMethod(METHOD_GET_BLUR_SHADER_PAINT)
@@ -1260,7 +1288,7 @@ object LauncherHook {
     }
 
     /**
-     * COS17 渲染主链：先调用 static a(d) 保留系统准备，再覆盖已准备的 RenderNode 内容。
+     * COS17 渲染主链：在系统完成底图录制后，替换已准备的 RenderNode 内容。
      * 玻璃不可用保留系统录制；录制失败尝试以重入保护恢复系统内容。16.x 不走此入口。
      */
     private fun mountInlineRecordPathA(api: XposedInterface) {
@@ -1278,34 +1306,38 @@ object LauncherHook {
             return
         }
         try {
+            val staticRecord = Modifier.isStatic(method.modifiers)
             api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
                     if (restoringNativeRecord.get() == true) return@intercept chain.proceed()
                     RuntimeDiagnostics.mark("invoked", "桌面内联录制入口已被系统调用")
                     val drawable = try {
-                        chain.getArgs()?.getOrNull(0)
+                        if (staticRecord) chain.getArg(0) else chain.getThisObject()
                     } catch (t: Throwable) {
                         Lg.e(TAG_FINGERPRINT, "launcher-glass: inline getArgs failed", t); null
                     }
                     // Preserve e()/preDraw geometry, pending-buffer adoption and dirty bookkeeping.
                     // The system records first; only then replace its prepared content with glass.
-                    val nativeContentChanged=drawable!=null && NativeLauncherButtonMaterial.contains(drawable) &&
+                    val dirtyBefore = drawable != null &&
                         runCatching {mContentDirtyField?.getBoolean(drawable)==true}.getOrDefault(false)
                     val originalResult = chain.proceed()
                     if (drawable != null) {
+                        val cleanAfter = runCatching {
+                            mContentDirtyField?.getBoolean(drawable) == false
+                        }.getOrDefault(false)
                         if(NativeLauncherButtonMaterial.contains(drawable))runCatching {
                             nativeClearExtractor?.stamp(drawable)?.let {
-                                NativeLauncherButtonMaterial.sourceChanged(drawable,it,nativeContentChanged &&
-                                    runCatching {mContentDirtyField?.getBoolean(drawable)==false}.getOrDefault(false))
+                                NativeLauncherButtonMaterial.sourceChanged(drawable,it,dirtyBefore && cleanAfter)
                             }
                         }.onFailure {
                             RuntimeDiagnostics.update("recents-clear-source-notify","原生输入通知失败：${it.javaClass.simpleName}")
                         }
                         try {
                             val nativeNode = mRenderNodeField?.get(drawable) as? RenderNode
-                            if (mContentDirtyField?.getBoolean(drawable) == false && nativeNode?.hasDisplayList() == true) {
-                                recordGlassInline(drawable)
+                            val active = staticRecord || mRelocatedActiveField?.getBoolean(drawable) == true
+                            if (active && cleanAfter && nativeNode?.hasDisplayList() == true) {
+                                recordGlassInline(drawable, if (staticRecord) null else relocatedGlassPaint.get())
                             }
                         } catch (t: Throwable) {
                             restoreNativeRecord(drawable)
@@ -1314,14 +1346,36 @@ object LauncherHook {
                     }
                     originalResult
                 }
-            RuntimeDiagnostics.mark("mounted", "${method.declaringClass.name}#${method.name}(d) 注册成功")
+            if (!staticRecord) {
+                mountRelocatedPositionCallbacks(api, method.declaringClass)
+            }
+            val entry = "${method.declaringClass.name}#${method.name}(${if (staticRecord) "d" else ""})"
+            RuntimeDiagnostics.mark("mounted", "$entry 注册成功")
             Lg.i(
                 TAG_FINGERPRINT,
-                "launcher-glass: mounted path A ${method.declaringClass.name}#${method.name}(d) (native prepare then glass record)",
+                "launcher-glass: mounted path A $entry (native prepare then glass record)",
             )
         } catch (t: Throwable) {
             Lg.e(TAG_FINGERPRINT, "launcher-glass: path A mount FAILED, system blur fallback", t)
         }
+    }
+
+    private fun mountRelocatedPositionCallbacks(api: XposedInterface, base: Class<*>) {
+        val loader = base.classLoader ?: return
+        val listener = listOf("fi0", "qi0").firstNotNullOfOrNull { name ->
+            runCatching {
+                val type = Class.forName(name, false, loader)
+                check(type.interfaces.any { it.name == "com.oplus.wrapper.graphics.RenderNode\$PositionUpdateListener" })
+                check(base.isAssignableFrom(type.getDeclaredField("a").type))
+                type
+            }.getOrNull()
+        } ?: return
+        runCatching {
+            api.deoptimize(listener.getDeclaredMethod(
+                "positionChanged", java.lang.Long.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE,
+            ))
+            api.deoptimize(listener.getDeclaredMethod("positionLost", java.lang.Long.TYPE))
+        }.onFailure { Lg.w(TAG_FINGERPRINT, "launcher-glass: position callback deoptimization unavailable", it) }
     }
 
     /**
@@ -1332,7 +1386,8 @@ object LauncherHook {
         try {
             mContentDirtyField?.setBoolean(drawable, true)
             restoringNativeRecord.set(true)
-            mInlineRecordMethod?.invoke(null, drawable)
+            val method = mInlineRecordMethod ?: return
+            if (Modifier.isStatic(method.modifiers)) method.invoke(null, drawable) else method.invoke(drawable)
         } catch (t: Throwable) {
             Lg.e(TAG_FINGERPRINT, "native record recovery failed", t)
         } finally {
@@ -1340,7 +1395,7 @@ object LauncherHook {
         }
     }
 
-    private fun recordGlassInline(drawable: Any): Boolean {
+    private fun recordGlassInline(drawable: Any, isolatedPaint: Paint?): Boolean {
         // enableBlurShader=false 时系统跳过 shader 分支 → 我们也回退原方法
         val enable = try {
             mEnableBlurShaderField?.getBoolean(drawable) ?: true
@@ -1355,9 +1410,13 @@ object LauncherHook {
             return false
         }
         // 门控 + 建玻璃 shader（与16.x 同一函数：省电/开关/映射/源全在这里判）
-        if (!replaceShaderIfPossible(drawable)) return false
-        val paint = getBlurShaderPaintOf(drawable) ?: return false
-        return recordPreparedGlass(drawable,paint)
+        if (!replaceShaderIfPossible(drawable, isolatedPaint)) return false
+        val paint = isolatedPaint ?: getBlurShaderPaintOf(drawable) ?: return false
+        return try {
+            recordPreparedGlass(drawable, paint)
+        } finally {
+            isolatedPaint?.shader = null
+        }
     }
 
     internal fun registerNativeClearMaterial(view:View,params:LiquidGlassShader.Params):Boolean {
@@ -2001,9 +2060,12 @@ object LauncherHook {
      */
     private fun mountOnBlurReady(api: XposedInterface, classLoader: ClassLoader) {
         try {
-            val clazz = Class.forName(CLASS_BLUR_DRAWABLE_MANAGER, false, classLoader)
-            // 候选名链：16.x onBlurReady → 17.3.12 改名 f（同签名）
-            val candidates = if (isLauncher17Plus()) {
+            val relocated = mRelocatedActiveField != null
+            val owner = if (relocated) "com.oplus.posteffect.manager.b" else CLASS_BLUR_DRAWABLE_MANAGER
+            val clazz = Class.forName(owner, false, classLoader)
+            val candidates = if (relocated) {
+                listOf("g")
+            } else if (isLauncher17Plus()) {
                 listOf(METHOD_ON_BLUR_READY, METHOD_ON_BLUR_READY_17)
             } else {
                 listOf(METHOD_ON_BLUR_READY)
@@ -2016,6 +2078,7 @@ object LauncherHook {
                         List::class.java, HardwareBuffer::class.java,
                         Int::class.javaPrimitiveType, Float::class.javaPrimitiveType,
                     )
+                    if (method.returnType != Void.TYPE || Modifier.isStatic(method.modifiers)) continue
                     api.hook(method)
                         .setExceptionMode(ExceptionMode.PROTECTIVE)
                         .intercept { chain ->
@@ -2030,18 +2093,18 @@ object LauncherHook {
                         }
                     Lg.i(
                         TAG,
-                        "LauncherHook mounted: $CLASS_BLUR_DRAWABLE_MANAGER#$name(List, HardwareBuffer, int, float) (folder bg blur refresh signal)",
+                        "LauncherHook mounted: $owner#$name(List, HardwareBuffer, int, float) (folder bg blur refresh signal)",
                     )
                     mounted = true
                     break
                 } catch (_: NoSuchMethodException) {
                     continue
                 } catch (t: Throwable) {
-                    Lg.w(TAG, "LauncherHook mount $CLASS_BLUR_DRAWABLE_MANAGER#$name failed, try next", t)
+                    Lg.w(TAG, "LauncherHook mount $owner#$name failed, try next", t)
                 }
             }
             if (!mounted) {
-                Lg.e(TAG, "LauncherHook mount FAILED: $CLASS_BLUR_DRAWABLE_MANAGER#onBlurReady/f (all candidate names)")
+                Lg.e(TAG, "LauncherHook mount FAILED: $owner blur-ready callback")
             }
         } catch (t: Throwable) {
             Lg.e(TAG, "LauncherHook mount FAILED: $CLASS_BLUR_DRAWABLE_MANAGER#$METHOD_ON_BLUR_READY", t)
@@ -2525,7 +2588,7 @@ object LauncherHook {
      * 把 blurShaderPaint.shader 替换为液态玻璃 RuntimeShader。
      * 强兜底契约：任何失败都不动 paint（保持系统原样），返回 false → 调用方回退系统绘制。
      */
-    private fun replaceShaderIfPossible(drawable: Any): Boolean {
+    private fun replaceShaderIfPossible(drawable: Any, isolatedPaint: Paint? = null): Boolean {
         val id = System.identityHashCode(drawable)
         GlassRegistry.bind(id, drawable)
         // [spec/85 补接·Launcher] 省电开启 → 还原模块 shader 并回退系统绘制（与 SystemUI 同门控，
@@ -2533,7 +2596,7 @@ object LauncherHook {
         // getShaderOrNull 语义同 SystemUI 侧：通常 null）。只 return false 不还原会残留玻璃。
         if (isPowerSaveGlassOff()) {
             try {
-                val p = getBlurShaderPaintOf(drawable)
+                val p = if (isolatedPaint == null) getBlurShaderPaintOf(drawable) else null
                 val cur = p?.shader
                 if (cur is RuntimeShader && shaderOwnerSet.contains(cur)) {
                     p.shader = null
@@ -2548,7 +2611,7 @@ object LauncherHook {
         // [2026-10-13 玻璃总开关] 关 → 还原模块 shader 回退系统模糊（与 SystemUI 同门控）
         if (!Prefs.glassEnabled(api)) {
             try {
-                val p = getBlurShaderPaintOf(drawable)
+                val p = if (isolatedPaint == null) getBlurShaderPaintOf(drawable) else null
                 val cur = p?.shader
                 if (cur is RuntimeShader && shaderOwnerSet.contains(cur)) {
                     p.shader = null
@@ -2561,7 +2624,7 @@ object LauncherHook {
             return false
         }
         val paint = try {
-            getBlurShaderPaintOf(drawable)
+            isolatedPaint ?: getBlurShaderPaintOf(drawable)
         } catch (t: Throwable) {
             Lg.e(TAG, "launcher render: getBlurShaderPaint failed", t); null
         }
@@ -2579,13 +2642,19 @@ object LauncherHook {
             return false
         }
         val current = try {
-            paint.shader
+            if (isolatedPaint == null) paint.shader
+            else if (appliedUniformsMap.containsKey(id)) shaderCache[id] else null
         } catch (t: Throwable) {
             null
         }
         // 已是本模块缓存的液态玻璃实例 → 每帧重跑 uniform（源/尺寸/位置变化才重设）
         if (current is RuntimeShader && shaderOwnerSet.contains(current) && matchesSafeAreaMode(current)) {
-            return refreshShaderUniforms(paint, current, id, bounds)
+            if (isolatedPaint != null) {
+                val entry = screenRegionMap[id] ?: return false
+                if (entry.region.isEmpty) return false
+                isolatedPaint.shader = current
+            }
+            return refreshShaderUniforms(current, id, bounds)
         }
         val liquid = try {
             buildLiquidShader(drawable, bounds)
@@ -2656,7 +2725,7 @@ object LauncherHook {
     }
 
     /** [R1] 已替换的液态玻璃实例每帧刷新 uniform；失败不破坏现有绘制（返回 true 保持玻璃）。 */
-    private fun refreshShaderUniforms(paint: Paint, shader: RuntimeShader, id: Int, bounds: Rect): Boolean {
+    private fun refreshShaderUniforms(shader: RuntimeShader, id: Int, bounds: Rect): Boolean {
         try {
             val entry = screenRegionMap[id] ?: return true
             val region = entry.region
@@ -2722,7 +2791,7 @@ object LauncherHook {
     internal fun publishedIconBackdrop(screenRegion:RectF):IconGlassWallpaper.Frame? {
         val snap=screenSnapshot ?: return null
         if(snap.bitmap.isRecycled || snap.region.width()<=0f || snap.region.height()<=0f)return null
-        val image=LowResTier.tierBitmapOf(snap.bitmap,4) ?: return null
+        val image=snap.bitmap
         if(image.isRecycled)return null
         val region=zoomedRegionForWallpaper(screenRegion,snap.screenRect,snap.wallpaperZoomAtCapture)
         val sx=image.width/snap.region.width();val sy=image.height/snap.region.height()
@@ -2948,6 +3017,7 @@ object LauncherHook {
                     } else {
                         Lg.i(TAG, "bg-element: launcher background ready ${bg.bitmap.width}x${bg.bitmap.height} region=${bg.region.toShortString()}")
                         postInvalidateRegistered()
+                        IconGlassWallpaper.launcherSourceChanged()
                     }
                 } else {
                     // 失败重试（3 次/320ms），用尽冷却

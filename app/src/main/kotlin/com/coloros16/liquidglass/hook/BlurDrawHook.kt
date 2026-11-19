@@ -2361,7 +2361,8 @@ object BlurDrawHook {
             return ButtonBackdropBinding.Bound(source, sourceRect,
                 params.copy(blurRadius = 0f, sourcePreblurred = true))
         }
-        val panelRadius = if (ccBlurOnButtonsEnabled() && isButtonBlurRegion(id) && observedPanelBlurRadius > 0)
+        val panelRadius = if (!params.buttonBlurOverride && ccBlurOnButtonsEnabled() &&
+            isButtonBlurRegion(id) && observedPanelBlurRadius > 0)
             ButtonBackdropBlur.radius(observedPanelBlurRadius, ccBlurStrength()) else null
         return ButtonBackdropBinding.resolve(buttonBackdropWorker, source, screen, sourceRect,
             sourceIsSnapshot, params, panelRadius)
@@ -2612,9 +2613,17 @@ object BlurDrawHook {
     private val lastLoggedCornerRadius = ConcurrentHashMap<Int, Float>()
 
     fun install(api: XposedInterface, classLoader: ClassLoader) {
-        ParticleDissolveHook.install(api, classLoader, RuntimeDiagnostics::mark)
+        runCatching { ParticleDissolveHook.install(api, classLoader, RuntimeDiagnostics::mark) }
+            .onFailure { Lg.w(TAG, "SystemUI particle hooks unavailable", it) }
         this.api = api
         LockWallpaperBackdrop.install(api, classLoader, ::postInvalidateHosts)
+        if (Build.VERSION.SDK_INT >= 33) runCatching {
+            LockMediaBackdrop.install(api, ::isKeyguardLockedNow,
+                { Prefs.glassEnabled(api) && !isPowerSaveGlassOff() }) {
+                if (LockMediaBackdrop.frame == null) lockMediaSnapshot = null
+                postInvalidateHosts()
+            }
+        }.onFailure { Lg.w(TAG, "Lock media artwork source unavailable", it) }
         NotificationArrivalCaptureHook.install(api, classLoader) { background ->
             if (isHeadsUpBgView(background)) triggerHeadsUpAppearanceCapture(background)
         }
@@ -2849,11 +2858,6 @@ object BlurDrawHook {
         return null
     }
 
-    /** [spec/114] 16.00.14 旧架构判定：新 shader 类缺失且旧 shader 类命中 */
-    private fun isLegacyPosteffect(classLoader: ClassLoader): Boolean =
-        resolveClassChain(classLoader, CLASS_DRAWABLE_SHADER) == null &&
-            resolveClassChain(classLoader, CLASS_DRAWABLE_SHADER_LEGACY) != null
-
     /** [spec/114] 能力缺失降级日志（16.00.14 上即「16.00.14 无 X，降级」） */
     private fun logLegacyDegrade(what: String) {
         Lg.i(TAG, "lg-hook: ${if (legacyPosteffectArch) "16.00.14 无" else "本版本无"} $what，降级")
@@ -2949,13 +2953,20 @@ object BlurDrawHook {
         // getBlurShader*/BlurDrawableShader），原先整段一个 try 首个 miss 就连坐 getBounds/getPaint/
         // drawBlurShader 全部解析不到 → 主渲染链整体失效。旧名候选只在新名 miss 时才试，
         // 现役（16.99.12/17.99.02）新名第一命中，解析结果与原先逐字一致。
-        legacyPosteffectArch = isLegacyPosteffect(classLoader)
-        if (legacyPosteffectArch) Lg.i(TAG, "lg-hook: 16.00.14 旧架构 posteffect 检出，shader/圆角走旧名等价链")
+        legacyPosteffectArch = false
         try {
             val base = Class.forName(CLASS_BASE_DRAWABLE, false, classLoader)
-            val shaderCls = resolveClassChain(classLoader, CLASS_DRAWABLE_SHADER, CLASS_DRAWABLE_SHADER_LEGACY)
-            mGetDrawableShaderPaint = resolveMethodChain(base, METHOD_GET_DRAWABLE_SHADER_PAINT, METHOD_GET_LEGACY_SHADER_PAINT)
             mGetDrawableShader = resolveMethodChain(base, METHOD_GET_DRAWABLE_SHADER, METHOD_GET_LEGACY_SHADER)
+            // Use the shader type actually returned by BaseDrawable on this build.
+            val shaderCls = mGetDrawableShader?.returnType
+            legacyPosteffectArch = shaderCls?.name == CLASS_DRAWABLE_SHADER_LEGACY
+            val paintGetters = if (legacyPosteffectArch) {
+                arrayOf(METHOD_GET_LEGACY_SHADER_PAINT, METHOD_GET_DRAWABLE_SHADER_PAINT)
+            } else {
+                arrayOf(METHOD_GET_DRAWABLE_SHADER_PAINT, METHOD_GET_LEGACY_SHADER_PAINT)
+            }
+            mGetDrawableShaderPaint = resolveMethodChain(base, *paintGetters)
+            RuntimeDiagnostics.update("systemui_posteffect", shaderCls?.name ?: "未找到 SystemUI 原生模糊 Shader 接口")
             mGetEnableShader = resolveMethodChain(base, METHOD_GET_ENABLE_SHADER)
             mGetBounds = resolveMethodChain(base, METHOD_GET_BOUNDS)
             mGetPaint = resolveMethodChain(base, METHOD_GET_PAINT)
@@ -11922,15 +11933,13 @@ object BlurDrawHook {
      * 返回值 true 仅代表 paint.shader 已替换为液态玻璃（后续由系统 drawPath 完成实际绘制）。
      */
     private fun replaceShaderIfPossible(drawable: Any): Boolean {
-        if (isKeyguardLockedNow()) {
-            val ctx = systemUiContext()
-            if (ctx == null || LockWallpaperBackdrop.get(ctx) == null) {
-                // Never keep a previously bound application frame while wallpaper is loading.
-                restoreSystemShaderIfReplaced(drawable)
-                return false
-            }
+        val locked = isKeyguardLockedNow()
+        if (locked && sceneBackdrop() == null) {
+            // Drop the previous shader during a source change, including entry into lyrics.
+            restoreSystemShaderIfReplaced(drawable)
+            return false
         }
-        if (!screenInteractive && !isKeyguardLockedNow()) {
+        if (!screenInteractive && !locked) {
             restoreSystemShaderIfReplaced(drawable)
             return false
         }
@@ -12214,7 +12223,10 @@ object BlurDrawHook {
      */
     fun shutdownForHotReload() {
         NotificationTiltCompat.stopAll()
-        if (Build.VERSION.SDK_INT >= 33) ParticleDissolveHook.Api33.stopAll()
+        if (Build.VERSION.SDK_INT >= 33) {
+            ParticleDissolveHook.Api33.stopAll()
+            LockMediaBackdrop.shutdown()
+        }
         try {
             geometryPool.shutdownNow()
         } catch (t: Throwable) {
@@ -12990,9 +13002,20 @@ object BlurDrawHook {
      */
     @Volatile private var lockWallpaperSnapshot: ElementBackground? = null
     private var lockWallpaperConfiguration = 0
-    /** Screen capture admission and lock wallpaper rendering are deliberately independent. */
+    @Volatile private var lockMediaSnapshot: ElementBackground? = null
+    /** Screen capture admission and lockscreen backdrop rendering are deliberately independent. */
     private fun sceneBackdrop(id: Int? = null, region: RectF? = null): ElementBackground? {
         if (isKeyguardLockedNow()) {
+            if (LockMediaBackdrop.active) {
+                val frame = LockMediaBackdrop.frame
+                if (frame == null) {
+                    lockMediaSnapshot = null
+                    return null
+                }
+                return lockMediaSnapshot?.takeIf { it.bitmap === frame.bitmap }
+                    ?: ElementBackground(frame.bitmap, RectF(frame.region)).also { lockMediaSnapshot = it }
+            }
+            lockMediaSnapshot = null
             val ctx = systemUiContext() ?: return null
             val bitmap = LockWallpaperBackdrop.get(ctx) ?: return null
             val config = ctx.resources.configuration
@@ -13652,8 +13675,10 @@ object BlurDrawHook {
             // 动画期 IPC 读降至 ~1 次/s；配置改动 ≤1s 生效（无需重启）。渲染输出不变（同值复用）。
             val m = readMaterialParams()
             // 预设逐键覆盖：该元素类被某个预设接管的键取预设值，其余键仍取全局值
-            val ov = IosGlassPreset.resolve(m.builtinPreset, usePolishedMaterial(elementId),
-                GlassRegistry.overridesFor(elementId))
+            val custom = GlassRegistry.overridesFor(elementId)
+            val ov = IosGlassPreset.resolve(m.builtinPreset, usePolishedMaterial(elementId), custom)
+            val button = isButtonBlurRegion(elementId)
+            val buttonBlur = if (button) IosGlassPreset.explicitButtonBlur(m.buttonBlurRadius, custom) else null
 
             if (elementId != 0) {
                 val nowMs = SystemClock.uptimeMillis()
@@ -13679,8 +13704,9 @@ object BlurDrawHook {
                 // [2026-09-16 恢复配置化] 撤回原「强制透明诊断档」的硬编码 0，改回读 KEY_BLUR_RADIUS
                 // （默认 8px）。用户反馈「横幅太透」即因长期被强制成清晰透镜。
                 blurRadius = QsSurfacePolicy.resolveButtonBlur(
-                    pick(Prefs.KEY_BUTTON_BLUR_RADIUS, m.buttonBlurRadius), pick(Prefs.KEY_BLUR_RADIUS, m.blurRadius), isButtonBlurRegion(elementId),
+                    buttonBlur ?: pick(Prefs.KEY_BUTTON_BLUR_RADIUS, m.buttonBlurRadius), pick(Prefs.KEY_BLUR_RADIUS, m.blurRadius), button,
                 ),
+                buttonBlurOverride = buttonBlur != null,
                 // [doc/spec/95 + spec/96 2026-10-10] 折射环带高度走统一出口 Prefs.refractionHeightPx：
                 // 相对模式 = 元素短边 × KEY_REFRACTION_HEIGHT_RATIO（默认 0.5 = 改动前的 min(w,h)/2f，
                 // 零视觉变化）；绝对模式 = KEY_REFRACTION_HEIGHT_PX（固定像素，默认 64）。
@@ -13872,7 +13898,7 @@ object BlurDrawHook {
     private fun triggerHeadsUpAppearanceCapture(bgView: View) {
         if (!Prefs.glassEnabled(api) || isPowerSaveGlassOff() || !visibleCaptureHost(bgView)) return
         if (isKeyguardLockedNow()) {
-            systemUiContext()?.let { LockWallpaperBackdrop.get(it) }
+            sceneBackdrop()
             postInvalidateHosts()
             return
         }

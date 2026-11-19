@@ -61,6 +61,7 @@ internal class NativeClearSourceExtractor private constructor(
 
     companion object {
         fun resolve(base:Class<*>):NativeClearSourceExtractor {
+            if (Cos17Contract.relocatedRecord(base) != null) return resolveRelocated(base)
             val named=base.name=="com.oplus.posteffect.drawable.BaseDrawable"
             fun field(type:Class<*>,expected:Class<*>,old:String,new:String,unique:Boolean=false)=
                 NativeClearFieldResolver.resolve(type,expected,if(named)new else old,uniqueType=unique)
@@ -77,6 +78,23 @@ internal class NativeClearSourceExtractor private constructor(
                 field(image.type,Bitmap::class.java,"a","bitmap",true),
                 field(image.type,Boolean::class.javaPrimitiveType!!,"b","isRecycled"),
                 field(base,Matrix::class.java,"l","bitmapMatrix"))
+        }
+
+        private fun resolveRelocated(base: Class<*>): NativeClearSourceExtractor {
+            fun field(owner: Class<*>, name: String, type: Class<*>) =
+                NativeClearFieldResolver.resolve(owner, type, name, uniqueType = false)
+
+            val capture = base.getDeclaredField("B").apply { isAccessible = true }
+            val image = capture.type.getDeclaredField("a").apply { isAccessible = true }
+            check((capture.type.name to image.type.name) in setOf("gi0" to "ge2", "ri0" to "ee2"))
+            val shader = base.getDeclaredField("K").apply { isAccessible = true }
+            return NativeClearSourceExtractor(
+                base, field(base, "q", Any::class.java), field(base, "a", java.lang.Boolean.TYPE),
+                field(base, "L", Paint::class.java), shader,
+                field(shader.type, "b", java.lang.Boolean.TYPE), field(shader.type, "v", RuntimeShader::class.java),
+                capture, image, field(image.type, "a", Bitmap::class.java),
+                field(image.type, "b", java.lang.Boolean.TYPE), field(base, "k", Matrix::class.java),
+            )
         }
     }
 }

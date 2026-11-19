@@ -78,7 +78,8 @@ class XposedEntry : XposedModule() {
         // 与 SystemUI 共用同一套 posteffect drawBlurShader hook（FQCN 相同，两份独立 hook 实例）。
         if (param.packageName != PACKAGE_SYSTEMUI && param.packageName != PACKAGE_LAUNCHER &&
             param.packageName != PACKAGE_GALLERY &&
-            param.packageName != PACKAGE_SMART_SIDEBAR && param.packageName != PACKAGE_ASSISTANT_SCREEN
+            param.packageName != PACKAGE_SMART_SIDEBAR && param.packageName != PACKAGE_ASSISTANT_SCREEN &&
+            param.packageName != PACKAGE_WEATHER
         ) return
         val classLoader = param.getDefaultClassLoader() ?: return
         // [doc/spec/110] 存宿主 classLoader：同 ClassLoader 复用重载时 onHotReloaded 直接取用；
@@ -153,7 +154,7 @@ class XposedEntry : XposedModule() {
         }
         if (pkg != PACKAGE_SYSTEMUI && pkg != PACKAGE_LAUNCHER &&
             pkg != PACKAGE_GALLERY && pkg != PACKAGE_SMART_SIDEBAR &&
-            pkg != PACKAGE_ASSISTANT_SCREEN
+            pkg != PACKAGE_ASSISTANT_SCREEN && pkg != PACKAGE_WEATHER
         ) {
             // 非目标进程：按框架语义卸掉旧 hook（这些进程本就不该有模块 hook）
             param.oldHookHandles.forEach { h ->
@@ -222,7 +223,8 @@ class XposedEntry : XposedModule() {
                 }
             }
         }.onFailure { Lg.w(TAG, "safe-area preferences unavailable", it) }
-        com.coloros16.liquidglass.hook.SceneBackdropBlurHook.install(this, classLoader, packageName)
+        runCatching { com.coloros16.liquidglass.hook.SceneBackdropBlurHook.install(this, classLoader, packageName) }
+            .onFailure { Lg.w(TAG, "Scene backdrop hooks unavailable in $packageName", it) }
         when (packageName) {
             // SystemUI：Hook B 绘制替换 / Hook C 场景过滤（占位实现，保持现状）。
             // [2026-08-13 用户决定] BlurService 端全移除：模块不再干预 com.oplus.blur 进程，
@@ -240,13 +242,12 @@ class XposedEntry : XposedModule() {
                 com.coloros16.liquidglass.hook.LauncherIconGlassHook.install(this,classLoader)
                 com.coloros16.liquidglass.hook.LauncherFolderGlassSurfaceHook.install(this,classLoader)
                 com.coloros16.liquidglass.hook.LauncherSuggestionGlassSurfaceHook.install(this,classLoader)
-                com.coloros16.liquidglass.hook.LauncherLargeFolderGlassHook.install(this,classLoader)
                 com.coloros16.liquidglass.hook.RecentsClearButtonGlassHook.install(this,classLoader)
                 LauncherTiltCompat.install(this, classLoader)
             }
             // 第三方 App（相册/智能侧边栏/速览）：A/B 族模糊挂载点登记（组件清单 + 预设按组件命中）。
             // OEM 背景输入通道使用统一 GPU 光学材质；不需要向第三方进程开放抓屏权限。
-            PACKAGE_GALLERY, PACKAGE_SMART_SIDEBAR, PACKAGE_ASSISTANT_SCREEN -> {
+            PACKAGE_GALLERY, PACKAGE_SMART_SIDEBAR, PACKAGE_ASSISTANT_SCREEN, PACKAGE_WEATHER -> {
                 AppGlassHook.install(this, classLoader, packageName)
             }
         }
@@ -256,9 +257,12 @@ class XposedEntry : XposedModule() {
         // 仅 SystemUI 进程：Hook B 绘制替换 / Hook C 场景过滤（占位实现；类名/方法名来自旧版反编译，待新版核对）。
         // Hook A（BlurService 端原图注入）已随 [2026-08-13 用户决定] 全移除——系统模糊管线原样，
         // 玻璃源 = SystemUI 端每元素背景源（BlurDrawHook 内 captureDisplay）。
-        BlurDrawHook.install(this, classLoader)
-        KeyguardGlassHook.install(this, classLoader)
-        SceneFilter.install(this, classLoader)
+        runCatching { BlurDrawHook.install(this, classLoader) }
+            .onFailure { Lg.e(TAG, "SystemUI blur hook installation failed", it) }
+        runCatching { KeyguardGlassHook.install(this, classLoader) }
+            .onFailure { Lg.e(TAG, "SystemUI keyguard hook installation failed", it) }
+        runCatching { SceneFilter.install(this, classLoader) }
+            .onFailure { Lg.e(TAG, "SystemUI scene hook installation failed", it) }
         // [spec/82] ⛔ 曾有 display-root 通道探针挂在这里，**已删除** —— 见 DisplayRootChannel 头部说明：
         // 它在屏幕暗/AOD 时会连续 120 秒每 5 秒抓一次整屏，与 UI 合成抢 SF，
         // 造成「进桌面卡顿」「SystemUI 重启后异常」。通道本身已验证通过，不再需要常驻探针。
@@ -317,6 +321,7 @@ class XposedEntry : XposedModule() {
         const val PACKAGE_SMART_SIDEBAR = "com.coloros.smartsidebar"
         /** 速览（负一屏）进程：卡片/控件窗口模糊组件登记（AppGlassHook B 族）。 */
         const val PACKAGE_ASSISTANT_SCREEN = "com.coloros.assistantscreen"
+        const val PACKAGE_WEATHER = "com.coloros.weather2"
         /** [doc/spec/110] 宿主 classLoader 缓存（onPackageLoaded 存 / onHotReloaded 读）。 */
         private val cachedLoaders = java.util.concurrent.ConcurrentHashMap<String, ClassLoader>()
         /** [doc/spec/110] 模块版本标记（热重载完成日志用，便于 daemon 侧对账 loaded version）。 */

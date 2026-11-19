@@ -12,13 +12,13 @@ import io.github.libxposed.api.XposedInterface
  * Each adapter owns its native fill only. */
 internal object Cos17AppSurfaceHooks {
     private var targets:List<Class<*>> = emptyList()
-    fun isTarget(view:View)=targets.any {it.isInstance(view)} || AssistantSurfaceAdapter.isSpecificTarget(view) || GallerySurfaceAdapter.matches(view)
+    fun isTarget(view:View)=targets.any {it.isInstance(view)} || AssistantSurfaceAdapter.isSpecificTarget(view) || GallerySurfaceAdapter.matches(view) || WeatherSurfaceAdapter.role(view) != null
     fun isNativeCard(view:View)=AssistantSurfaceAdapter.isNativeCard(view)
-    fun nativeBounds(view:View):RectF? = AssistantSurfaceAdapter.nativeBounds(view) ?: GallerySurfaceAdapter.nativeBounds(view)
+    fun nativeBounds(view:View):RectF? = AssistantSurfaceAdapter.nativeBounds(view) ?: GallerySurfaceAdapter.nativeBounds(view) ?: WeatherSurfaceAdapter.bounds(view)
     fun nativeFillAlpha(view:View)=AssistantSurfaceAdapter.nativeFillAlpha(view) ?: 1f
     fun beforeAssign(view:View,active:Boolean)=GallerySurfaceAdapter.beforeAssign(view,active)
-    fun nativeRadius(view:View)=GallerySurfaceAdapter.nativeRadius(view) ?: AssistantSurfaceAdapter.nativeRadius(view)
-    fun nativeRole(view:View)=GallerySurfaceAdapter.nativeRole(view)
+    fun nativeRadius(view:View)=GallerySurfaceAdapter.nativeRadius(view) ?: AssistantSurfaceAdapter.nativeRadius(view) ?: WeatherSurfaceAdapter.radius(view)
+    fun nativeRole(view:View)=GallerySurfaceAdapter.nativeRole(view) ?: WeatherSurfaceAdapter.role(view)
     fun onMaterialStateChanged(view:View,active:Boolean) {
         AssistantSurfaceAdapter.onMaterialStateChanged(view,active)
         GallerySurfaceAdapter.onMaterialStateChanged(view,active)
@@ -27,6 +27,8 @@ internal object Cos17AppSurfaceHooks {
         targets=try {when(pkg) {
             XposedEntry.PACKAGE_GALLERY -> GallerySurfaceAdapter.install(api,loader,AppGlassHook::materialApplied)
             XposedEntry.PACKAGE_ASSISTANT_SCREEN -> AssistantSurfaceAdapter.install(api,loader,AppGlassHook::materialApplied)
+            XposedEntry.PACKAGE_WEATHER -> { WeatherSurfaceAdapter.install(api,loader,AppGlassHook::weatherEnabled,
+                AppGlassHook::observeWeatherCard,AppGlassHook::materialApplied); emptyList() }
             else -> emptyList()
         }} catch(error:Throwable) {
             RuntimeDiagnostics.mark("app-glass-target-error","原生控件接口未匹配，保留原生：${error.javaClass.simpleName}")

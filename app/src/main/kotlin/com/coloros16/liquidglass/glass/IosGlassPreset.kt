@@ -28,4 +28,9 @@ object IosGlassPreset {
 
     fun resolve(activeId: String?, polished: Boolean, custom: Map<String, Float>?): Map<String, Float>? =
         if (activeId != ID || !polished) custom else if (custom.isNullOrEmpty()) values else values + custom
+
+    /** A saved button radius overrides the built-in default. A class override still wins. */
+    fun explicitButtonBlur(configured: Float?, custom: Map<String, Float>?): Float? =
+        custom?.get(Prefs.KEY_BUTTON_BLUR_RADIUS)?.takeIf { it.isFinite() && it >= 0f }
+            ?: configured?.takeIf { it.isFinite() && it >= 0f }
 }

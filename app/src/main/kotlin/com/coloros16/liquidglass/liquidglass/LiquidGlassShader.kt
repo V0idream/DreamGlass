@@ -975,6 +975,7 @@ object LiquidGlassShader {
         val compactOptics: Boolean = false,
         val grayBaseLuma: Float = -1f,
         val debugGlassBounds: Boolean = com.coloros16.liquidglass.debug.GlassRenderBounds.enabled(),
+        val buttonBlurOverride: Boolean = false,
     )
 
     /**

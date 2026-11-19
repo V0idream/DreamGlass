@@ -6,6 +6,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.view.View
+import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.log.Lg
 import io.github.libxposed.api.XposedInterface
@@ -166,7 +167,8 @@ object QsSurfacePolicy {
 
     /** Missing/invalid new settings preserve existing per-class/global blur; never read old opacity. */
     fun resolveButtonBlur(configured: Float, inherited: Float, button: Boolean): Float =
-        if (button && configured.isFinite() && configured >= 0f) configured.coerceAtMost(64f) else inherited
+        if (button && configured.isFinite() && configured >= 0f)
+            configured.coerceAtMost(Prefs.BUTTON_BLUR_RADIUS_MAX.toFloat()) else inherited
 
     fun field(type: Class<*>, name: String): Field {
         var cursor: Class<*>? = type
