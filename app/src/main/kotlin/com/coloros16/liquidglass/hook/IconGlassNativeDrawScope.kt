@@ -4,7 +4,10 @@ package com.coloros16.liquidglass.hook
  * animator must still run and return its own visibility/interception result. */
 internal object IconGlassNativeDrawScope {
     private val owner=ScopedDrawOwner<Any>()
-    fun suppresses(manager:Any?):Boolean=manager!=null && owner.current()===manager
+    fun owns(manager:Any?):Boolean=manager!=null && owner.current()===manager
+    // ColorOS draws notification dots and counts in its after-icon pass.
+    fun suppresses(manager:Any?,beforeIcon:Boolean):Boolean=
+        beforeIcon && owns(manager)
     fun <T> run(manager:Any?,nativeAnimation:()->T):T=owner.run(manager,nativeAnimation)
 
     /** A native animator may already have drawn the content (including two clipped passes).

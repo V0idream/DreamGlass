@@ -53,4 +53,18 @@ class IconModeAndHeadsUpContractTest {
         assertEquals(-45f,HeadsUpDissolveContract.releaseX(-150f,100,200))
         assertEquals(145f,HeadsUpDissolveContract.releaseX(225f,100,200))
     }
+
+    @Test fun simpleBannerHorizontalRequiresTheNativeDismissListener() {
+        assertEquals(-1f, HeadsUpDissolveContract.simpleBannerHorizontal("translationX", true, -40f))
+        assertEquals(1f, HeadsUpDissolveContract.simpleBannerHorizontal("translationX", true, 40f))
+        assertNull(HeadsUpDissolveContract.simpleBannerHorizontal("translationX", false, -40f))
+        assertNull(HeadsUpDissolveContract.simpleBannerHorizontal("translationY", true, -40f))
+    }
+
+    @Test fun simpleBannerVerticalOnlyAcceptsUpwardDismissal() {
+        assertTrue(HeadsUpDissolveContract.simpleBannerUpward(-40f, false))
+        assertFalse(HeadsUpDissolveContract.simpleBannerUpward(40f, false))
+        assertFalse(HeadsUpDissolveContract.simpleBannerUpward(0f, false))
+        assertFalse(HeadsUpDissolveContract.simpleBannerUpward(-40f, true))
+    }
 }

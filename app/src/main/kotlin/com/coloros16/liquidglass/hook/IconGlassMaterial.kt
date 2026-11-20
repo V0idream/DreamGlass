@@ -173,7 +173,7 @@ half3 background(float2 p) {
 half4 main(float2 position) {
     float2 p=position-uOrigin;
     float d=boxDistance(p);
-    float cover=1.0-smoothstep(-.7,.7,d);
+    float cover=1.0-smoothstep(-.54,.54,d);
     if(cover<.001 || uAlpha<.001)return half4(0.0);
     float side=min(uSize.x,uSize.y);
     // Analytic rounded-rectangle normal: four finite-distance evaluations removed.
@@ -218,7 +218,7 @@ half4 main(float2 position) {
     // Preserve wallpaper colour and light through the plate; contrast lives in the glyph.
     float topLight=max(dot(normal,normalize(float2(-.62,-.79))),0.0);
     float bottomLight=max(dot(normal,normalize(float2(.72,.69))),0.0);
-    float rim=exp(-pow((d+.60)/.85,2.0));
+    float rim=exp(-pow((d+.54)/.65,2.0));
     float innerRim=exp(-pow((d+side*.018)/max(.6,side*.004),2.0));
     // Angle-dependent reflection follows the same curved surface as the refraction.
     float fresnel=.035+.965*pow(1.0-surfaceZ,5.0);
@@ -229,11 +229,16 @@ half4 main(float2 position) {
     glass-=half3(.07,.09,.11)*half(edge*(1.0-topLight)*.12);
 
     half4 mark=foreground(p);
-    float glyphAlpha=float(mark.a);
-    float stepSize=max(.65,side/128.0);
+    float coverage=float(mark.a);
+    float stepSize=clamp(side/152.0,.625,1.15);
     half4 right=foreground(p+float2(stepSize,0.0));half4 left=foreground(p-float2(stepSize,0.0));
     half4 down=foreground(p+float2(0.0,stepSize));half4 up=foreground(p-float2(0.0,stepSize));
     float2 glyphGradient=float2(float(right.a-left.a),float(down.a-up.a));
+    float gradientLength=length(glyphGradient);
+    float glyphEdge=clamp(gradientLength*1.7,0.0,1.0);
+    // Keep linear antialiasing and flat translucent artwork. Only tighten the
+    // transition where neighbouring alpha shows a real silhouette.
+    float glyphAlpha=mix(coverage,smoothstep(.12,.88,coverage),.48*glyphEdge);
     half3 glyphGlass=half3(0.0);
     half3 original=mark.rgb/max(mark.a,half(.001));
     // Relief/detailed artwork replaces this value completely. Do not sample a second
@@ -282,9 +287,7 @@ half4 main(float2 position) {
     }
     // Apply after every artwork branch so downloaded contours receive the same
     // upper-left highlight and lower-right shade as procedural glyphs.
-    float gradientLength=length(glyphGradient);
     float2 glyphNormal=-glyphGradient/max(gradientLength,.001);
-    float glyphEdge=clamp(gradientLength*1.5,0.0,1.0);
     float keyLight=max(dot(glyphNormal,normalize(float2(-.62,-.79))),0.0);
     float shade=max(dot(glyphNormal,normalize(float2(.62,.79))),0.0);
     glyphGlass=mix(glyphGlass,half3(1.0),half(glyphEdge*keyLight*(.52+.16*uThickness)));

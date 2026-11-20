@@ -18,6 +18,14 @@ internal object HeadsUpDissolveContract {
     fun windowRoot(className:String,type:Int,verifiedContainer:Boolean=false)=
         type==2017 && (verifiedContainer || className.contains("HeadsUp",ignoreCase=true))
 
+    fun simpleBannerHorizontal(property: String?, hasDismissListener: Boolean, drag: Float): Float? {
+        if (property != "translationX" || !hasDismissListener || !drag.isFinite()) return null
+        return if (drag < 0f) -1f else 1f
+    }
+
+    fun simpleBannerUpward(drag: Float, pulledDown: Boolean): Boolean =
+        !pulledDown && drag.isFinite() && drag < 0f
+
     // Fast swipes may already have moved the complete row above the visible window.
     // Keep a bounded part of the handoff above the display so the outgoing particles show.
     fun releaseY(y:Float,height:Int):Float = maxOf(y,-height*.45f)

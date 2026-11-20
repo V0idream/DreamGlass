@@ -1,0 +1,13 @@
+{
+  "product": "DreamGlass",
+  "version": "3.0.5",
+  "versionCode": 3000007,
+  "debuggable": false,
+  "apkSha256": "5ec180dc4d03616eeb1f402976090c45366ce912c7b68e540bcf73a3e0f3383d",
+  "signatureCertificateSha256": "12db3813c08e0d85d97884f7bf87e337d91c9e376e470a41e086a1f682402a96",
+  "unitTests": 435,
+  "testFailures": 0,
+  "lintErrors": 0,
+  "lintWarnings": 441,
+  "physicalVerification": false
+}

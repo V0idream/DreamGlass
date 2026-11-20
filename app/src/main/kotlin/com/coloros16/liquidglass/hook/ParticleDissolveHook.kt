@@ -5,6 +5,8 @@
  */
 package com.coloros16.liquidglass.hook
 
+import android.animation.Animator
+import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.Application
 import android.content.Context
@@ -41,7 +43,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 /** One-line integration: ParticleDissolveHook.install(api, classLoader).
- * Only explicit SwipeHelper dismissals of notification rows; never unlock, heads-up timeout or QS.
+ * Explicit notification row dismissals and accepted heads-up swipes.
  * No CPU blur, pixel readback, per-particle View, repeating timer or replacement deletion callback.
  */
 object ParticleDissolveHook {
@@ -117,6 +119,7 @@ object ParticleDissolveHook {
             }
         }
         private var installed = false
+        private var simpleBannerInstalled = false
         private var enabled = false
         private var masterEnabled=false
         private var featureEnabled=false
@@ -134,6 +137,9 @@ object ParticleDissolveHook {
         fun install(api: XposedInterface, loader: ClassLoader) {
             interfaceApi = api
             if (installed) return
+            if (!simpleBannerInstalled) runCatching { installSimpleBannerGesture(api, loader) }.onFailure {
+                current("simple_banner_route", "简洁横幅入口不可用：${it.javaClass.simpleName}: ${it.message?.take(120)}")
+            }
             val row = Class.forName(ROW, false, loader)
             runCatching {installHeadsUpGesture(api,loader,row)}.onFailure {
                 current("heads_up_route","横幅入口未安装：${it.javaClass.simpleName}: ${it.message?.take(120)}")
@@ -191,6 +197,102 @@ object ParticleDissolveHook {
 
         private data class HeadsUpTarget(val row:View,val container:View,val manager:WindowManager?,val position:IntArray)
         private data class HeadsUpTouch(val target:HeadsUpTarget?,val fingerUp:Boolean)
+
+        private fun installSimpleBannerGesture(api: XposedInterface, loader: ClassLoader) {
+            val prefix = "com.oplus.systemui.notification.interruption.fullscreenbanner"
+            val handler = Class.forName("$prefix.view.FullScreenBannerTouchHandler", false, loader)
+            val helper = Class.forName("$prefix.FullScreenBannerHelper", false, loader)
+            val banner = handler.getDeclaredField("mAnimView").apply { isAccessible = true }
+            val owner = handler.getDeclaredField("mFullscreenBannerHelper").apply { isAccessible = true }
+            val callback = handler.getDeclaredField("mTouchCallback").apply { isAccessible = true }
+            val startX = handler.getDeclaredField("mStartPosX").apply { isAccessible = true }
+            val startY = handler.getDeclaredField("mStartPosY").apply { isAccessible = true }
+            val rebound = handler.getDeclaredField("mBannerPullDownRebound").apply { isAccessible = true }
+            val floatWindow = handler.getDeclaredField("mFloatWindowTriggered").apply { isAccessible = true }
+            val window = helper.getDeclaredField("mBannerRootLayout").apply { isAccessible = true }
+            val manager = helper.getDeclaredField("mWindowManager").apply { isAccessible = true }
+            val boost = banner.type.getMethod("getBannerBoostFrameRateRateHandler").returnType
+                .getDeclaredMethod("boostFrameRate", Animator::class.java)
+            val hide = Class.forName("$prefix.FullScreenBannerHelper\$9", false, loader).getDeclaredMethod("hide")
+            val dismissListener = Class.forName(handler.name + "\$1", false, loader)
+            val touch = handler.getDeclaredMethod("onTouchEvent", MotionEvent::class.java)
+            val intercept = handler.getDeclaredMethod("onInterceptTouchEvent", MotionEvent::class.java)
+
+            // The OEM can also call hide during cancellation. Only callbacks inside finger-up qualify.
+            data class Release(val handler: Any, val view: View, val dx: Float, val dy: Float)
+            var release: Release? = null
+            fun commit(gesture: Release, vertical: Boolean, direction: Float) {
+                val view = gesture.view
+                val nativeHelper = owner.get(gesture.handler) ?: return
+                val root = window.get(nativeHelper) as? View ?: return
+                if (!view.isAttachedToWindow || view.rootView !== root) return
+                val position = IntArray(2).also(view::getLocationOnScreen)
+                val target = HeadsUpTarget(view, root, manager.get(nativeHelper) as? WindowManager, position)
+                current("simple_banner_commit", if (vertical) "原生确认上划收起" else "原生确认横划收起")
+                commitHeadsUp(api, target, vertical, direction)
+            }
+
+            api.hook(boost).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                release?.let { gesture -> safe {
+                    val animator = chain.getArg(0) as? ObjectAnimator ?: return@safe
+                    if (animator.target !== gesture.view) return@safe
+                    val drag = gesture.view.translationX.takeIf { it != 0f } ?: gesture.dx
+                    val property = animator.propertyName ?: animator.values?.singleOrNull()?.propertyName
+                    val direction = HeadsUpDissolveContract.simpleBannerHorizontal(
+                        property, animator.listeners?.any(dismissListener::isInstance) == true, drag
+                    ) ?: return@safe
+                    commit(gesture, vertical = false, direction = direction)
+                } }
+                chain.proceed()
+            }
+            api.hook(hide).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                release?.let { gesture -> safe {
+                    if (callback.get(gesture.handler) !== chain.getThisObject()) return@safe
+                    val pulledDown = rebound.getBoolean(gesture.handler) || floatWindow.getBoolean(gesture.handler)
+                    if (HeadsUpDissolveContract.simpleBannerUpward(gesture.dy, pulledDown))
+                        commit(gesture, vertical = true, direction = -1f)
+                } }
+                chain.proceed()
+            }
+            api.hook(intercept).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val result = chain.proceed()
+                val event = chain.getArg(0) as? MotionEvent
+                if (result == true && event?.actionMasked == MotionEvent.ACTION_MOVE) safe {
+                    val receiver = chain.getThisObject() ?: return@safe
+                    val view = banner.get(receiver) as? View ?: return@safe
+                    val dx = event.x - startX.getFloat(receiver)
+                    val dy = event.y - startY.getFloat(receiver)
+                    if (kotlin.math.abs(dx) > kotlin.math.abs(dy) || dy < 0f) warmHeadsUp(api, view)
+                }
+                result
+            }
+            api.hook(touch).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
+                val event = chain.getArg(0) as? MotionEvent ?: return@intercept chain.proceed()
+                val action = event.actionMasked
+                if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL)
+                    return@intercept chain.proceed()
+                val previous = release
+                var view: View? = null
+                try {
+                    release = null
+                    safe {
+                        val receiver = chain.getThisObject() ?: return@safe
+                        val current = (banner.get(receiver) as? View) ?: return@safe
+                        view = current
+                        if (action == MotionEvent.ACTION_UP)
+                            release = Release(receiver, current, event.x - startX.getFloat(receiver), event.y - startY.getFloat(receiver))
+                    }
+                    chain.proceed()
+                } finally {
+                    release = previous
+                    view?.let { safe { cancel(it) } }
+                }
+            }
+            // ART can inline the listener and boost calls into the OEM gesture implementation.
+            runCatching { api.deoptimize(touch) }
+            simpleBannerInstalled = true
+            current("simple_banner_route", "已安装简洁横幅的横划和上划入口")
+        }
 
         private fun installHeadsUpGesture(api:XposedInterface,loader:ClassLoader,row:Class<*>) {
             val animator=Class.forName("com.oplus.systemui.notification.headsup.windowframe.OplusHeadsUpAnimator",false,loader)
@@ -317,7 +419,7 @@ object ParticleDissolveHook {
                 capture?.let {rememberHeadsUpPosition(view,it)}
             }
         }
-        private fun commitHeadsUp(api:XposedInterface,target:HeadsUpTarget) {
+        private fun commitHeadsUp(api:XposedInterface,target:HeadsUpTarget,vertical:Boolean=true,direction:Float?=null) {
             val view=target.row
             if(!allowed(api,view.context) || effects.containsKey(view))return
             val capture=captures[view]?.takeIf {!it.cancelled}
@@ -325,10 +427,10 @@ object ParticleDissolveHook {
                 ?: headsUpFallbackCapture(target) ?: return
             if(capture.committed)return
             capture.headsUp=true
-            capture.vertical=true
+            capture.vertical=vertical
             rememberHeadsUpPosition(view,capture)
             particleRoot(view,capture,target.container,target.manager)
-            finishDismiss(view,capture)
+            finishDismiss(view,capture,direction)
         }
         private fun rememberHeadsUpPosition(view:View,c:Capture) {
             if(!view.isAttachedToWindow)return
@@ -820,13 +922,13 @@ object ParticleDissolveHook {
             val image = request(view) ?: return
             finishDismiss(view,image)
         }
-        private fun finishDismiss(view:View,image:Capture) {
+        private fun finishDismiss(view:View,image:Capture,direction:Float?=null) {
             if (image.committed) return
             if(!image.headsUp || !image.vertical)particleRoot(view,image)
             image.committed = true
             val translation=runCatching { (view.javaClass.getMethod("getTranslation").invoke(view) as Number).toFloat() }.getOrDefault(view.translationX)
             image.releaseX=handoffX(image.x,image.rowTranslation,translation)
-            image.direction=if(image.vertical || translation<0f)-1f else 1f
+            image.direction=direction ?: if(image.vertical || translation<0f)-1f else 1f
             image.initialProgress=if(image.vertical).14f else handoffProgress(translation,image.width)
             // Keep the committed row until the bounded GPU job completes; native removal can
             // otherwise release its last strong reference before the image is ready.

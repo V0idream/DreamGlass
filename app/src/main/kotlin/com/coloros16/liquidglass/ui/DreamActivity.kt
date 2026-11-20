@@ -18,9 +18,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
 import com.coloros16.liquidglass.BuildConfig
 import com.coloros16.liquidglass.App
+import com.coloros16.liquidglass.config.MemberFeaturePolicy
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.diagnostics.RuntimeStore
+import com.coloros16.liquidglass.diagnostics.Troubleshooting
+import com.coloros16.liquidglass.hook.KeyguardGlassHook
+import com.coloros16.liquidglass.hook.ParticleDissolveHook
 import com.coloros16.liquidglass.root.ScopeRestarter
 import com.coloros16.liquidglass.root.RootGrant
 import io.github.libxposed.service.XposedService
@@ -330,6 +334,7 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         }
         val tools = card()
         tools.addView(text("支持与恢复", 18f, ink, true))
+        action(tools, "自助故障排查", true) { troubleshoot() }
         tools.addView(text("记录用于排查连接和渲染问题。若需停用，可关闭模块并重启作用域，无需清除系统桌面数据。",13f,muted))
         action(tools, "复制诊断摘要", true) {
             val report = "DreamGlass ${BuildConfig.VERSION_NAME}\n${frameworkLabel.text}\n" + listOf("com.android.launcher", "com.android.systemui").joinToString("\n") { "$it\n${readReport(it)}" }
@@ -338,6 +343,33 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
         }
         action(tools, "详细日志与导出  ›", true) { advanced("log") }
         action(tools, "开源许可与项目来源", true) { startActivity(Intent(this, LicenseActivity::class.java)) }
+    }
+
+    private fun troubleshoot() {
+        TroubleshootingDialog.show(this, App.serviceRef) {
+            val scope = setOf(Troubleshooting.LAUNCHER, Troubleshooting.SYSTEM_UI)
+            val prefs = remote() ?: return@show Troubleshooting.Checks(
+                listOf(Troubleshooting.Row("框架配置", "暂时无法读取作用域实际使用的开关。请先检查 LSPosed 连接。", Troubleshooting.Level.CHECK)),
+                false, scope,
+            )
+            val masterOn = prefs.getBoolean(Prefs.KEY_MASTER, false)
+            val glassOn = prefs.getBoolean(Prefs.KEY_GLASS_ENABLE, Prefs.DEFAULT_GLASS_ENABLE)
+            val iconsOn = prefs.getBoolean(Prefs.KEY_ICON_GLASS_ENABLE, Prefs.DEFAULT_ICON_GLASS_ENABLE)
+            val member = MemberFeaturePolicy.isConfirmed(prefs)
+            val checks = listOf(
+                Troubleshooting.enabled("模块总开关", masterOn, "请返回首页开启。"),
+                Troubleshooting.enabled("液态玻璃", glassOn, "可在「通知与控制中心」开启。"),
+                Troubleshooting.enabled("桌面图标玻璃", iconsOn, "可在会员功能开启。", optional = true),
+                Troubleshooting.enabled("Dock 玻璃", prefs.getBoolean(Prefs.KEY_DOCK_GLASS_ENABLE, Prefs.DEFAULT_DOCK_GLASS_ENABLE), "可在「桌面文件夹与 Dock」开启。", optional = true),
+                Troubleshooting.enabled("锁屏玻璃", prefs.getBoolean(KeyguardGlassHook.KEY_ENABLE, false), "可在会员功能开启。", optional = true),
+                Troubleshooting.enabled("通知粒子飘散", prefs.getBoolean(ParticleDissolveHook.KEY_ENABLED, false), "可在会员功能开启。", optional = true),
+            )
+            val rows = if (member) checks else checks + Troubleshooting.Row(
+                "会员效果", "尚未确认会员功能。桌面图标玻璃、锁屏玻璃和通知粒子飘散受此状态限制。",
+                if (iconsOn) Troubleshooting.Level.CHECK else Troubleshooting.Level.INFO,
+            )
+            Troubleshooting.Checks(rows, masterOn && glassOn && iconsOn && member, scope)
+        }
     }
 
     private fun readReport(pkg: String): String = try {

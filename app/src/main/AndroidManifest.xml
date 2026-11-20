@@ -19,6 +19,9 @@
 
     <!-- User initiated custom icon library downloads only. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Local diagnostics checks Xposed modules, including modules with no launcher activity. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <!-- 包可见性声明（hook 安装分发与设置页读取宿主信息用） -->
     <queries>

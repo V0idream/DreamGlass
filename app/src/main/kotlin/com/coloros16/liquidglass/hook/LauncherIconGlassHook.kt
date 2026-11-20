@@ -448,8 +448,8 @@ internal object LauncherIconGlassHook {
             if(name=="drawWithoutDot" && context!=null)return@intercept drawNativeContent(chain,view,canvas,context)
             // An inactive nested view must mask an ancestor's draw owner, even on exceptions.
             owner.run(context) {
-                // The OEM also paints cached layers in executeAfterIconDraw, after drawIcon.
-                // Keep both phases out of an owned generated slot, while retaining animations.
+                // Suppress the owned before-icon pass while preserving the native
+                // after-icon overlays, including notification dots and counts.
                 IconGlassNativeDrawScope.run(nativeManager(context)) {chain.proceed()}
             }
         }
@@ -595,8 +595,11 @@ internal object LauncherIconGlassHook {
         val render=renderManager.javaClass.methods.firstOrNull {it.name=="renderIcon" &&
             it.parameterTypes.contentEquals(arrayOf(Canvas::class.java,Boolean::class.javaPrimitiveType)) &&
             it.returnType==Void.TYPE} ?: return
-        if(nativeRenderMethods.add(render))module.hook(render).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-            if(IconGlassNativeDrawScope.suppresses(chain.getThisObject()))null else chain.proceed()
+        if(nativeRenderMethods.add(render)) {
+            module.hook(render).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                if(IconGlassNativeDrawScope.suppresses(chain.getThisObject(),chain.getArg(1)==true))null else chain.proceed()
+            }
+            mountNativePreviewCover(module,render)
         }
         runCatching {module.deoptimize(target)}.onFailure(::report)
         module.hook(target).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
@@ -621,6 +624,22 @@ internal object LauncherIconGlassHook {
             } else chain.proceed()
         }
     }
+
+    private fun mountNativePreviewCover(module:XposedInterface,render:Method) {
+        // Folder animations can repaint a cached icon during the same after-icon
+        // pass. Filter that renderer at its own entry, outside the badge renderer.
+        runCatching {
+            val manager=render.declaringClass
+            val type=Class.forName("com.android.launcher3.iconrender.impl.FolderIconPreviewRender",false,manager.classLoader)
+            val draw=type.getDeclaredMethod("renderAfterIconDrawn",Canvas::class.java,manager)
+            check(draw.returnType==Void.TYPE)
+            module.hook(draw).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                if(IconGlassNativeDrawScope.owns(chain.getArg(1)))null else chain.proceed()
+            }
+            runCatching {module.deoptimize(render)}.onFailure(::report)
+        }.onFailure(::report)
+    }
+
     private fun mountDrawableOverride(module:XposedInterface,type:Class<*>) {
         if(!drawableTypes.add(type))return
         if(contract?.fast?.isAssignableFrom(type)!=true) {mountGenericDrawable(module,type);return}
