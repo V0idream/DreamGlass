@@ -11,7 +11,7 @@ internal object IconGlassImageBinding {
         params:IconGlassMaterial.Params,ready:()->Unit,frame:IconGlassWallpaper.Frame?=null):Bitmap? {
         val bounds=IconGlassImageGeometry.bounds(view) ?: return null
         IconGlassImageClip.apply(view,bounds)
-        val generated=LauncherIconGlassAssets.prefabFor(view.tag) ?: LauncherIconGlassAssets.generated(source) ?: run {
+        val generated=LauncherIconGlassAssets.prefabFor(view.tag) ?: LauncherIconGlassAssets.generated(source,view.tag) ?: run {
             val matrix=Matrix();view.transformMatrixToGlobal(matrix);matrix.mapRect(bounds)
             LauncherIconGlassBinding.prepareBitmap(view.context,view.tag,source,component,user,
                 bounds,params,ready,frame)
@@ -24,7 +24,7 @@ internal object IconGlassImageBinding {
     fun drawFallback(view:ImageView,canvas:android.graphics.Canvas):Boolean {
         val area=IconGlassImageGeometry.bounds(view) ?: return false
         val bitmap=(view.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap ?: return false
-        val generated=if(LauncherIconGlassAssets.isGenerated(bitmap))bitmap else LauncherIconGlassAssets.generated(bitmap) ?: return false
+        val generated=LauncherIconGlassAssets.generated(bitmap,view.tag) ?: return false
         val save=canvas.save()
         canvas.clipPath(android.graphics.Path().apply {addRoundRect(area,
             minOf(area.width(),area.height())*.235f,minOf(area.width(),area.height())*.235f,android.graphics.Path.Direction.CW)})

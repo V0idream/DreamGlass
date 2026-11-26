@@ -1,6 +1,5 @@
 package com.coloros16.liquidglass.ui
 
-import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -27,6 +26,7 @@ import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.config.SafeAreas
 import com.coloros16.liquidglass.config.SafeAreaWallpaper
 import com.coloros16.liquidglass.root.RootGrant
+import com.coloros16.liquidglass.root.RootWallpaper
 import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.max
@@ -93,7 +93,7 @@ class SafeAreaActivity : AppCompatActivity() {
         pick.isEnabled = false
         worker.execute {
             val root = if (uri == null && (requestRoot || RootGrant.canTryAutomatically(this))) {
-                runCatching { rootWallpaper(requestRoot) }.getOrElse { RootPreview(false, null) }
+                runCatching { RootWallpaper.read(this, scene, requestRoot) }.getOrElse { RootWallpaper.Result(false, null) }
                     .also { RootGrant.remember(this, it.granted) }
             } else null
             val image = if (uri != null) runCatching { decode { contentResolver.openInputStream(uri) } }.getOrNull()
@@ -136,50 +136,6 @@ class SafeAreaActivity : AppCompatActivity() {
             options.inJustDecodeBounds = false
             options.inSampleSize = sampleSize(size)
             return BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, options)
-        }
-    }
-
-    private data class RootPreview(val granted: Boolean, val image: Bitmap?)
-    private fun rootWallpaper(requestRoot: Boolean): RootPreview {
-        val wm = WallpaperManager.getInstance(this)
-        val user = android.os.Process.myUid() / 100_000
-        val dir = "/data/system/users/$user"
-        val file = runCatching {
-            if (scene == SafeAreas.Scene.LOCK && wm.getWallpaperId(WallpaperManager.FLAG_LOCK) >= 0) "$dir/wallpaper_lock"
-            else if (wm.wallpaperInfo == null) "$dir/wallpaper" else null
-        }.getOrNull()
-        // Use one su request for both authorization and the selected scene. The path is
-        // derived only from the app's own user ID and fixed system wallpaper filenames.
-        val read = if (file == null) ":" else "cat $file 2>/dev/null"
-        val command = "[ \"\$(id -u)\" = 0 ] || exit 13; echo DGROOT; $read"
-        val process = ProcessBuilder("su", "-c", command).redirectErrorStream(false).start()
-        var granted = false
-        val stop = java.util.Timer(true)
-        try {
-            stop.schedule(object : java.util.TimerTask() {
-                override fun run() { process.destroyForcibly() }
-            }, if (requestRoot) 40_000L else 2_500L)
-            val bytes = process.inputStream.use { input ->
-                val marker = "DGROOT\n".toByteArray(Charsets.US_ASCII)
-                if (!input.readNBytes(marker.size).contentEquals(marker)) return RootPreview(false, null)
-                granted = true
-                val output = java.io.ByteArrayOutputStream()
-                val chunk = ByteArray(8192)
-                while (true) {
-                    val count = input.read(chunk)
-                    if (count < 0) break
-                    if (output.size() + count > 24 * 1024 * 1024) return RootPreview(true, null)
-                    output.write(chunk, 0, count)
-                }
-                output.toByteArray()
-            }
-            val image = if (process.waitFor() == 0 && bytes.isNotEmpty()) decode { bytes.inputStream() } else null
-            return RootPreview(true, image)
-        } catch (_: java.io.IOException) {
-            return RootPreview(granted, null)
-        } finally {
-            stop.cancel()
-            if (process.isAlive) process.destroyForcibly()
         }
     }
 

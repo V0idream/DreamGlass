@@ -22,6 +22,23 @@ object QsSurfaceHook {
     private const val SLIDER = "com.oplus.systemui.qs.base.seek.OplusQsVerticalSeekBar"
     private val iconBackgrounds = Collections.synchronizedMap(WeakHashMap<Drawable, WeakReference<View>>())
 
+    private class DetailSliderFields(val type: Class<*>, val detail: Field, val radius: Field, val weight: Field)
+    private var detailSliderFields: DetailSliderFields? = null
+
+    fun isDetailSlider(view: View): Boolean {
+        val fields = detailSliderFields ?: return false
+        return fields.type.isInstance(view) && runCatching { fields.detail.getBoolean(view) }.getOrDefault(false)
+    }
+
+    fun detailSliderArcRadius(view: View, bounds: Rect): Float? {
+        val fields = detailSliderFields ?: return null
+        if (!isDetailSlider(view)) return null
+        return runCatching {
+            QsSurfacePolicy.nativeArcRadius(fields.radius.getFloat(view), fields.weight.getFloat(view),
+                bounds.width(), bounds.height())
+        }.getOrNull()
+    }
+
     fun install(api: XposedInterface, loader: ClassLoader, enabled: () -> Boolean) {
         installSlider(api, loader, enabled)
         installIconBackground(api, loader, enabled)
@@ -83,6 +100,9 @@ object QsSurfaceHook {
             val bounds = QsSurfacePolicy.field(slider, "mClipProgressRect")
             val radius = QsSurfacePolicy.field(slider, "mCurProgressRadius")
             val weight = QsSurfacePolicy.field(slider, "mBackgroundRoundCornerWeight")
+            detailSliderFields = runCatching {
+                DetailSliderFields(slider, QsSurfacePolicy.field(slider, "isDetailToggle"), radius, weight)
+            }.getOrNull()
             val states = Collections.synchronizedMap(WeakHashMap<View, ClipState>())
             // Use the ROM's own smooth-corner constructor, rather than guessing a fixed radius.
             val smooth = try {
@@ -103,14 +123,15 @@ object QsSurfaceHook {
                             state.rect.set(rect)
                             state.path.reset()
                             val w = weight.getFloat(view)
-                            val rounded = if (smooth != null && w.isFinite() && w != 0f) try {
+                            val arc = detailSliderArcRadius(view, rect)
+                            val rounded = if (arc == null && smooth != null && w.isFinite() && w != 0f) try {
                                 state.adapter = state.adapter ?: smooth.second.invoke(smooth.first, state.path)
                                 state.radii.fill(r)
                                 smooth.third.invoke(smooth.first, state.adapter, state.rect, state.radii, Path.Direction.CW, w) == true
                             } catch (_: Throwable) { false } else false
                             if (!rounded || state.path.isEmpty) {
                                 state.path.reset()
-                                state.path.addRoundRect(state.rect, r, r, Path.Direction.CW)
+                                state.path.addRoundRect(state.rect, arc ?: r, arc ?: r, Path.Direction.CW)
                             }
                             state.path
                         }
@@ -139,6 +160,14 @@ object QsSurfaceHook {
 
 /** Exact ownership rules: never remove a round 1x1 tile or a status-bar icon's background. */
 object QsSurfacePolicy {
+    /** ColorOS uses weight 1 for its full-corner slider preset and 0 for an ordinary round rect. */
+    fun nativeArcRadius(radius: Float, smoothWeight: Float, width: Int, height: Int): Float? {
+        if (!radius.isFinite() || radius <= 0f || width <= 0 || height <= 0) return null
+        val half = minOf(width, height) / 2f
+        if (smoothWeight == 1f && radius >= half - 1f) return half
+        return if (smoothWeight == 0f) radius.coerceAtMost(half) else null
+    }
+
     fun isWideTile(name: String): Boolean = name ==
         "com.oplus.systemui.plugins.qs.customize.view.tile.OplusQSResizeableTileViewTwoXOne"
 

@@ -98,9 +98,8 @@ internal object IconGlassLibraryRuntime {
             context.contentResolver.registerContentObserver(IconLibrary.URI, false, observer)
         }.isSuccess
         val updated = runCatching {
-            val response = context.contentResolver.call(IconLibrary.URI, "catalog", null, null)
-            val encoded = requireNotNull(response?.getString("catalog"))
-            IconLibrary.parse(encoded).associateBy { it.pkg }
+            val response = requireNotNull(context.contentResolver.call(IconLibrary.URI, "catalog", null, null))
+            IconLibrary.parseRuntimeCatalog(response).associateBy { it.pkg }
         }.getOrNull()
         var redraw = false
         val recoverEntries = synchronized(lock) {

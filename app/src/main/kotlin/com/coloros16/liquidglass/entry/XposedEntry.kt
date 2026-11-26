@@ -10,6 +10,7 @@ import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.config.Prefs
 import com.coloros16.liquidglass.hook.AppGlassHook
 import com.coloros16.liquidglass.hook.BlurDrawHook
+import com.coloros16.liquidglass.island.FluidIslandHook
 import com.coloros16.liquidglass.hook.HostVersion
 import com.coloros16.liquidglass.hook.SystemUiLifecycle
 import com.coloros16.liquidglass.hook.SystemUiInstallGate
@@ -128,6 +129,7 @@ class XposedEntry : XposedModule() {
         // 注意：HotReloadingParam **不**继承 ModuleLoadedParam，只暴露 extras/savedState，拿不到 processName
         Lg.i(TAG, "hot-reload: approving (old-class callback)")
         try {
+            FluidIslandHook.shutdown()
             BlurDrawHook.shutdownForHotReload()
         } catch (t: Throwable) {
             Lg.w(TAG, "hot-reload: shutdown step failed", t)
@@ -259,6 +261,7 @@ class XposedEntry : XposedModule() {
         // 玻璃源 = SystemUI 端每元素背景源（BlurDrawHook 内 captureDisplay）。
         runCatching { BlurDrawHook.install(this, classLoader) }
             .onFailure { Lg.e(TAG, "SystemUI blur hook installation failed", it) }
+        FluidIslandHook.install(this, classLoader)
         runCatching { KeyguardGlassHook.install(this, classLoader) }
             .onFailure { Lg.e(TAG, "SystemUI keyguard hook installation failed", it) }
         runCatching { SceneFilter.install(this, classLoader) }

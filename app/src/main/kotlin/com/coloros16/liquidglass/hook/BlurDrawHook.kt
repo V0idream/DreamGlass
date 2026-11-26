@@ -27,6 +27,8 @@ import android.view.ViewParent
 import android.view.WindowManager
 import android.widget.TextView
 import com.coloros16.liquidglass.config.Prefs
+import com.coloros16.liquidglass.island.FluidIslandHook
+import com.coloros16.liquidglass.island.IslandGlass
 import com.coloros16.liquidglass.diagnostics.RuntimeDiagnostics
 import com.coloros16.liquidglass.glass.IosGlassPreset
 import com.coloros16.liquidglass.glass.GlassRegistry
@@ -1478,23 +1480,40 @@ object BlurDrawHook {
                 addAction(android.content.Intent.ACTION_SCREEN_OFF)
                 addAction(android.content.Intent.ACTION_USER_PRESENT)
                 addAction(android.content.Intent.ACTION_WALLPAPER_CHANGED)
+                addAction(android.content.Intent.ACTION_TIME_TICK)
+                addAction(android.content.Intent.ACTION_TIME_CHANGED)
+                addAction(android.content.Intent.ACTION_TIMEZONE_CHANGED)
+                addAction(android.content.Intent.ACTION_BATTERY_CHANGED)
                 addAction("android.intent.action.USER_SWITCHED")
             }
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
                     try {
                         val action = intent?.action ?: return
+                        if (action == android.content.Intent.ACTION_BATTERY_CHANGED) {
+                            AodTransitionHook.batteryChanged(intent)
+                            return
+                        }
+                        if (action == android.content.Intent.ACTION_TIME_TICK ||
+                            action == android.content.Intent.ACTION_TIME_CHANGED ||
+                            action == android.content.Intent.ACTION_TIMEZONE_CHANGED) {
+                            AodTransitionHook.tickClock()
+                            return
+                        }
                         // 缓存置过期 → 下次 isKeyguardLockedNow 强制实测（不直接写死状态值）
                         cachedKeyguardLockedAt = 0L
                         if (action == android.content.Intent.ACTION_WALLPAPER_CHANGED ||
                             action == "android.intent.action.USER_SWITCHED") {
                             LockWallpaperBackdrop.changed()
                             lockWallpaperSnapshot = null
+                            shadeWallpaper.invalidate()
+                            AodTransitionHook.refreshWallpaper()
                             postInvalidateHosts()
                             return
                         }
                         if (action == android.content.Intent.ACTION_SCREEN_OFF) {
                             screenInteractive = false
+                            shadeWallpaper.reset()
                             captureEpoch++
                             // Never expose pre-lock app content to native AOD/lockscreen draws.
                             screenSnapshot = null
@@ -1913,6 +1932,11 @@ object BlurDrawHook {
 
     /** COS17 factories return AutoBlurDrawable wrappers, not drawBlurShader's inner target. */
     private val qsSeekbars = QsSeekbarCompat()
+    private const val NATIVE_SLIDER_ARC = "native-slider-arc"
+
+    private fun nativeSliderContourChanged(previous: RegionEntry, current: RegionEntry): Boolean =
+        (previous.cornerRadiusSource == NATIVE_SLIDER_ARC || current.cornerRadiusSource == NATIVE_SLIDER_ARC) &&
+            (previous.cornerRadius != current.cornerRadius || previous.cornerRadiusSource != current.cornerRadiusSource)
 
     /** [spec/86] 进度填充层 tint alpha（0..255）。半透明让轨道层玻璃的折射/高光透出；调大更亮。 */
     private const val SEEKBAR_ACTIVE_TINT_ALPHA = 0x66
@@ -2320,7 +2344,7 @@ object BlurDrawHook {
         screenInteractive, isKeyguardLockedNow(),
         panelExpansionActive && visibleCaptureHost(shadeRootViewCache),
         isHeadsUpHostActive(), isCardBackgroundHostActive(), isSimpleBannerHostActive(),
-        visibleCaptureHost(captureMenuHost?.get()),
+        visibleCaptureHost(captureMenuHost?.get()), IslandGlass.demand(),
     )
 
     @Volatile private var captureRetryAtMs = 0L
@@ -2328,6 +2352,7 @@ object BlurDrawHook {
     private val overlayFrameEpochs = OverlayFrameEpochs()
     @Volatile private var cloudRequiredCaptureEpoch = Long.MIN_VALUE
     @Volatile private var bannerRequiredCaptureEpoch = Long.MIN_VALUE
+    @Volatile private var islandRequiredCaptureEpoch = Long.MIN_VALUE
     private var lastCaptureStartMs = 0L
     private val captureWake = Object()
     private val captureExecutor = RuntimeWorkPolicy.executor("DreamGlass-capture")
@@ -2616,7 +2641,14 @@ object BlurDrawHook {
         runCatching { ParticleDissolveHook.install(api, classLoader, RuntimeDiagnostics::mark) }
             .onFailure { Lg.w(TAG, "SystemUI particle hooks unavailable", it) }
         this.api = api
-        LockWallpaperBackdrop.install(api, classLoader, ::postInvalidateHosts)
+        AodTransitionHook.install(api, classLoader)
+        LockWallpaperBackdrop.install(api, classLoader) {
+            shadeWallpaper.invalidate()
+            AodTransitionHook.refreshWallpaper()
+            postInvalidateHosts()
+        }
+        shadeWallpaper.install(api, classLoader, ::isBehindScrimHost,
+            { screenInteractive && !isKeyguardLockedNow() }, ::drawShadeWallpaper, ::postInvalidateHosts)
         if (Build.VERSION.SDK_INT >= 33) runCatching {
             LockMediaBackdrop.install(api, ::isKeyguardLockedNow,
                 { Prefs.glassEnabled(api) && !isPowerSaveGlassOff() }) {
@@ -3764,6 +3796,8 @@ object BlurDrawHook {
      * @param logTag   注册点标记（"map"/"swipe"/"capsule"/"capsuleEar"/"mediaCarousel"/"nbv" 等）
      */
     private fun isUnifiedCornerScope(hostView: View, drawable: Any?, logTag: String): Boolean {
+        // The progress fill is drawn separately by ColorOS and keeps the native slider contour.
+        if (QsSurfaceHook.isDetailSlider(hostView)) return false
         // [doc/spec/106] 锁屏实时门控放在**缓存之前**：锁屏/解锁共用同一批 View（shade 的
         // NotificationStackScrollLayout 不重建），若把锁屏时判出的 false 写进缓存，解锁后
         // 这些卡片会永远拿不到统一圆角。此处不命中即直接返回 false 且**不污染缓存**。
@@ -3905,6 +3939,7 @@ object BlurDrawHook {
         w: Float,
         h: Float,
     ): Float {
+        if (entry.cornerRadiusSource == NATIVE_SLIDER_ARC) return ownRadius
         val base = GlassRegistry.cornerOverrideFor(elementId)?.coerceAtMost(minOf(w, h) / 2f) ?: ownRadius
         if (!entry.unifiedScope) return base
         if (!Prefs.unifiedCornerEnabled(api)) return base
@@ -4499,8 +4534,9 @@ object BlurDrawHook {
             if (screenRegionMap.size > 1024) screenRegionMap.clear()
             // [doc/spec/07 + 2026-08-13] 新映射建立 = 内容变化信号 → 触发整屏快照重抓
             triggerBackgroundCapture()
-        } else if (previous.region != region || previous.autoBounds != bounds) {
+        } else if (previous.region != region || previous.autoBounds != bounds || nativeSliderContourChanged(previous, entry)) {
             screenRegionMap[key] = entry
+            if (nativeSliderContourChanged(previous, entry)) geometryCache.remove(key)
             logThrottled("$logTag-region-updated", Log.DEBUG) { "$logTag: updated screen region id=$key region=$region bounds=$bounds" }
             if (screenRegionMap.size > 1024) screenRegionMap.clear()
             // 位置/尺寸更新仅写表不重抓（静态壁纸背景，srcRect 实时折算已跟手）
@@ -5040,8 +5076,9 @@ object BlurDrawHook {
             // [doc/spec/07 + 2026-08-13] 新映射建立 = 内容变化信号 → 触发整屏快照重抓
             //（registerHostView 时映射尚未写入，抓屏触发只能在此处；立即重抓见 triggerBackgroundCapture）
             triggerBackgroundCapture()
-        } else if (previous.region != region || previous.autoBounds != bounds) {
+        } else if (previous.region != region || previous.autoBounds != bounds || nativeSliderContourChanged(previous, entry)) {
             screenRegionMap[key] = entry
+            if (nativeSliderContourChanged(previous, entry)) geometryCache.remove(key)
             logThrottled("$logTag-region-updated", Log.DEBUG) { "$logTag: updated screen region id=$key region=$region bounds=$bounds" }
             // map 防膨胀（同上）
             if (screenRegionMap.size > 1024) screenRegionMap.clear()
@@ -5969,6 +6006,7 @@ object BlurDrawHook {
                         if (view != null && isShadeRootView(view)) {
                             // 窗口（重建后）重挂载 → 缓存刷新：shade 根解析不依赖宿主登记时机
                             shadeRootViewCache = view
+                            view.post { if (view.isAttachedToWindow) AodTransitionHook.attach(view) }
                             shadeSfcCache = null  // 旧 sfc 在窗口重建后可能失效/错误，强制重解析
                             Lg.i(TAG, "bg-source: shade root attached/reattached, cache refreshed ${view.javaClass.simpleName}")
                         }
@@ -5995,6 +6033,7 @@ object BlurDrawHook {
                         // 仅清指向本根的缓存（窗口重建时旧根 detach → 清掉 stale 根，等新根 attach 重缓存；
                         // 若缓存已指向更新的根则不动）
                         if (view != null && shadeRootViewCache === view) {
+                            AodTransitionHook.detach(view)
                             shadeRootViewCache = null
                             shadeSfcCache = null
                             Lg.i(TAG, "bg-source: shade root detached, cache cleared")
@@ -7298,7 +7337,7 @@ object BlurDrawHook {
                         if (thisView != null) {
                             val isContainer = containerCls?.isInstance(thisView)
                                 ?: (thisView.javaClass.name == CLASS_CAPSULE_PLUGIN_CONTAINER)
-                            if (isContainer) {
+                            if (isContainer && !FluidIslandHook.suppresses(thisView)) {
                                 // [2026-09-16] 原每帧 dumpParents(thisView) 诊断已移除（逐帧刷屏）；
                                 // 需要时用 dumpParents 单独排查
                                 val canvas = try {
@@ -7527,10 +7566,11 @@ object BlurDrawHook {
         hostView: View,
         source: String = "seedling-heuristic",
         cornerRadiusOverride: Float = 0f,
+        nativeArcRadius: Float? = null,
     ): Boolean {
         if (source.startsWith("seedling-") && !seedlingRuntimeAllowed()) return false
         registerHostView(hostView)
-        val cornerRadius = if (cornerRadiusOverride > 0f) {
+        val cornerRadius = nativeArcRadius ?: if (cornerRadiusOverride > 0f) {
             cornerRadiusOverride
         } else {
             Math.min(bounds.width(), bounds.height()).toFloat() * seedlingCardCornerRatio
@@ -7538,8 +7578,8 @@ object BlurDrawHook {
         val hostName = if (source.isEmpty()) hostView.javaClass.simpleName else "$source:${hostView.javaClass.simpleName}"
         val entry = RegionEntry(
             screenRegion, bounds, hostName,
-            cornerRadius, "seedling-heuristic",
-            cornerIsConic = true, cornerWeight = DEFAULT_CORNER_WEIGHT,
+            cornerRadius, if (nativeArcRadius == null) "seedling-heuristic" else NATIVE_SLIDER_ARC,
+            cornerIsConic = nativeArcRadius == null, cornerWeight = DEFAULT_CORNER_WEIGHT,
             hostViewRef = WeakReference(hostView),
         )
         val previous = screenRegionMap[id]
@@ -7548,13 +7588,16 @@ object BlurDrawHook {
             if (screenRegionMap.size > 1024) screenRegionMap.clear()
             triggerBackgroundCapture()
             Lg.i(TAG, "seedling-card: region registered id=$id view=$hostName region=$screenRegion corner=$cornerRadius")
-        } else if (previous.region != screenRegion || previous.autoBounds != bounds) {
+        } else if (previous.region != screenRegion || previous.autoBounds != bounds || nativeSliderContourChanged(previous, entry)) {
             screenRegionMap[id] = entry
         }
         return true
     }
 
     // ------------------------------------------------------------ [doc/spec/09] 音量条玻璃化 ------------------------------------------------------------
+
+    private class VolumeTrackFields(val bounds: Field, val radius: Field, val weight: Field)
+    private var volumeTrackFields: VolumeTrackFields? = null
 
     /**
      * [doc/spec/09 + doc/spec/134] 音量条液态玻璃化 —— hook `COUIVerticalSeekBar.draw(Canvas)`。
@@ -7573,6 +7616,11 @@ object BlurDrawHook {
         if (volumeSeekBarMounted) return
         try {
             val clazz = hostForName(CLASS_VERTICAL_SEEKBAR, classLoader)
+            volumeTrackFields = runCatching {
+                VolumeTrackFields(QsSurfacePolicy.field(clazz, "mBackgroundRect"),
+                    QsSurfacePolicy.field(clazz, "mCurBackgroundRadius"),
+                    QsSurfacePolicy.field(clazz, "mBackgroundRoundCornerWeight"))
+            }.getOrNull()
             val method = clazz.getMethod(METHOD_DRAW, Canvas::class.java)
             api.hook(method)
                 .setExceptionMode(ExceptionMode.PROTECTIVE)
@@ -8003,6 +8051,14 @@ object BlurDrawHook {
             logVolumeDiag("not-shown", "volume-seekbar: 跳过 —— isShown=false（不可见实例）")
             return
         }
+        val track = Rect(0, 0, w, h)
+        val nativeArc = volumeTrackFields?.let { fields ->
+            runCatching {
+                val nativeBounds = fields.bounds.get(seekbar) as? Rect ?: return@runCatching null
+                QsSurfacePolicy.nativeArcRadius(fields.radius.getFloat(seekbar), fields.weight.getFloat(seekbar),
+                    nativeBounds.width(), nativeBounds.height())?.also { track.set(nativeBounds) }
+            }.getOrNull()
+        }
         val loc = IntArray(2)
         try {
             seekbar.getLocationOnScreen(loc)
@@ -8010,15 +8066,17 @@ object BlurDrawHook {
             Lg.e(TAG, "volume-seekbar: getLocationOnScreen failed", t); return
         }
         val screenRegion = RectF(
-            loc[0].toFloat(), loc[1].toFloat(),
-            (loc[0] + w).toFloat(), (loc[1] + h).toFloat(),
+            (loc[0] + track.left).toFloat(), (loc[1] + track.top).toFloat(),
+            (loc[0] + track.right).toFloat(), (loc[1] + track.bottom).toFloat(),
         )
         val id = System.identityHashCode(seekbar)
         registerSeedlingCardRegion(
-            id, screenRegion, Rect(0, 0, w, h), seekbar,
-            source = "volume-seekbar", cornerRadiusOverride = resolveVolumeCornerPx(seekbar),
+            id, screenRegion, track, seekbar,
+            source = "volume-seekbar", cornerRadiusOverride = if (nativeArc == null) resolveVolumeCornerPx(seekbar) else 0f,
+            nativeArcRadius = nativeArc,
         )
-        drawSeedlingGlassOnCanvas(canvas, seekbar, id, w, h, screenRegion, offsetX = 0f, offsetY = 0f)
+        drawSeedlingGlassOnCanvas(canvas, seekbar, id, track.width(), track.height(), screenRegion,
+            offsetX = track.left.toFloat(), offsetY = track.top.toFloat())
         // 顺带失效 ···按钮：玻璃/填充开关切换后按钮视图随音量条每帧重绘即时生效
         try {
             volumeMoreBtnHost?.get()?.takeIf { it.isAttachedToWindow }?.invalidate()
@@ -8535,15 +8593,20 @@ object BlurDrawHook {
         val requiredEpoch = when {
             host.javaClass.name == CLASS_CARD_BACKGROUND_VIEW -> cloudRequiredCaptureEpoch
             entry.hostViewName.startsWith("simple-banner:") -> bannerRequiredCaptureEpoch
+            entry.hostViewName.startsWith("island-takeover:") -> islandRequiredCaptureEpoch
             else -> Long.MIN_VALUE
         }
         if (!isKeyguardLockedNow() && captureMode() != Prefs.BG_CAPTURE_MODE_STATIC &&
             !overlayFrameEpochs.accepts(source, requiredEpoch)) return false
         val viewport = RectF(0f, 0f, w.toFloat(), h.toFloat())
-        val cornerRadius = GlassRegistry.cornerOverrideFor(id)?.coerceAtMost(minOf(w, h) / 2f)
+        val cornerRadius = (if (entry.cornerRadiusSource == NATIVE_SLIDER_ARC) null else
+            GlassRegistry.cornerOverrideFor(id)?.coerceAtMost(minOf(w, h) / 2f))
             ?: entry.cornerRadius.takeIf { it > 0f }
             ?: (Math.min(w, h).toFloat() * seedlingCardCornerRatio)
         var params = buildParams(w.toFloat(), h.toFloat(), cornerRadius, entry.cornerIsConic, entry.cornerWeight, elementId = id)
+        if (host.javaClass.name == CLASS_CARD_BACKGROUND_VIEW) {
+            params = NativeCloudBackdrop.glassFinish(params)
+        }
         // 音量元素（hostViewName="volume-*"：音量条/···按钮）弱化折射与色散：小面积元素强折射会把
         // 快照内容放大成扭曲倒影（验收反馈的黑渐变/棕色带/红色倒影），预设未接管该键时才衰减
         if (entry.hostViewName.startsWith("volume-")) {
@@ -8606,6 +8669,44 @@ object BlurDrawHook {
         return drawn
     }
 
+    internal fun refreshIslandBackdrop(fresh: Boolean) {
+        if (api == null || !IslandGlass.demand() || isPowerSaveGlassOff()) return
+        if (fresh && captureMode() != Prefs.BG_CAPTURE_MODE_STATIC) {
+            captureEpoch++
+            islandRequiredCaptureEpoch = captureEpoch
+        }
+        triggerBackgroundCapture(contentChange = false)
+    }
+
+    internal fun mayRefreshIslandBackdrop(): Boolean =
+        api != null && captureMode() != Prefs.BG_CAPTURE_MODE_STATIC && !isPowerSaveGlassOff()
+
+    internal fun drawIslandSurface(canvas: Canvas, surface: View, radius: Float): Boolean {
+        if (api == null || !canvas.isHardwareAccelerated || surface.width <= 0 ||
+            surface.height <= 0 || !IslandGlass.demand() || isKeyguardLockedNow()) return false
+        val root = surface.rootView
+        if (reflectViewRootSurfaceControl(root)?.isValid != true) return false
+        val position = IntArray(2)
+        surface.getLocationOnScreen(position)
+        val width = surface.width
+        val height = surface.height
+        val bounds = Rect(0, 0, width, height)
+        val area = RectF(position[0].toFloat(), position[1].toFloat(),
+            position[0] + width.toFloat(), position[1] + height.toFloat())
+        val id = System.identityHashCode(surface)
+        if (screenRegionMap[id] == null) surface.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = Unit
+            override fun onViewDetachedFromWindow(v: View) {
+                v.removeOnAttachStateChangeListener(this)
+                screenRegionMap.remove(id)
+                shaderCache.remove(id)
+                appliedUniformsMap.remove(id)
+            }
+        })
+        registerSeedlingCardRegion(id, area, bounds, surface, "island-takeover", radius)
+        return drawSeedlingGlassOnCanvas(canvas, surface, id, width, height, area, 0f, 0f)
+    }
+
     // ------------------------------------------------------------ [spec/44c] 流体云展开卡片玻璃化（CardBackgroundView 宿主）
 
     /** COS17's plugin owns draw()/native BackgroundBlurDrawable, but inherits the empty
@@ -8665,14 +8766,15 @@ object BlurDrawHook {
     private class ExpandedCloudGlassDrawable(host: View, original: Drawable?) :
         BoundedGlassDrawable(host, original,
             enabled = { seedlingRuntimeAllowed() && Prefs.glassEnabled(api) && !isPowerSaveGlassOff() },
-            render = { canvas, target, _ ->
+            render = { canvas, target, bounds ->
                 cardBackgroundActiveHost = WeakReference(target)
                 if (!cardBackgroundContinuousRunning) startCardBackgroundContinuousCapture()
-                renderCardBackgroundGlass(canvas, target)
+                renderCardBackgroundGlass(canvas, target, bounds)
             },
-            rendered = { RuntimeDiagnostics.mark("seedling_card_paint", "展开流体云已在原生背景出口绘制液态玻璃，未叠加系统深色模糊") },
+            rendered = { RuntimeDiagnostics.mark("seedling_card_paint", "已在原生展开卡片绘制玻璃底，并保留系统渐变") },
             failure = { Lg.e(TAG, "seedling-cardview: glass failed; retain native background", it) },
-            forwardNativeCallbacks = true, hideNativeBlurOnGlass = true)
+            forwardNativeCallbacks = true, hideNativeBlurOnGlass = true,
+            splitGlassBackground = NativeCloudBackdrop::splitLayers)
 
     /**
      * [spec/44c] CardBackgroundView「容器即元素」玻璃绘制路径：背景 View 自身 bounds 登记 + 画玻璃。
@@ -8681,21 +8783,29 @@ object BlurDrawHook {
      * [2026-08-15] 圆角 = 运行时读资源 dimen `round_corner_radius_fluid_cloud`（20dp，SystemUIPlugin.apk
      * 资源），一次解析缓存（[roundCornerFluidCloudPx]），失败兜底 20dp×density；不是启发式 min(w,h)×ratio。
      */
-    private fun renderCardBackgroundGlass(canvas: Canvas, bgView: View): Boolean {
+    private fun renderCardBackgroundGlass(canvas: Canvas, bgView: View, paintBounds: Rect): Boolean {
         if (!seedlingRuntimeAllowed()) return false
-        val w = bgView.width
-        val h = bgView.height
+        val w = paintBounds.width()
+        val h = paintBounds.height()
         if (w <= 0 || h <= 0 || bgView.visibility != View.VISIBLE) return false
         val loc = IntArray(2)
-        try {
+        val screenRegion = try {
             bgView.getLocationOnScreen(loc)
+            // The native card animates its parent scale as well as its drawable bounds.
+            // Keep the texture rect aligned to the pixels actually shown in the window.
+            val transform = android.graphics.Matrix()
+            bgView.transformMatrixToGlobal(transform)
+            val origin = floatArrayOf(0f, 0f)
+            transform.mapPoints(origin)
+            RectF(paintBounds).apply {
+                transform.mapRect(this)
+                offset(loc[0] - origin[0], loc[1] - origin[1])
+            }
         } catch (t: Throwable) {
             return false
         }
-        val screenRegion = RectF(
-            loc[0].toFloat(), loc[1].toFloat(),
-            (loc[0] + w).toFloat(), (loc[1] + h).toFloat(),
-        )
+        if (screenRegion.isEmpty || !screenRegion.left.isFinite() || !screenRegion.top.isFinite() ||
+            !screenRegion.right.isFinite() || !screenRegion.bottom.isFinite()) return false
         val id = System.identityHashCode(bgView)
         // 圆角：一次解析并缓存（避免每帧 getIdentifier）；SystemUIPlugin.apk 资源，包 com.oplus.systemui.plugins
         if (roundCornerFluidCloudPx <= 0f) {
@@ -8712,8 +8822,9 @@ object BlurDrawHook {
                 20f * bgView.resources.displayMetrics.density
             }
         }
-        registerSeedlingCardRegion(id, screenRegion, Rect(0, 0, w, h), bgView, "seedling-cardview", roundCornerFluidCloudPx)
-        return drawSeedlingGlassOnCanvas(canvas, bgView, id, w, h, screenRegion, offsetX = 0f, offsetY = 0f)
+        registerSeedlingCardRegion(id, screenRegion, paintBounds, bgView, "seedling-cardview", roundCornerFluidCloudPx)
+        return drawSeedlingGlassOnCanvas(canvas, bgView, id, w, h, screenRegion,
+            offsetX = paintBounds.left.toFloat(), offsetY = paintBounds.top.toFloat())
     }
 
     /** [2026-08-15 持续抓屏对齐 heads-up] CardBackgroundView 活跃判定：活跃宿主存在且仍 attach、可见
@@ -11063,6 +11174,9 @@ object BlurDrawHook {
      * 防永久方形）；限容 512（同 lastRenderScreenRegion 模式），超限整体清空防内存膨胀。
      */
     private fun resolveCornerRadius(proxy: Any?, bounds: Rect, hostView: View? = null, drawable: Any? = null): CornerInfo {
+        if (hostView != null) QsSurfaceHook.detailSliderArcRadius(hostView, bounds)?.let {
+            return CornerInfo(it, NATIVE_SLIDER_ARC)
+        }
         if (mViewProxyGetBlurConfig == null) return CornerInfo(DEFAULT_CORNER_RADIUS_PX, "default")
         // 缓存命中：seekbar 级 6 兜底按量化 minSide 档位判定（active 拖动时填充高度每帧小幅变化，
         // 量化档位不变 → 命中缓存，避免每帧 5-6 级反射）；其他级（反射真实值）bounds 精确判定
@@ -12381,7 +12495,8 @@ object BlurDrawHook {
             if (cg.bodyRect != wantBody) {
                 submitGeometryCompute(id, bounds, force = true)
             }
-            var srcRect = resolveLiveSrcRect(id, entry, bounds, cg) ?: return true
+            val snapshot = sceneBackdrop(entry = entry)
+            var srcRect = resolveLiveSrcRect(entry, bounds, cg, snapshot) ?: return true
             // [doc/spec/100 方案2] metaball uniform 输入（cg.bodyRect==null → null → shader 零变化）
             val mbNow = resolveMetaBalls(entry, cg.bodyRect, cg.viewport)
             val applied = appliedUniformsMap[id]
@@ -12390,7 +12505,6 @@ object BlurDrawHook {
             val tiltNow = notifTiltAngleFor(entry?.hostViewRef?.get())
             val frame = cg.frame
             // 源变化判断用主线程【当前】快照实例 id（后台计算后快照可能换新 → 立即重建绑定新图，玻璃内容不冻结）
-            val snapshot = sceneBackdrop()
             var currentBitmap = snapshot?.bitmap
             var renderParams = cg.params
             var sharedButtonBlur = false
@@ -12597,7 +12711,9 @@ object BlurDrawHook {
      * - 快照缺失 → 异步请求抓屏 + 返回 null（保持上次 uniform，下帧快照就绪自动恢复）。
      * 主线程/渲染线程调用（getLocationOnScreen 必须主线程）。
      */
-    private fun resolveLiveSrcRect(id: Int, entry: RegionEntry?, bounds: Rect, cg: ComputedGeometry): RectF? {
+    private fun resolveLiveSrcRect(
+        entry: RegionEntry?, bounds: Rect, cg: ComputedGeometry, snapshot: ElementBackground?,
+    ): RectF? {
         val hostView = entry?.hostViewRef?.get()
         val renderRegion: RectF
         if (hostView != null) {
@@ -12616,19 +12732,15 @@ object BlurDrawHook {
             // hostView 弱引用已回收 → 回退注册 region + bounds delta 对齐（旧逻辑兜底，位置静止可接受）
             renderRegion = applyContainerTransform(reconcileRegion(entry, bounds), null)
         }
-        return resolveSrcRectFromRegion(renderRegion)
+        return snapshot?.let { sourceRectFor(renderRegion, it) }
     }
 
     /**
      * [doc/spec/32] region → 整屏快照坐标折算（复用 [resolveRenderSource] 的 srcRect 公式，主线程实时算）。
      * 快照缺失 → 异步请求抓屏（不阻塞渲染线程）+ null（保持上次 uniform，下帧恢复）。
      */
-    private fun resolveSrcRectFromRegion(renderRegion: RectF): RectF? {
-        val snap = sceneBackdrop()
-        if (snap == null || snap.bitmap.width <= 0 || snap.bitmap.height <= 0 || snap.region.width() <= 0f) {
-            requestScreenSnapshotAsync()
-            return null
-        }
+    private fun sourceRectFor(renderRegion: RectF, snap: ElementBackground): RectF? {
+        if (snap.bitmap.isRecycled || snap.region.isEmpty) return null
         val scaleX = snap.bitmap.width.toFloat() / snap.region.width()
         val scaleY = snap.bitmap.height.toFloat() / snap.region.height()
         return RectF(
@@ -13003,8 +13115,65 @@ object BlurDrawHook {
     @Volatile private var lockWallpaperSnapshot: ElementBackground? = null
     private var lockWallpaperConfiguration = 0
     @Volatile private var lockMediaSnapshot: ElementBackground? = null
+    private val shadeWallpaper = ShadeWallpaperHook()
+    private val shadeWallpaperPaint by lazy { Paint(Paint.FILTER_BITMAP_FLAG) }
+    private val shadeWallpaperBounds = RectF()
+    private val shadeWallpaperLocation = IntArray(2)
+
+    private fun lockWallpaperBackground(ctx: android.content.Context?): ElementBackground? {
+        ctx ?: return null
+        val bitmap = LockWallpaperBackdrop.get(ctx) ?: return null
+        val config = ctx.resources.configuration
+        val configKey = 31 * config.orientation + 31 * config.screenWidthDp + config.screenHeightDp
+        val cached = lockWallpaperSnapshot
+        if (cached?.bitmap === bitmap && lockWallpaperConfiguration == configKey) return cached
+        val dm = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION")
+        val display = (ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager)?.defaultDisplay
+        @Suppress("DEPRECATION")
+        if (display != null) display.getRealMetrics(dm) else dm.setTo(ctx.resources.displayMetrics)
+        val cover = LockWallpaperGeometry.cover(bitmap.width, bitmap.height, dm.widthPixels, dm.heightPixels)
+            ?: return null
+        return ElementBackground(bitmap, RectF(cover[0], cover[1], cover[2], cover[3])).also {
+            lockWallpaperConfiguration = configKey
+            lockWallpaperSnapshot = it
+        }
+    }
+
+    private fun drawShadeWallpaper(canvas: Canvas, view: View, alpha: Int): Boolean {
+        if (view.width <= 0 || view.height <= 0) return false
+        val frame = lockWallpaperBackground(view.context) ?: return false
+        if (frame.bitmap.isRecycled ||
+            (frame.bitmap.config == Bitmap.Config.HARDWARE && !canvas.isHardwareAccelerated)) return false
+        view.getLocationOnScreen(shadeWallpaperLocation)
+        shadeWallpaperBounds.set(frame.region)
+        shadeWallpaperBounds.offset(-shadeWallpaperLocation[0].toFloat(), -shadeWallpaperLocation[1].toFloat())
+        val save = canvas.save()
+        try {
+            canvas.clipRect(0, 0, view.width, view.height)
+            shadeWallpaperPaint.alpha = alpha
+            canvas.drawBitmap(frame.bitmap, null, shadeWallpaperBounds, shadeWallpaperPaint)
+            if (Prefs.glassEnabled(api) && !isPowerSaveGlassOff()) {
+                scrimMaskPaintFor(readScrimViewAlpha(view) ?: behindScrimAlpha)?.let { mask ->
+                    val nativeAlpha = mask.alpha
+                    try {
+                        mask.alpha = nativeAlpha * alpha / 255
+                        canvas.drawRect(0f, 0f, view.width.toFloat(), view.height.toFloat(), mask)
+                    } finally {
+                        mask.alpha = nativeAlpha
+                    }
+                }
+            }
+        } finally {
+            canvas.restoreToCount(save)
+        }
+        return true
+    }
+
     /** Screen capture admission and lockscreen backdrop rendering are deliberately independent. */
-    private fun sceneBackdrop(id: Int? = null, region: RectF? = null): ElementBackground? {
+    private fun sceneBackdrop(
+        id: Int? = null, region: RectF? = null, entry: RegionEntry? = id?.let { screenRegionMap[it] },
+    ): ElementBackground? {
         if (isKeyguardLockedNow()) {
             if (LockMediaBackdrop.active) {
                 val frame = LockMediaBackdrop.frame
@@ -13016,22 +13185,14 @@ object BlurDrawHook {
                     ?: ElementBackground(frame.bitmap, RectF(frame.region)).also { lockMediaSnapshot = it }
             }
             lockMediaSnapshot = null
-            val ctx = systemUiContext() ?: return null
-            val bitmap = LockWallpaperBackdrop.get(ctx) ?: return null
-            val config = ctx.resources.configuration
-            val configKey = 31 * config.orientation + 31 * config.screenWidthDp + config.screenHeightDp
-            val cached = lockWallpaperSnapshot
-            if (cached?.bitmap === bitmap && lockWallpaperConfiguration == configKey) return cached
-            val dm = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION")
-            val display = (ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager)?.defaultDisplay
-            @Suppress("DEPRECATION")
-            if (display != null) display.getRealMetrics(dm) else dm.setTo(ctx.resources.displayMetrics)
-            val cover = LockWallpaperGeometry.cover(bitmap.width, bitmap.height, dm.widthPixels, dm.heightPixels)
-                ?: return null
-            return ElementBackground(bitmap, RectF(cover[0], cover[1], cover[2], cover[3])).also {
-                lockWallpaperConfiguration = configKey
-                lockWallpaperSnapshot = it
+            return lockWallpaperBackground(systemUiContext())
+        }
+        if (shadeWallpaper.hasBackdrop && entry != null && !entry.hostViewName.startsWith("seedling-") &&
+            !entry.hostViewName.startsWith(SIMPLE_BANNER_TAG) && !entry.hostViewName.startsWith("island-takeover:") &&
+            !entry.hostViewName.startsWith("volume-")) {
+            val host = entry.hostViewRef?.get()
+            if (host != null && shadeWallpaper.appliesTo(host) && !isHeadsUpBgView(host)) {
+                lockWallpaperBackground(host.context)?.let { return it }
             }
         }
         if (!captureDemandActive()) return null
@@ -13039,6 +13200,7 @@ object BlurDrawHook {
             id == null -> Long.MIN_VALUE
             screenRegionMap[id]?.hostViewName?.startsWith(SEEDLING_CARDVIEW_TAG) == true -> cloudRequiredCaptureEpoch
             screenRegionMap[id]?.hostViewName?.startsWith(SIMPLE_BANNER_TAG) == true -> bannerRequiredCaptureEpoch
+            screenRegionMap[id]?.hostViewName?.startsWith("island-takeover:") == true -> islandRequiredCaptureEpoch
             else -> Long.MIN_VALUE
         }
         val regional = if (id != null && region != null) regionRenderSourceSnapshot(id, region) else null
@@ -13047,18 +13209,10 @@ object BlurDrawHook {
 
     private fun resolveRenderSource(id: Int, screenRegion: RectF): RenderSource? {
         // 区域模式命中（瞬态元素 + 区域快照覆盖）→ 采样区域快照；否则整屏快照（srcRect 折算公式一致）
-        if (!isKeyguardLockedNow() && !captureDemandActive()) return null
         val snap = sceneBackdrop(id, screenRegion)
-        if (snap != null && snap.bitmap.width > 0 && snap.bitmap.height > 0 && snap.region.width() > 0f) {
+        if (snap != null) {
             // srcRect = 元素当前区域折算到快照坐标（按降采样比例缩放，坐标空间一致不错位）
-            val scaleX = snap.bitmap.width.toFloat() / snap.region.width()
-            val scaleY = snap.bitmap.height.toFloat() / snap.region.height()
-            val srcRect = RectF(
-                (screenRegion.left - snap.region.left) * scaleX,
-                (screenRegion.top - snap.region.top) * scaleY,
-                (screenRegion.right - snap.region.left) * scaleX,
-                (screenRegion.bottom - snap.region.top) * scaleY,
-            )
+            val srcRect = sourceRectFor(screenRegion, snap) ?: return null
             // MetaBall 扩张/动画中 region 可能含屏外负偏移 → srcRect 可能越界；AGSL BitmapShader CLAMP 兜底
             return RenderSource(snap.bitmap, srcRect, RectF(snap.region), isSnapshotSource = true)
         }
@@ -14135,7 +14289,7 @@ object BlurDrawHook {
      *  静态模式不入队（零抓屏，快照冻结为现有值）。 */
     private fun scheduleElementCaptures() {
         if (!captureDemandActive()) return
-        if (!screenInteractive || !Prefs.glassEnabled(api) || isPowerSaveGlassOff()) return
+        if (!screenInteractive || (!Prefs.glassEnabled(api) && !IslandGlass.demand()) || isPowerSaveGlassOff()) return
         if (captureMode() == Prefs.BG_CAPTURE_MODE_STATIC) return
         // 入队 → kick 起 worker 消费（异步，主线程零阻塞）。无论 enqueue 是否实际
         // 入队都 kick（pending 去重命中 = 队列已有任务待消费或 worker 正在抓，kick 内部 running>0 / 队列空
@@ -14177,7 +14331,21 @@ object BlurDrawHook {
      */
     private fun captureSnapshotImmediate(source: String, regionMode: Boolean = false) {
         if (!captureDemandActive()) return
-        if (!screenInteractive || !Prefs.glassEnabled(api) || SystemClock.uptimeMillis() < captureRetryAtMs) return
+        if (!screenInteractive || (!Prefs.glassEnabled(api) && !IslandGlass.demand()) ||
+            SystemClock.uptimeMillis() < captureRetryAtMs) return
+        if (IslandGlass.demand() && IslandGlass.windows().any {
+            it.isAttachedToWindow && reflectViewRootSurfaceControl(it)?.isValid != true
+        }) return
+        // The OEM capsule/status bar and the expanded card are in separate windows.
+        // Exclude both while acquiring the card backdrop to keep the dark top strip out.
+        val cloudLayers = if (isCardBackgroundHostActive()) {
+            val card = resolveCardBackgroundSfc()?.takeIf { it.isValid } ?: return
+            val statusRoot = FluidIslandHook.nativeStatusBarRoot()
+            if (statusRoot == null) listOf(card) else {
+                val status = reflectViewRootSurfaceControl(statusRoot)?.takeIf { it.isValid } ?: return
+                listOf(card, status)
+            }
+        } else emptyList()
         // [spec/85 省电模式] 省电开启 → 真正的 captureDisplay 也不执行（省电下玻璃已关，零抓屏）
         if (isPowerSaveGlassOff()) {
             logThrottled("power-save-skip-capture", Log.INFO) {
@@ -14224,9 +14392,9 @@ object BlurDrawHook {
         // 不再重试/冷却/静默放弃。shade 在渲染但 sfc 短暂 invalid 时轻微自采样，sfc 恢复后 exclude 抓屏覆盖。
         // 区域模式 → crop 换成活跃瞬态 region 并集 bbox，其余排除/降采样逻辑共用
         val bg = if (regionBBox != null) {
-            captureElementBackground(shade, regionBBox)
+            captureElementBackground(shade, regionBBox, cloudLayers)
         } else {
-            captureScreenSnapshot(shade)
+            captureScreenSnapshot(shade, cloudLayers)
         }
         if (bg != null) {
             if (!captureDemandActive() || epochAtStart != captureEpoch) { bg.bitmap.recycle(); return }
@@ -15122,10 +15290,10 @@ object BlurDrawHook {
      * + 0.5 降采样，wrap+copy 出独立软件位图。共享给所有玻璃元素；内容变化时立即重抓（无节流，异步控负载），
      * 移动只更新 srcRect（渲染侧按元素 region 折算到快照坐标）不重抓。失败返回 null（静默，兜底铁律）。
      */
-    private fun captureScreenSnapshot(shade: SurfaceControl?): ElementBackground? {
+    private fun captureScreenSnapshot(shade: SurfaceControl?, cloudLayers: List<SurfaceControl>): ElementBackground? {
         val dm = android.content.res.Resources.getSystem().displayMetrics
         val region = RectF(0f, 0f, dm.widthPixels.toFloat(), dm.heightPixels.toFloat())
-        return captureElementBackground(shade, region)
+        return captureElementBackground(shade, region, cloudLayers)
     }
 
     /**
@@ -15138,7 +15306,7 @@ object BlurDrawHook {
      * [2026-08-15] 再追加 Simple Banner 窗口根 / 流体云展开大卡窗口根。
      * 再追加音量弹窗窗口根（[resolveVolumeWindowSfc]，弹窗在屏期间排除防自采样）。
      */
-    private fun collectExcludes(shade: SurfaceControl?): ArrayList<SurfaceControl> {
+    private fun collectExcludes(shade: SurfaceControl?, cloudLayers: List<SurfaceControl>): ArrayList<SurfaceControl> {
         val excludes = ArrayList<SurfaceControl>(2)
         val hu = try {
             resolveHeadsUpSfc()
@@ -15153,7 +15321,7 @@ object BlurDrawHook {
             null
         }
         val card = try {
-            resolveCardBackgroundSfc()
+            if (cloudLayers.isEmpty()) resolveCardBackgroundSfc() else cloudLayers.first()
         } catch (t: Throwable) {
             Lg.e(TAG, "bg-element: resolve seedling-cardview sfc failed", t)
             null
@@ -15179,10 +15347,16 @@ object BlurDrawHook {
             val surface=reflectViewRootSurfaceControl(root)
             if(surface?.isValid==true && excludes.none { it==surface })excludes.add(surface)
         }
+        for (root in IslandGlass.windows()) {
+            if (!root.isAttachedToWindow) continue
+            val surface = reflectViewRootSurfaceControl(root)
+            if (surface?.isValid == true && excludes.none { it == surface }) excludes.add(surface)
+        }
         if (shade != null && shade.isValid) excludes.add(shade)
         hu?.let { if (it.isValid) excludes.add(it) }
         banner?.let { if (it.isValid) excludes.add(it) }
         card?.let { if (it.isValid) excludes.add(it) }
+        cloudLayers.forEach { surface -> if (surface.isValid && surface !in excludes) excludes.add(surface) }
         if (vol != null && vol.isValid && excludes.none { e -> e == vol }) excludes.add(vol)
         if (menu != null && menu.isValid && excludes.none { e -> e == menu }) excludes.add(menu)
         // [doc/spec/92 §5.5 · 2026-10-10] 诊断日志（模块日志开关 + 节流）：一眼分辨两类根因——
@@ -15215,7 +15389,7 @@ object BlurDrawHook {
      *    零 WMS Binder、零 `WindowManager: captureDisplay` 记账日志。
      * 2. 兜底：反射 `IWindowManager.captureDisplay`（旧路径，通道未就绪/解析失败时用）。
      */
-    private fun captureElementBackground(shade: SurfaceControl?, region: RectF): ElementBackground? {
+    private fun captureElementBackground(shade: SurfaceControl?, region: RectF, cloudLayers: List<SurfaceControl>): ElementBackground? {
         if (!captureDemandActive()) return null
         // sourceCrop 必须落在显示范围内（MetaBall 扩张/动画中 region 可能含屏外边缘），clamp 兜底
         val dm = android.content.res.Resources.getSystem().displayMetrics
@@ -15239,7 +15413,7 @@ object BlurDrawHook {
             // 导致显示管线卡死，教训见 DisplayRootChannel 头部）。
             // 任何失败返回 null → 自动落到下面的旧路径（兜底铁律）。
             val newScale = bgCaptureScale()
-            val newExcludes = collectExcludes(shade)
+            val newExcludes = collectExcludes(shade, cloudLayers)
             if (!captureDemandActive()) return null
             val viaToken = DisplayRootChannel.captureViaDisplayToken(
                 systemUiContext(), crop, newScale, newExcludes.toTypedArray()
@@ -15274,7 +15448,7 @@ object BlurDrawHook {
                     val scale = bgCaptureScale()
                     builderCls.getMethod("setSourceCrop", Rect::class.java).invoke(builder, crop)
                     // 排除数组（防玻璃自采样）。抽成函数：新路径（spec/82 display 根层抓屏）共用同一份。
-                    val excludes = collectExcludes(shade)
+                    val excludes = collectExcludes(shade, cloudLayers)
                     builderCls.getMethod("setExcludeLayers", Array<SurfaceControl>::class.java)
                         .invoke(builder, excludes.toTypedArray())
                     builderCls.getMethod("setFrameScale", Float::class.javaPrimitiveType).invoke(builder, scale)

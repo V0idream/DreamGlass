@@ -26,9 +26,9 @@ internal object LauncherIconGlassAssets {
         override fun getIntrinsicWidth()=nativeWidth
         override fun getIntrinsicHeight()=nativeHeight
     }
-    private data class Key(val identity:Int,val generation:Int,val style:Int,val variant:String)
+    private data class Key(val identity:Int,val generation:Int,val style:Int,val variant:String,val owner:String?)
     private data class Asset(val source:Bitmap,val rendered:Bitmap,val epoch:Long)
-    private data class Original(val source:Bitmap,val epoch:Long,val variant:String)
+    private data class Original(val source:Bitmap,val epoch:Long,val variant:String,val owner:String?)
     private data class Request(val key:Key,val source:Bitmap,val mask:Bitmap,val wallpaper:Bitmap,
         val crop:RectF,val sharpWallpaper:Bitmap,val params:IconGlassMaterial.Params,val ready:()->Unit,val epoch:Long,val workEpoch:Long,val identity:String?)
     private data class Swap(val source:Bitmap,val rendered:Bitmap,val nativeAlpha:Paint?,val nativeFilter:Paint?,
@@ -50,7 +50,6 @@ internal object LauncherIconGlassAssets {
     private val slotSwaps=WeakHashMap<Any,SlotSwap>()
     private val floatingAssets=WeakHashMap<Any,Bitmap>()
     private val componentAssets=LinkedHashMap<String,Bitmap>(192,.75f,true)
-    private val infoComponents=WeakHashMap<Any,String>()
     private val rebinding=ThreadLocal<Boolean>()
     private val worker=RuntimeWorkPolicy.executor("DreamGlass-generated-icons")
     private var running=false
@@ -105,10 +104,23 @@ internal object LauncherIconGlassAssets {
             // to their real original after a preference change. Values do not reference keys.
         }
     }
-    fun current(bitmap:Bitmap)=synchronized(lock) {reverse[bitmap]?.let {it.epoch==epoch && active && it.variant==IconGlassDynamicIcons.variant(it.variant.substringBefore('|'))}==true}
+    private fun fresh(asset:Original) =
+        asset.epoch==epoch && active && asset.variant==IconGlassDynamicIcons.variant(asset.owner)
+    fun current(bitmap:Bitmap)=synchronized(lock) {reverse[bitmap]?.let(::fresh)==true}
+    fun currentFor(bitmap:Bitmap,item:Any?):Boolean {
+        val id=identity(item)
+        return synchronized(lock) {reverse[bitmap]?.let {fresh(it) && it.owner==id}==true}
+    }
+    fun restoreStaleBinding(drawable:Drawable,bitmap:Bitmap) {
+        val source=original(bitmap)
+        if(source!==bitmap && !source.isRecycled) {
+            bitmapField?.set(drawable,source)
+            synchronized(lock) {drawables.remove(drawable)}
+        }
+    }
     fun isGenerated(bitmap:Bitmap)=synchronized(lock) {reverse[bitmap]?.epoch==epoch && active}
     fun original(bitmap:Bitmap):Bitmap=synchronized(lock) {reverse[bitmap]?.source ?: bitmap}
-    fun generated(bitmap:Bitmap):Bitmap?=if(active)available(bitmap) else null
+    fun generated(bitmap:Bitmap,item:Any?=null):Bitmap?=if(active)available(bitmap,identity(item)) else null
     fun prefabFor(item:Any?):Bitmap? {
         if(!active)return null
         val id=identity(item) ?: return null
@@ -117,7 +129,7 @@ internal object LauncherIconGlassAssets {
     fun identity(item:Any?):String?=runCatching {
         if(item==null)return@runCatching null
         val access=IconGlassIdentityAccess.forType(item.javaClass)
-        val component=access.component?.invoke(item) as? android.content.ComponentName ?: return@runCatching null
+        val component=IconGlassIdentityAccess.component(item) ?: return@runCatching null
         val user=access.user?.get(item) as? android.os.UserHandle
         val shortcut=runCatching {access.shortcut?.invoke(item) as? String}.getOrNull()
         component.flattenToString()+"@"+(user?.hashCode() ?: 0)+(shortcut?.takeIf {it.isNotEmpty()}?.let {"#"+it} ?: "")
@@ -131,23 +143,22 @@ internal object LauncherIconGlassAssets {
     fun bind(view:View,drawable:Drawable,item:Any?) {
         if(!active || !main() || rebinding.get()==true)return
         val id=identity(item) ?: return
-        val info=runCatching {itemBitmap?.get(item)}.getOrNull()
-        if(info!=null)synchronized(lock) {infoComponents[info]=id}
         val prefab=synchronized(lock) {componentAssets[id]}?.takeIf(::current) ?: return
         val source=sourceForItem(item) ?: return
         rebinding.set(true)
         try {apply(view,drawable,item,source,prefab)}finally {rebinding.remove()}
     }
-    private fun available(bitmap:Bitmap):Bitmap?=synchronized(lock) {
-        reverse[bitmap]?.takeIf {it.epoch==epoch && active && current(bitmap)}?.let {bitmap} ?: cache.entries.firstOrNull {
-            it.value.source===bitmap && it.value.epoch==epoch && it.key.generation==bitmap.generationId && it.key.variant==IconGlassDynamicIcons.variant(it.key.variant.substringBefore('|'))
+    private fun available(bitmap:Bitmap,owner:String?=null):Bitmap?=synchronized(lock) {
+        reverse[bitmap]?.takeIf {fresh(it) && (owner==null || it.owner==owner)}?.let {bitmap} ?: cache.entries.firstOrNull {
+            owner!=null && it.key.owner==owner && it.value.source===bitmap && it.value.epoch==epoch &&
+                it.key.generation==bitmap.generationId && it.key.variant==IconGlassDynamicIcons.variant(owner)
         }?.value?.rendered
     }
     fun request(source:Bitmap,mask:Bitmap,wallpaper:Bitmap,crop:RectF,params:IconGlassMaterial.Params,ready:()->Unit,identity:String?=null,sharpWallpaper:Bitmap=wallpaper):Bitmap? {
         if(!active || source.isRecycled || source.width<16 || source.height<16)return null
         val native=original(source)
         val fixed=params.copy(alpha=255,disabled=false)
-        val key=Key(System.identityHashCode(native),native.generationId,fixed.hashCode(),IconGlassDynamicIcons.variant(identity))
+        val key=Key(System.identityHashCode(native),native.generationId,fixed.hashCode(),IconGlassDynamicIcons.variant(identity),identity)
         synchronized(lock) {
             if(identity!=null)componentAssets[identity]?.takeIf(::current)?.let {return it}
             cache[key]?.takeIf {it.source===native && it.epoch==epoch}?.let {return it.rendered}
@@ -182,7 +193,7 @@ internal object LauncherIconGlassAssets {
                             if(inFlight[request.key]==request.workEpoch)inFlight.remove(request.key)
                             if(active && request.epoch==epoch && request.workEpoch==workEpoch) {
                                 val asset=Asset(request.source,result,request.epoch)
-                                cache[request.key]=asset;reverse[result]=Original(request.source,request.epoch,request.key.variant)
+                                cache[request.key]=asset;reverse[result]=Original(request.source,request.epoch,request.key.variant,request.key.owner)
                                 request.identity?.let {componentAssets[it]=result}
                                 IconGlassPipelineTrace.record(request.identity,"asset","published ${result.width}x${result.height}")
                                 while(componentAssets.size>192)componentAssets.remove(componentAssets.keys.first())
@@ -306,7 +317,7 @@ internal object LauncherIconGlassAssets {
                 }
             }
             identity(item)?.let {id ->synchronized(lock) {
-                infoComponents[native]=id;infoComponents[replacement]=id;componentAssets[id]=rendered
+                componentAssets[id]=rendered
                 while(componentAssets.size>192)componentAssets.remove(componentAssets.keys.first())
             }}
         }
@@ -388,9 +399,9 @@ internal object LauncherIconGlassAssets {
                     if(result is Drawable)runCatching {
                         val bitmap=infoIcon!!.get(chain.getThisObject()) as? Bitmap ?: return@runCatching
                         val source=original(bitmap)
-                        val component=synchronized(lock) {infoComponents[chain.getThisObject()]}
-                        val cached=if(active)component?.let {synchronized(lock) {componentAssets[it]}}?.takeIf(::current)
-                            ?: available(bitmap) ?: available(source) else null
+                        // An original BitmapInfo can be shared by unrelated launcher items.
+                        // Only a BitmapInfo already carrying a replacement owns that artwork.
+                        val cached=if(active)available(bitmap) else null
                         if(cached!=null) {
                             if(bitmapField!!.get(result)!==cached)swapDrawable(result,source,cached)
                         }
@@ -399,20 +410,6 @@ internal object LauncherIconGlassAssets {
                     }.onFailure(::error)
                     result
                 }
-            runCatching {
-                val iconCache=Class.forName("com.android.launcher3.icons.IconCache",false,loader)
-                val apply=iconCache.declaredMethods.first {it.name=="applyCacheEntry" && it.parameterCount==2 && it.parameterTypes[1]==item}
-                module.hook(apply).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-                    val result=chain.proceed()
-                    runCatching {
-                        val owner=chain.getArg(1) ?: return@runCatching
-                        val id=identity(owner) ?: return@runCatching
-                        val bitmapInfo=itemBitmap!!.get(owner) ?: return@runCatching
-                        synchronized(lock) {infoComponents[bitmapInfo]=id}
-                    }.onFailure(::error)
-                    result
-                }
-            }.onFailure(::error)
             val floating=Class.forName("com.android.launcher3.views.FloatingIconView",false,loader)
             val loadResult=find(floating,"mIconLoadResult") ?: error("Missing floating icon result")
             floating.declaredMethods.firstOrNull {it.name=="fetchIcon" && it.parameterCount==4 && it.parameterTypes[1]==View::class.java}
@@ -423,7 +420,7 @@ internal object LauncherIconGlassAssets {
                         val info=if(owner!=null && item.isInstance(owner))itemBitmap!!.get(owner) else null
                         val icon=if(info!=null)infoIcon!!.get(info) as? Bitmap else null
                         val viewBitmap=((chain.getArg(1) as? ImageView)?.drawable as? BitmapDrawable)?.bitmap
-                        val rendered=prefabFor(owner) ?: icon?.let(::available) ?: viewBitmap?.let(::available)
+                        val rendered=prefabFor(owner) ?: icon?.let {generated(it,owner)} ?: viewBitmap?.let {generated(it,owner)}
                         if(rendered!=null)synchronized(lock) {floatingAssets[result]=rendered}
                     }.onFailure(::error)
                     result
@@ -434,7 +431,7 @@ internal object LauncherIconGlassAssets {
                     if(active)runCatching {
                         val native=chain.getArg(2) as? Drawable
                         val bitmap=if(native!=null && fast.isInstance(native))bitmapField!!.get(native) as? Bitmap else null
-                        val cached=bitmap?.let(::available) ?: synchronized(lock) {floatingAssets[loadResult.get(chain.getThisObject())]}
+                        val cached=bitmap?.let {available(it)} ?: synchronized(lock) {floatingAssets[loadResult.get(chain.getThisObject())]}
                             ?.takeIf(::current) ?: return@runCatching
                         val context=(chain.getThisObject() as? View)?.context ?: return@runCatching
                         val replacement=AdaptiveIconDrawable(BitmapDrawable(context.resources,cached),ColorDrawable(Color.TRANSPARENT))

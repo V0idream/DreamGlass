@@ -50,6 +50,8 @@
                 <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
             </intent-filter>
         </activity>
+        <activity android:name=".ui.FluidIslandActivity" android:exported="false" />
+        <activity android:name=".ui.AodSettingsActivity" android:exported="false" />
         <activity-alias android:name="${applicationId}.LauncherAlias"
             android:targetActivity=".ui.DreamActivity" android:enabled="true" android:exported="true"
             android:label="@string/app_name" android:icon="@mipmap/ic_launcher">

@@ -28,7 +28,7 @@ internal object LauncherIconGlassBinding {
         frame:IconGlassWallpaper.Frame?=null,wallpaperReady:()->Unit=ready):Bitmap? {
         val source=LauncherIconGlassAssets.original(raw)
         if(source.isRecycled || source.width<16 || source.height<16)return null
-        val cached=LauncherIconGlassAssets.prefabFor(item) ?: LauncherIconGlassAssets.generated(source)
+        val cached=LauncherIconGlassAssets.prefabFor(item) ?: LauncherIconGlassAssets.generated(source,item)
         if(cached!=null)return cached
         val mask=IconGlassMasks.resolve(context,component,userId,source,ready) ?: return null
         // Imported images are already the final artwork: their CPU crop path never reads

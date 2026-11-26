@@ -28,13 +28,14 @@ internal object Troubleshooting {
         if (on) Row(title, "已开启", Level.OK)
         else Row(title, "未开启。$location", if (optional) Level.INFO else Level.CHECK)
 
-    fun scan(context: Context, service: XposedService?, checks: Checks): List<Section> {
+    fun scan(context: Context, service: XposedService?, checks: Checks, allowRoot: Boolean? = null): List<Section> {
         val pm = context.packageManager
-        val active = activeScopes(context)
+        val useRoot = allowRoot ?: RootGrant.canTryAutomatically(context)
+        val active = if (useRoot) activeScopes() else null
         val ownScope = runCatching { service?.scope?.toSet() }.getOrNull()
             ?: active?.let { it[context.packageName].orEmpty() }
         val hostRows = targets.map { target ->
-            component(pm, target, target in checks.requiredScope)
+            component(pm, target, target in checks.requiredScope, useRoot)
         }
         val lsposed = if (service != null) Row("LSPosed 连接", "已连接。", Level.OK)
         else Row("LSPosed 连接", "应用暂未接到模块服务。请检查当前模块是否已启用。", Level.CHECK)
@@ -51,7 +52,7 @@ internal object Troubleshooting {
         } else checks.rows
         return listOf(
             Section("效果开关", switches),
-            Section("组件版本", hostRows),
+            Section("组件 SHA-256 核对", hostRows),
             Section("本模块作用域", listOf(lsposed) + scopes),
             Section("其他作用于相同组件的模块", modules(context, active, checks.iconEffectsEnabled)),
         )
@@ -62,26 +63,35 @@ internal object Troubleshooting {
         else -> "SystemUI"
     }
 
-    fun knownVersion(target: String, name: String?, code: Long): Boolean = when (target) {
-        LAUNCHER -> (name to code) in setOf(
-            "16.3.22" to 160030022L, "16.4.6" to 160040006L,
-            "17.3.12" to 170030012L, "17.5.5" to 170050005L,
-        )
-        SYSTEM_UI -> name == "17.99.02" && code == 179902L
-        else -> false
-    }
-
     @Suppress("DEPRECATION")
-    private fun component(pm: PackageManager, target: String, required: Boolean): Row {
+    private fun component(pm: PackageManager, target: String, required: Boolean, useRoot: Boolean): Row {
         val label = targetLabel(target)
         val pkg = runCatching { pm.getPackageInfo(target, 0) }.getOrNull()
             ?: return Row(label, "无法读取 $target。" + if (required) "请确认已安装原厂组件。" else "", if (required) Level.CHECK else Level.INFO)
         val version = "${pkg.versionName ?: "版本未知"}（${pkg.longVersionCode}）"
-        val matched = knownVersion(target, pkg.versionName, pkg.longVersionCode)
-        val detail = if (matched) "版本号与已核对样本匹配。同版本的 ROM 变体仍可能不同。"
-            else "当前版本未收录，兼容性待确认。"
-        val note = if (!required) "本模块不作用于该组件，此项仅供参考。" else ""
-        return Row(label, "$version\n$detail$note", if (!required) Level.INFO else if (matched) Level.OK else Level.CHECK)
+        val info = pkg.applicationInfo
+        val digest = ComponentApkCatalog.read(info?.sourceDir, useRoot)
+        val splits = info?.splitSourceDirs?.size ?: 0
+        val match = ComponentApkCatalog.match(target, pkg.versionName, pkg.longVersionCode, digest?.value, splits)
+        val outcome = when (match) {
+            ComponentApkCatalog.Match.EXACT -> "完整 APK 的 SHA-256 与已适配样本一致。"
+            ComponentApkCatalog.Match.SPLITS_UNVERIFIED -> "主 APK 与已适配样本一致，另有 $splits 个拆分 APK 尚未核对。"
+            ComponentApkCatalog.Match.SAME_VERSION_DIFFERENT_APK -> "版本号已收录，但 APK 的 SHA-256 不同。当前构建兼容性待确认。"
+            ComponentApkCatalog.Match.UNLISTED -> "APK 的 SHA-256 未收录，兼容性待确认。"
+            ComponentApkCatalog.Match.UNREADABLE -> if (useRoot) "无法读取 APK 或计算 SHA-256。"
+                else "普通权限无法读取 APK。可授予 Root 后重查。"
+        }
+        val detail = buildList {
+            add(version)
+            add(outcome)
+            if (digest != null) {
+                add("主 APK SHA-256${if (digest.fromRoot) "（Root）" else ""}")
+                add(digest.value)
+            }
+            if (!required) add("本模块未作用于该组件，此项仅供参考。")
+        }.joinToString("\n")
+        val level = if (!required) Level.INFO else if (match == ComponentApkCatalog.Match.EXACT) Level.OK else Level.CHECK
+        return Row(label, detail, level)
     }
 
     @Suppress("DEPRECATION")
@@ -162,8 +172,7 @@ internal object Troubleshooting {
         contents.lineSequence().flatMap { it.substringBefore('#').split(Regex("[;,\\s]+")).asSequence() }
             .filter { it in targets }.toSet()
 
-    private fun activeScopes(context: Context): Map<String, Set<String>>? {
-        if (!RootGrant.canTryAutomatically(context)) return null
+    private fun activeScopes(): Map<String, Set<String>>? {
         // Android uses 100,000 UIDs per user. The system UI normally runs as user 0.
         val user = Process.myUid() / 100_000
         val query = "SELECT DISTINCT modules.module_pkg_name, scope.app_pkg_name " +

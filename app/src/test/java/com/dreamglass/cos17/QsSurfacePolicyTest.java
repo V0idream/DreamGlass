@@ -41,4 +41,19 @@ public class QsSurfacePolicyTest {
     @Test public void missingGeometryFailsExplicitlyInsteadOfInventingRadius() {
         assertThrows(NoSuchFieldException.class, () -> policy.field(NativeSlider.class, "unknownRadius"));
     }
+
+    @Test public void fullCornerDetailSlidersUseACircularCapAtTheTrackWidth() {
+        assertEquals(Float.valueOf(260f), policy.nativeArcRadius(259f, 1f, 520, 1280));
+        assertEquals(Float.valueOf(259.5f), policy.nativeArcRadius(261f, 1f, 519, 1280));
+        assertNull(policy.nativeArcRadius(48f, 1f, 520, 1280));
+        assertNull(policy.nativeArcRadius(259f, 3f, 520, 1280));
+    }
+
+    @Test public void standaloneVolumeUsesLiveNativeRadiusAndTrackBounds() {
+        assertEquals(Float.valueOf(69f), policy.nativeArcRadius(69f, 0f, 138, 712));
+        assertEquals(Float.valueOf(49f), policy.nativeArcRadius(69f, 0f, 98, 712));
+        assertEquals(Float.valueOf(40f), policy.nativeArcRadius(40f, 0f, 98, 712));
+        assertNull(policy.nativeArcRadius(69f, 0f, 0, 712));
+        assertNull(policy.nativeArcRadius(Float.NaN, 0f, 138, 712));
+    }
 }

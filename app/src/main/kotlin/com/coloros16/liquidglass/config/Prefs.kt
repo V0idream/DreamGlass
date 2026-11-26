@@ -35,6 +35,9 @@ object Prefs {
     /** [2026-10-13] 玻璃渲染总开关：false = 自研液态玻璃 shader 完全不套（回退系统模糊），
      *  其余功能（倾斜/飞入/热重载等）不受影响。默认开（保持现行为）。500ms TTL 直读生效。 */
     const val KEY_GLASS_ENABLE = "glass_enable"
+    const val KEY_SHADE_LOCK_WALLPAPER = "shade_lock_wallpaper"
+    const val KEY_AOD_TRANSITION_STYLE = "lock_transition_style"
+    const val DEFAULT_SHADE_LOCK_WALLPAPER = false
     const val DEFAULT_GLASS_ENABLE = true
 
     // ---------- 玻璃效果预设 ----------

@@ -228,6 +228,9 @@ class DreamActivity : AppCompatActivity(), App.ServiceStateListener {
     }
 
     private fun settings() {
+        DreamUi.row(card(), "息屏与壁纸", "设置息屏过渡、预览壁纸和打开系统息屏设置") {
+            startActivity(Intent(this, AodSettingsActivity::class.java))
+        }
         val entry = card()
         entry.addView(text("应用入口", 17f, ink, true))
         val alias = android.content.ComponentName(this, "$packageName.LauncherAlias")

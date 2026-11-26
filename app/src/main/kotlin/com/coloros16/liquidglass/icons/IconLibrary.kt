@@ -3,6 +3,7 @@ package com.coloros16.liquidglass.icons
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.os.Bundle
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -15,6 +16,8 @@ object IconLibrary {
     const val HOME="https://github.com/V0idream/DreamGlass-Icons"
     const val ROOT="https://raw.githubusercontent.com/V0idream/DreamGlass-Icons/main/"
     const val REVISION="custom_icon_library_revision"
+    private const val INDEX_LIMIT=262144
+    private const val ENTRIES_PER_INDEX=500
     val URI: android.net.Uri by lazy { android.net.Uri.parse("content://${com.coloros16.liquidglass.BuildConfig.APPLICATION_ID}.icons") }
     fun publish(context:Context,revision:String) {
         // The catalog files are already committed. The launcher can refresh even when LSPosed's binder has not arrived.
@@ -33,10 +36,12 @@ object IconLibrary {
     fun validPackage(pkg:String)=pkg.length<=180 && pkg.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))
     fun validPath(path:String)=path.matches(Regex("icons/[a-z0-9-]{1,80}\\.png"))
     fun digest(bytes:ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
-    fun parse(raw:String):List<Entry> {
-        require(raw.length<=262144)
+    fun parse(raw:String):List<Entry> = parse(raw, INDEX_LIMIT, ENTRIES_PER_INDEX)
+
+    private fun parse(raw:String, limit:Int, maxEntries:Int):List<Entry> {
+        require(raw.length<=limit)
         val json=JSONObject(raw);require(json.getInt("schema")==1)
-        val array=json.getJSONArray("icons");require(array.length()<=500)
+        val array=json.getJSONArray("icons");require(array.length()<=maxEntries)
         val entries=(0 until array.length()).map {i ->
             val e=array.getJSONObject(i)
             Entry(e.getString("package"),e.getString("label").take(80),e.getString("path"),
@@ -49,6 +54,26 @@ object IconLibrary {
         }
         require(entries.map {it.pkg}.distinct().size==entries.size)
         return entries
+    }
+    internal fun runtimeCatalog(entries:List<Entry>):Bundle = Bundle().apply {
+        val raw=encode(entries)
+        val bytes=raw.toByteArray(Charsets.UTF_8)
+        if (bytes.size<=INDEX_LIMIT && entries.size<=ENTRIES_PER_INDEX) {
+            putString("catalog",raw)
+        } else {
+            require(bytes.size<=INDEX_LIMIT*2)
+            val output=java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(output).use {it.write(bytes)}
+            putByteArray("catalog_gzip",output.toByteArray())
+        }
+    }
+    internal fun parseRuntimeCatalog(bundle:Bundle):List<Entry> {
+        val compressed=bundle.getByteArray("catalog_gzip") ?: return parse(requireNotNull(bundle.getString("catalog")))
+        require(compressed.size<=INDEX_LIMIT*2)
+        val raw=java.util.zip.GZIPInputStream(compressed.inputStream()).use {
+            IconImport.read(it,INDEX_LIMIT*2).toString(Charsets.UTF_8)
+        }
+        return parse(raw,INDEX_LIMIT*2,ENTRIES_PER_INDEX*2)
     }
     fun encode(entries:List<Entry>)=JSONObject().put("schema",1)
         .put("icons",JSONArray().apply {entries.forEach {put(it.json())}}).toString()
@@ -110,10 +135,7 @@ object IconLibrary {
         }
         require(entries.all {it.source=="library"})
         val combined=(index(context,"installed.json")+entries).associateBy {it.pkg}.values.sortedBy {it.pkg}
-        val data=encode(combined)
-        val temp=File(root,"installed.tmp");temp.writeText(data)
-        java.nio.file.Files.move(temp.toPath(),File(root,"installed.json").toPath(),
-            java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+        writeIndex(context,"installed.json",combined)
         return revision(context)
     }
     fun revision(context:Context)=digest(encode(local(context).sortedBy {it.pkg}).toByteArray())
@@ -135,9 +157,11 @@ object IconLibrary {
         return revision(context)
     }
     private fun writeIndex(context:Context,name:String,entries:List<Entry>) {
-        require(entries.size<=500)
+        require(entries.size<=ENTRIES_PER_INDEX) {"图标数量超过 ${ENTRIES_PER_INDEX} 个"}
         val target=File(folder(context),name);val temp=File(folder(context),name+".tmp")
-        temp.writeText(encode(entries));java.nio.file.Files.move(temp.toPath(),target.toPath(),
+        val bytes=encode(entries).toByteArray(Charsets.UTF_8)
+        require(bytes.size<=INDEX_LIMIT) {"图标目录超过大小限制"}
+        temp.writeBytes(bytes);java.nio.file.Files.move(temp.toPath(),target.toPath(),
             java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE)
     }
     private fun read(path:String,limit:Int):ByteArray {

@@ -167,6 +167,8 @@
     <string name="config_framework_not_ready">服务还没准备好，请稍后再试。</string>
     <string name="about_title">DreamGlass · For ColorOS 17</string>
     <string name="cat_master">渲染开关</string>
+    <string name="shade_lock_wallpaper">下拉背景使用锁屏壁纸</string>
+    <string name="shade_lock_wallpaper_desc">解锁后下拉通知中心或控制中心时，随手势淡入锁屏壁纸。</string>
     <string name="cat_master_desc">模块总开关（默认关闭）</string>
     <string name="cat_material">材质参数</string>
     <string name="cat_material_desc">折射 / 鲜艳度 / 高光等材质参数</string>

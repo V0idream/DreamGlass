@@ -25,7 +25,7 @@ internal object IconGlassFolderPreviewContract {
  * resolved once against the launcher ABI; traversal does not inspect arbitrary view trees. */
 internal class IconGlassPreviewSlots(private val drawable:Field,private val item:Field,
     private val x:Field,private val y:Field,private val scale:Field,
-    private val stacked:Class<*>,private val children:Method) {
+    private val stacked:Class<*>?,private val children:Method?) {
     data class Slot(val owner:Any,val field:Field,val drawable:Drawable,val item:Any?,
         val x:Float,val y:Float,val scale:Float)
     fun visit(roots:Iterable<*>,accept:(Slot)->Unit) {
@@ -34,8 +34,8 @@ internal class IconGlassPreviewSlots(private val drawable:Field,private val item
             if(remaining--<=0 || depth>3)return
             val nx=px+ps*x.getFloat(node);val ny=py+ps*y.getFloat(node);val ns=ps*scale.getFloat(node)
             if(!nx.isFinite() || !ny.isFinite() || !ns.isFinite() || ns<=0f)return
-            if(stacked.isInstance(node)) {
-                (children.invoke(node) as? Iterable<*>)?.forEach {if(it!=null)visitOne(it,nx,ny,ns,depth+1)}
+            if(stacked?.isInstance(node)==true) {
+                (children?.invoke(node) as? Iterable<*>)?.forEach {if(it!=null)visitOne(it,nx,ny,ns,depth+1)}
             } else {
                 val image=drawable.get(node) as? Drawable ?: return
                 accept(Slot(node,drawable,image,item.get(node),nx,ny,ns))

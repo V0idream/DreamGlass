@@ -365,6 +365,8 @@ class SettingsActivity : AppCompatActivity() {
         }
         switchGlass.setOnCheckedChangeListener(glassListener)
         refreshBooleanSwitch(switchGlass, glassListener, Prefs.KEY_GLASS_ENABLE, Prefs.DEFAULT_GLASS_ENABLE)
+        bindGlassSwitch(view, R.id.switchShadeLockWallpaper,
+            Prefs.KEY_SHADE_LOCK_WALLPAPER, Prefs.DEFAULT_SHADE_LOCK_WALLPAPER)
     }
 
     /** 液态玻璃材质：内部轻模糊 / 鲜艳度 / 高光衰减 / 折射环带高度 / 折射强度。 */

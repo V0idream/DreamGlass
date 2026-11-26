@@ -18,7 +18,7 @@ class IconLibraryProvider:ContentProvider() {
     }
     override fun call(method:String,arg:String?,extras:Bundle?):Bundle? {
         checkCaller();require(method=="catalog")
-        return Bundle().apply {putString("catalog",IconLibrary.encode(IconLibrary.forProvider(context!!)))}
+        return IconLibrary.runtimeCatalog(IconLibrary.forProvider(context!!))
     }
     override fun openFile(uri:Uri,mode:String):ParcelFileDescriptor {
         checkCaller();require(mode=="r" && uri.pathSegments.size==1)

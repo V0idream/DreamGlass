@@ -3,6 +3,7 @@ package com.coloros16.liquidglass.hook
 
 import android.graphics.*
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.LayerDrawable
 import android.view.View
 import java.lang.ref.WeakReference
 
@@ -20,6 +21,7 @@ internal open class BoundedGlassDrawable(
     private val failure:(Throwable)->Unit={},
     private val forwardNativeCallbacks:Boolean=false,
     private val hideNativeBlurOnGlass:Boolean=false,
+    private val splitGlassBackground:((Drawable)->LayerDrawable?)?=null,
 ):Drawable(), Drawable.Callback {
     private fun <T> nativeValue(fallback:T, action:()->T):T = try {action()} catch(error:Throwable) {
         runCatching {failure(error)};fallback
@@ -44,6 +46,24 @@ internal open class BoundedGlassDrawable(
     override fun invalidateDrawable(who:Drawable) {invalidateSelf()}
     override fun scheduleDrawable(who:Drawable, what:Runnable, `when`:Long) {scheduleSelf(what,`when`)}
     override fun unscheduleDrawable(who:Drawable, what:Runnable) {unscheduleSelf(what)}
+
+    private fun drawGlassDecoration(canvas: Canvas, area: Rect, decoration: Drawable) {
+        nativeValue(Unit) {
+            // The wrapper's layer already applies the animated alpha and color filter.
+            // Leave the decoration opaque while glass owns it. Native fallback restores
+            // the original LayerDrawable's alpha before drawing both layers again.
+            if (decoration.alpha != 255) decoration.alpha = 255
+            val previousFilter = decoration.colorFilter
+            try {
+                decoration.bounds = area
+                if (previousFilter != null) decoration.colorFilter = null
+                decoration.draw(canvas)
+            } finally {
+                if (previousFilter != null) decoration.colorFilter = previousFilter
+            }
+        }
+    }
+
     override fun draw(canvas:Canvas) {
         val area=Rect(bounds)
         if(area.isEmpty || opacity==0 || drawing.get()==true)return
@@ -54,6 +74,7 @@ internal open class BoundedGlassDrawable(
             save=canvas.save()
             canvas.clipRect(area)
             val host=target.get()
+            var blurLayer=orig
             // Apply opacity/filter once. Native fallback already owns its own paint,
             // so it must not be drawn inside this GPU material's alpha layer.
             val effectSave=if(opacity<255 || filter!=null) {
@@ -61,13 +82,20 @@ internal open class BoundedGlassDrawable(
                 canvas.saveLayer(RectF(area),layerPaint)
             } else canvas.save()
             val success=try {
-                if(host!=null && canvas.isHardwareAccelerated && enabled())render(canvas,host,area) else false
+                if(host!=null && canvas.isHardwareAccelerated && enabled() && render(canvas,host,area)) {
+                    val split=nativeValue<LayerDrawable?>(null) {orig?.let {splitGlassBackground?.invoke(it)}}
+                    if(split!=null) {
+                        blurLayer=split.getDrawable(0)
+                        drawGlassDecoration(canvas,area,split.getDrawable(1))
+                    }
+                    true
+                } else false
             } catch(error:Throwable) {runCatching {failure(error)};false}
             finally {canvas.restoreToCount(effectSave)}
             if(success) {
                 // BackgroundBlurDrawable registers a separate compositor blur region.
                 // Omitting draw() alone does not retire the previous native region.
-                if(hideNativeBlurOnGlass) orig?.let {native ->
+                if(hideNativeBlurOnGlass) blurLayer?.let {native ->
                     nativeValue(Unit) {if(native.alpha!=0)native.alpha=0;nativeSuppressed=true}
                 }
                 runCatching {rendered()}
@@ -86,7 +114,10 @@ internal open class BoundedGlassDrawable(
                 }
                 attempt {if(fallback.alpha!=opacity)fallback.alpha=opacity}
                 attempt {if(fallback.colorFilter!==filter)fallback.colorFilter=filter}
-                attempt {fallback.bounds=area;fallback.draw(canvas)}
+                attempt {
+                    fallback.bounds=area
+                    fallback.draw(canvas)
+                }
             }
         } finally {try {if(save>=0)canvas.restoreToCount(save)} finally {drawing.remove()}}
     }

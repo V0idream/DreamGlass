@@ -184,7 +184,10 @@ internal object IconGlassMasks {
             if(request.key.user!=Process.myUserHandle().hashCode()) {
                 val apps=request.context.getSystemService(LauncherApps::class.java)?:return@runCatching null
                 apps.getActivityList(component.packageName,UserHandle.getUserHandleForUid(request.key.user*100000))
-                    .firstOrNull {it.componentName==component}?.getIcon(request.context.resources.displayMetrics.densityDpi)
+                    .firstOrNull {component.className.isEmpty() || it.componentName==component}
+                    ?.getIcon(request.context.resources.displayMetrics.densityDpi)
+            } else if (component.className.isEmpty()) {
+                request.context.packageManager.getApplicationIcon(component.packageName)
             } else {
                 request.context.packageManager.getActivityIcon(component)
             }

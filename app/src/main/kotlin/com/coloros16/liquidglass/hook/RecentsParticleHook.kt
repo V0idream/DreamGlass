@@ -33,13 +33,15 @@ object RecentsParticleHook {
     private var enabled=false;private var speed=100
     private var ownAlpha=false
     private var release:Release?=null
+    private var slideRelease:SlideRelease?=null
     private var explicitDismiss=0
     private var clearAll=0
     private val observer=NativeAnimationObserver({action->ui.post {action()};Unit}) {error ->
         retryAt=SystemClock.uptimeMillis()+30_000L
         mark("observer-error","${error.javaClass.simpleName}: ${error.message}")
     }
-    private class Release(val task:View,val playback:Any,val goingUp:Boolean)
+    private class Release(val task:View,val playback:Any?,val goingUp:Boolean)
+    private class SlideRelease(val task:View,val animation:Any)
     private fun mark(stage:String,value:String)=RuntimeDiagnostics.mark("recents-particles-$stage",value)
     private fun safe(action:()->Unit) {try {action()} catch(error:Throwable) {
         retryAt=SystemClock.uptimeMillis()+30_000L
@@ -66,59 +68,8 @@ object RecentsParticleHook {
     fun install(api:XposedInterface,loader:ClassLoader) {
         if(mounted || Build.VERSION.SDK_INT<33 || Application.getProcessName()!="com.android.launcher")return
         interfaceApi=api
-        // Install independently: a changed gesture adapter does not disable the clear-all path.
-        runCatching {
-            val base=Class.forName("com.android.launcher3.uioverrides.touchcontrollers.TaskViewTouchController",false,loader)
-            val concrete=Class.forName("ja.g",false,loader)
-            check(base.isAssignableFrom(concrete))
-            val task=base.getDeclaredField("mTaskBeingDragged").apply {isAccessible=true}
-            val animation=base.getDeclaredField("mCurrentAnimation").apply {isAccessible=true}
-            val goingUp=base.getDeclaredField("mCurrentAnimationIsGoingUp").apply {isAccessible=true}
-            val playback=Class.forName("com.android.launcher3.anim.AnimatorPlaybackController",false,loader)
-            val velocity=RecentsParticleContract.velocity(playback) ?: error("Unknown playback signature")
-            val player=playback.getDeclaredMethod("getAnimationPlayer")
-            val end=concrete.getDeclaredMethod("onDragEnd",Float::class.javaPrimitiveType)
-            api.hook(end).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
-                val previous=release
-                release=null
-                safe {
-                    val owner=chain.getThisObject()
-                    val view=task.get(owner) as? View
-                    val controller=animation.get(owner)
-                    if(view!=null && controller!=null && allowed(view.context))
-                        release=Release(view,controller,goingUp.getBoolean(owner))
-                }
-                try {chain.proceed()} finally {release=previous}
-            }
-            api.hook(velocity).setExceptionMode(ExceptionMode.PROTECTIVE).intercept { chain ->
-                val context=release
-                var ticket:Ticket?=null
-                safe {
-                    // The delegate also starts a pull-down reset animation with true. Identity
-                    // must match mCurrentAnimation, and only the upward delete may go to end.
-                    if(context!=null && context.playback===chain.getThisObject() &&
-                        RecentsParticleContract.confirmed(context.goingUp,chain.getArg(1)==true))
-                        ticket=capture(context.task)
-                }
-                val result=try {chain.proceed()} catch(error:Throwable) {ticket?.let(::cancel);throw error}
-                safe { ticket?.let { t->
-                    val animator=player.invoke(context!!.playback) as? Animator
-                    animator?.addListener(object:AnimatorListenerAdapter() {
-                        override fun onAnimationCancel(a:Animator) {observer.invoke {cancel(t)}}
-                        override fun onAnimationEnd(a:Animator) {observer.finish({}, {a.removeListener(this)})}
-                    })
-                    accept(t)
-                    mark("gesture","原生确认上划删除；当前卡片 GPU 接管")
-                } }
-                result
-            }
-            api.deoptimize(end)
-            for(name in listOf("no.g","no.h","no.d","no.e","no.i"))runCatching {
-                Class.forName(name,false,loader).declaredMethods.filter { it.name=="onDragEnd" &&
-                    it.parameterTypes.contentEquals(arrayOf(Float::class.javaPrimitiveType)) }.forEach { api.deoptimize(it) }
-            }
-            mark("gesture-hook","17.3.12 删除决策与 playback 身份校验已安装")
-        }.onFailure {mark("gesture-unavailable","${it.javaClass.simpleName}: ${it.message}")}
+        installGesture(api,loader)
+        installModernBatch(api,loader)
         runCatching {
             val task=Class.forName("com.android.quickstep.views.TaskView",false,loader)
             val batch=Class.forName("com.android.launcher3.anim.PendingAnimation",false,loader)
@@ -165,17 +116,7 @@ object RecentsParticleHook {
             val addListener=batch.getDeclaredMethod("addListener",Animator.AnimatorListener::class.java)
             val util=Class.forName("com.oplus.quickstep.utils.k",false,loader)
             val route=RecentsParticleContract.batchCard(util,recents,task,batch) ?: error("Unknown batch-card signature")
-            api.hook(route).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
-                var ticket:Ticket?=null
-                safe {
-                    val view=chain.getArg(1) as? View
-                    if(clearAll>0 && view!=null && allowed(view.context))ticket=capture(view,true)
-                }
-                val result=try {chain.proceed()} catch(error:Throwable) {ticket?.let(::cancel);throw error}
-                safe {ticket?.let {bindPending(chain.getArg(3)!!,it,addListener)}}
-                result
-            }
-            api.deoptimize(route)
+            hookBatchCard(api,route,addListener)
             // The delegate method is a verified caller of k.c; deopt it so a
             // previously inlined helper cannot bypass this independent hook.
             val delegate=Class.forName("lo.d",false,loader)
@@ -196,6 +137,193 @@ object RecentsParticleHook {
                 }
         }.onFailure {mark("alpha-unavailable",it.javaClass.simpleName)}
         mounted=true
+    }
+
+    private fun installGesture(api:XposedInterface,loader:ClassLoader) {
+        runCatching {
+            val playback=Class.forName("com.android.launcher3.anim.AnimatorPlaybackController",false,loader)
+            val velocity=RecentsParticleContract.velocity(playback) ?: error("Unknown playback signature")
+            val player=playback.getDeclaredMethod("getAnimationPlayer")
+            api.hook(velocity).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val context=release
+                val receiver=chain.getThisObject()
+                var ticket:Ticket?=null
+                safe {
+                    // Other playbacks can start inside drag end, including reverse/reset animations.
+                    if(context!=null && receiver!=null && (context.playback==null || context.playback===receiver) &&
+                        RecentsParticleContract.confirmed(context.goingUp,chain.getArg(1)==true))
+                        ticket=capture(context.task)
+                }
+                val result=try {chain.proceed()} catch(error:Throwable) {ticket?.let(::cancel);throw error}
+                safe {ticket?.let {t ->
+                    val animator=player.invoke(receiver) as? Animator
+                    animator?.addListener(object:AnimatorListenerAdapter() {
+                        override fun onAnimationCancel(a:Animator) {observer.invoke {cancel(t)}}
+                        override fun onAnimationEnd(a:Animator) {observer.finish({}, {a.removeListener(this)})}
+                    })
+                    accept(t)
+                    mark("gesture","原生确认上划删除；当前卡片 GPU 接管")
+                }}
+                result
+            }
+            val base=Class.forName("com.android.launcher3.uioverrides.touchcontrollers.TaskViewTouchController",false,loader)
+            val task=base.getDeclaredField("mTaskBeingDragged").apply {isAccessible=true}
+            val animation=base.getDeclaredField("mCurrentAnimation").apply {isAccessible=true}
+            val goingUp=base.getDeclaredField("mCurrentAnimationIsGoingUp").apply {isAccessible=true}
+            check(View::class.java.isAssignableFrom(task.type) && animation.type==playback && goingUp.type==Boolean::class.javaPrimitiveType)
+            var mountedRoutes=0
+            for(name in listOf("uu7","ja.g"))runCatching {
+                val concrete=Class.forName(name,false,loader)
+                check(base.isAssignableFrom(concrete))
+                val end=RecentsParticleContract.dragEnd(concrete) ?: error("Unknown drag-end signature")
+                hookRelease(api,end) { owner ->
+                    val view=task.get(owner) as? View
+                    val controller=animation.get(owner)
+                    if(view!=null && controller!=null) Release(view,controller,goingUp.getBoolean(owner)) else null
+                }
+                mountedRoutes++
+                val delegates=if(name=="uu7")listOf("fua","ob4","k6b","yca") else listOf("no.g","no.h","no.d","no.e","no.i")
+                for(delegate in delegates)runCatching {
+                    RecentsParticleContract.dragEnd(Class.forName(delegate,false,loader))?.let {api.deoptimize(it)}
+                }
+                if(name=="uu7")installSlideGesture(api,loader)
+            }
+            check(mountedRoutes>0) {"Unknown task touch adapter"}
+            mark("gesture-hook","已接入后台卡片上划删除确认与原生播放控制器")
+        }.onFailure {mark("gesture-unavailable","${it.javaClass.simpleName}: ${it.message}")}
+    }
+
+    private fun hookRelease(api:XposedInterface,end:Method,resolve:(Any)->Release?) {
+        api.hook(end).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+            if(Looper.myLooper()!=Looper.getMainLooper())return@intercept chain.proceed()
+            val previous=release
+            release=null
+            safe {
+                val owner=chain.getThisObject()
+                if(owner!=null) {
+                    val current=resolve(owner)
+                    if(current!=null && allowed(current.task.context))release=current
+                }
+            }
+            try {chain.proceed()} finally {release=previous}
+        }
+        runCatching {api.deoptimize(end)}
+    }
+
+    /** The new launcher can run a separate slide controller for a task card. */
+    private fun installSlideGesture(api:XposedInterface,loader:ClassLoader) {
+        runCatching {
+            val slide=Class.forName("com.android.quickstep.uioverrides.touchcontrollers.controller.a",false,loader)
+            val end=RecentsParticleContract.dragEnd(slide) ?: error("Unknown slide gesture")
+            val task=slide.getDeclaredField("c").apply {isAccessible=true}
+            val state=slide.getDeclaredField("z").apply {isAccessible=true}
+            val direction=state.type.getDeclaredField("l").apply {isAccessible=true}
+            val animation=state.type.getDeclaredField("n").apply {isAccessible=true}
+            check(View::class.java.isAssignableFrom(task.type) && direction.type==Boolean::class.javaPrimitiveType)
+            val start=animation.type.declaredMethods.singleOrNull {
+                it.name=="f" && it.returnType==Void.TYPE && it.parameterCount==4 &&
+                    it.parameterTypes[0].name=="com.android.launcher3.BaseDraggingActivity" &&
+                    it.parameterTypes.drop(1)==listOf(Boolean::class.javaPrimitiveType,Float::class.javaPrimitiveType,Long::class.javaPrimitiveType)
+            } ?: error("Unknown slide commit signature")
+            api.hook(end).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                if(Looper.myLooper()!=Looper.getMainLooper())return@intercept chain.proceed()
+                val previous=slideRelease
+                slideRelease=null
+                safe {
+                    val owner=chain.getThisObject()
+                    val view=task.get(owner) as? View
+                    val drag=state.get(owner)
+                    val pending=drag?.let {animation.get(it)}
+                    if(view!=null && drag!=null && pending!=null && direction.getBoolean(drag) && allowed(view.context))
+                        slideRelease=SlideRelease(view,pending)
+                }
+                try {chain.proceed()} finally {slideRelease=previous}
+            }
+            api.hook(start).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val slideContext=slideRelease
+                if(slideContext==null || slideContext.animation!==chain.getThisObject() || chain.getArg(1)!=true)
+                    return@intercept chain.proceed()
+                // The checked OEM method starts only this card's player once its guards pass.
+                // Observe the actual start without asking the vendor to create a player early.
+                val previous=release
+                release=Release(slideContext.task,null,true)
+                try {chain.proceed()} finally {release=previous}
+            }
+            runCatching {api.deoptimize(end)}
+            runCatching {api.deoptimize(start)}
+            mark("slide-hook","已接入新版后台卡片滑动控制器")
+        }.onFailure {mark("slide-unavailable","${it.javaClass.simpleName}: ${it.message}")}
+    }
+
+    /** Verified Launcher 17.5.5 entry points after the recents classes were obfuscated. */
+    private fun installModernBatch(api:XposedInterface,loader:ClassLoader) {
+        runCatching {
+            val recents=Class.forName("io7",false,loader)
+            val task=Class.forName("com.android.quickstep.views.c",false,loader)
+            val batch=Class.forName("com.android.launcher3.anim.PendingAnimation",false,loader)
+            check(View::class.java.isAssignableFrom(recents) && View::class.java.isAssignableFrom(task))
+            val addListener=batch.getDeclaredMethod("addListener",Animator.AnimatorListener::class.java)
+            installModernExplicit(api,recents,task,batch,addListener)
+            val util=Class.forName("k49",false,loader)
+            val card=RecentsParticleContract.batchCard(util,recents,task,batch,"a") ?: error("Unknown clear-all card signature")
+            val factory=RecentsParticleContract.clearFactory(recents,batch) ?: error("Unknown clear-all factory")
+            api.hook(factory).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                clearAll++
+                try {chain.proceed()} finally {clearAll--}
+            }
+            hookBatchCard(api,card,addListener)
+            runCatching {api.deoptimize(factory)}
+            for(name in listOf("dn7","jb4","vca"))runCatching {
+                val delegate=Class.forName(name,false,loader)
+                RecentsParticleContract.clearFactory(delegate,batch)?.let {api.deoptimize(it)}
+                val caller=delegate.declaredMethods.singleOrNull {
+                    it.name=="u0" && it.returnType==Void.TYPE && it.parameterTypes.contentEquals(arrayOf(View::class.java))
+                }
+                caller?.let {api.deoptimize(it)}
+            }
+            mark("batch-1755-hook","已接入新版后台一键清空与逐卡动画")
+        }.onFailure {mark("batch-1755-unavailable","${it.javaClass.simpleName}: ${it.message}")}
+    }
+
+    private fun hookBatchCard(api:XposedInterface,card:Method,addListener:Method) {
+        api.hook(card).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+            var ticket:Ticket?=null
+            safe {
+                val view=chain.getArg(1) as? View
+                if(clearAll>0 && view!=null && allowed(view.context))ticket=capture(view,true)
+            }
+            val result=try {chain.proceed()} catch(error:Throwable) {ticket?.let(::cancel);throw error}
+            safe {ticket?.let {bindPending(chain.getArg(3)!!,it,addListener)}}
+            result
+        }
+        runCatching {api.deoptimize(card)}
+    }
+
+    private fun installModernExplicit(api:XposedInterface,recents:Class<*>,task:Class<*>,batch:Class<*>,addListener:Method) {
+        runCatching {
+            val entry=RecentsParticleContract.explicit(recents.superclass ?: error("Missing recents base"),task)
+                ?: error("Unknown explicit dismissal")
+            val factory=RecentsParticleContract.singleFactory(recents,task,batch)
+                ?: error("Unknown single-card factory")
+            api.hook(entry).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                val removing=chain.getArg(2)==true
+                if(removing)explicitDismiss++
+                try {chain.proceed()} finally {if(removing)explicitDismiss--}
+            }
+            api.hook(factory).setExceptionMode(ExceptionMode.PROTECTIVE).intercept {chain ->
+                var ticket:Ticket?=null
+                safe {
+                    val view=chain.getArg(0) as? View
+                    if(explicitDismiss>0 && chain.getArg(1)==true && chain.getArg(2)==true &&
+                        chain.getArg(4)==false && view!=null && allowed(view.context))ticket=capture(view)
+                }
+                val result=try {chain.proceed()} catch(error:Throwable) {ticket?.let(::cancel);throw error}
+                safe {ticket?.let {if(result!=null)bindPending(result,it,addListener) else cancel(it)}}
+                result
+            }
+            runCatching {api.deoptimize(entry)}
+            runCatching {api.deoptimize(factory)}
+        }.onFailure {mark("explicit-1755-unavailable","${it.javaClass.simpleName}: ${it.message}")}
     }
 
     private fun bindPending(animation:Any,t:Ticket,addListener:Method) {
@@ -318,9 +446,27 @@ object RecentsParticleHook {
 /** Verified ROM shapes, testable without instantiating vendor classes. */
 object RecentsParticleContract {
     fun frameReady(batch:Boolean,attached:Boolean,age:Long)=age in 0L..180L && (batch || attached)
-    fun batchCard(type:Class<*>,recents:Class<*>,task:Class<*>,pending:Class<*>):Method?=
-        type.declaredMethods.singleOrNull {it.name=="c" && Modifier.isStatic(it.modifiers) &&
+    fun dragEnd(type:Class<*>):Method?=type.declaredMethods.singleOrNull {
+        it.name=="onDragEnd" && it.returnType==Void.TYPE &&
+            it.parameterTypes.contentEquals(arrayOf(Float::class.javaPrimitiveType))
+    }
+    @JvmOverloads
+    fun batchCard(type:Class<*>,recents:Class<*>,task:Class<*>,pending:Class<*>,name:String="c"):Method?=
+        type.declaredMethods.singleOrNull {it.name==name && Modifier.isStatic(it.modifiers) &&
             it.returnType==Void.TYPE && it.parameterTypes.contentEquals(arrayOf(recents,task,Long::class.javaPrimitiveType,pending))}
+    fun clearFactory(type:Class<*>,pending:Class<*>):Method?=type.declaredMethods.singleOrNull {
+        it.name=="f0" && it.returnType==pending &&
+            it.parameterTypes.contentEquals(arrayOf(Long::class.javaPrimitiveType))
+    }
+    fun explicit(type:Class<*>,task:Class<*>):Method?=type.declaredMethods.singleOrNull {
+        it.name=="a2" && it.returnType==Void.TYPE &&
+            it.parameterTypes.contentEquals(arrayOf(task,Boolean::class.javaPrimitiveType,Boolean::class.javaPrimitiveType))
+    }
+    fun singleFactory(type:Class<*>,task:Class<*>,pending:Class<*>):Method?=type.declaredMethods.singleOrNull {
+        it.name=="N" && it.returnType==pending &&
+            it.parameterTypes.contentEquals(arrayOf(task,Boolean::class.javaPrimitiveType,Boolean::class.javaPrimitiveType,
+                Long::class.javaPrimitiveType,Boolean::class.javaPrimitiveType))
+    }
     fun confirmed(goingUp:Boolean,goingToEnd:Boolean)=goingUp && goingToEnd
     fun velocity(type:Class<*>):Method?=type.declaredMethods.singleOrNull {
         it.name=="startWithVelocity" && it.returnType==Void.TYPE && it.parameterTypes.contentEquals(

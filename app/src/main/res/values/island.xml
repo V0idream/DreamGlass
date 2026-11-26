@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.IslandDialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="colorAccent">#97E5D0</item>
+        <item name="android:colorBackground">#14212C</item>
+        <item name="android:textColorPrimary">#EBF3F4</item>
+        <item name="android:textColorSecondary">#A5BBC4</item>
+    </style>
+</resources>

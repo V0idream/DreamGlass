@@ -31,6 +31,27 @@ public class RecentsParticleContractTest {
  public static class ChangedStackUtil {
   public void c(Recents rv,View task,long duration,Batch pending) {}
  }
+ public static class OtaRecents {
+  public void onDragEnd(float velocity) {}
+  public void onDragEnd(double unrelated) {}
+  public Batch f0(long duration) {return null;}
+  public Batch f0(int unrelated) {return null;}
+  public void a2(View task,boolean animate,boolean remove) {}
+  public Batch N(View task,boolean animate,boolean remove,long duration,boolean split) {return null;}
+ }
+ public static class OtaAnimationUtil {
+  public static void a(OtaRecents rv,View task,long duration,Batch pending) {}
+  public static void a(OtaRecents rv,View task,int unrelated,Batch pending) {}
+ }
+ @Test public void newerLauncherNeedsTheExactCardAndFactorySignatures() {
+  RecentsParticleContract contract=RecentsParticleContract.INSTANCE;
+  assertNotNull(contract.dragEnd(OtaRecents.class));
+  assertNotNull(contract.clearFactory(OtaRecents.class,Batch.class));
+  assertNotNull(contract.explicit(OtaRecents.class,View.class));
+  assertNotNull(contract.singleFactory(OtaRecents.class,View.class,Batch.class));
+  assertNotNull(contract.batchCard(OtaAnimationUtil.class,OtaRecents.class,View.class,Batch.class,"a"));
+  assertNull(contract.batchCard(OtaAnimationUtil.class,OtaRecents.class,View.class,Batch.class,"c"));
+ }
  @Test public void stackCardRouteRequiresExactStaticSignature() {
   assertNotNull(RecentsParticleContract.INSTANCE.batchCard(StackUtil.class,Recents.class,View.class,Batch.class));
   assertNull(RecentsParticleContract.INSTANCE.batchCard(ChangedStackUtil.class,Recents.class,View.class,Batch.class));

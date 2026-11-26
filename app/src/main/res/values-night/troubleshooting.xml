@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Troubleshooting" parent="Theme.AppCompat.Dialog.Alert" />
+    <color name="troubleshooting_surface">#17232E</color>
+    <color name="troubleshooting_ink">#EDF4FA</color>
+    <color name="troubleshooting_warning">#FFB985</color>
+    <color name="troubleshooting_conflict">#FFB4AB</color>
+</resources>
